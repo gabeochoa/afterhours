@@ -118,6 +118,7 @@ struct pathfinding : developer::Plugin {
     std::function<bool(Vec2)> walkability_checker;
     std::function<float(Vec2, Vec2)> distance_fn;
     std::function<std::vector<Vec2>(Vec2)> get_neighbors_fn;
+    std::function<float(Vec2, Vec2)> step_cost_fn;
     AtomicQueue<PathRequest> request_queue;
     AtomicQueue<PathResponse> response_queue;
     std::atomic<bool> running{false};
@@ -144,6 +145,8 @@ struct pathfinding : developer::Plugin {
         }
         return neighbors;
       };
+
+      step_cost_fn = distance_fn;
     }
   };
 
@@ -213,7 +216,9 @@ struct pathfinding : developer::Plugin {
   find_path_astar(Vec2 start, Vec2 end,
                   const std::function<bool(Vec2)> &is_walkable,
                   const std::function<std::vector<Vec2>(Vec2)> &get_neighbors,
-                  const std::function<float(Vec2, Vec2)> &distance) {
+                  const std::function<float(Vec2, Vec2)> &distance,
+                  const std::function<float(Vec2, Vec2)> &step_cost = nullptr) {
+    const auto &step = step_cost ? step_cost : distance;
     struct ScoreValue {
       float value;
       ScoreValue() { value = std::numeric_limits<float>::max(); }
@@ -288,7 +293,7 @@ struct pathfinding : developer::Plugin {
       auto neighbors = get_neighbors(current);
       for (const auto &neighbor : neighbors) {
         float tentative_g =
-            static_cast<float>(g_score[current]) + distance(current, neighbor);
+            static_cast<float>(g_score[current]) + step(current, neighbor);
         float neighbor_g = static_cast<float>(g_score[neighbor]);
 
         if (tentative_g < neighbor_g) {
@@ -427,7 +432,8 @@ struct pathfinding : developer::Plugin {
             if (provider->current_algorithm == Algorithm::AStar) {
               path = find_path_astar(request.start, request.end, is_walkable,
                                      provider->get_neighbors_fn,
-                                     provider->distance_fn);
+                                     provider->distance_fn,
+                                     provider->step_cost_fn);
             } else {
               path = find_path_bfs(request.start, request.end, is_walkable,
                                    provider->get_neighbors_fn,
@@ -481,7 +487,8 @@ struct pathfinding : developer::Plugin {
 
     if (provider->current_algorithm == Algorithm::AStar) {
       return find_path_astar(start, end, is_walkable,
-                             provider->get_neighbors_fn, provider->distance_fn);
+                             provider->get_neighbors_fn, provider->distance_fn,
+                             provider->step_cost_fn);
     } else {
       return find_path_bfs(start, end, is_walkable, provider->get_neighbors_fn,
                            provider->distance_fn);
@@ -507,6 +514,38 @@ struct pathfinding : developer::Plugin {
       return;
     }
     provider->walkability_checker = checker;
+  }
+
+  static void set_neighbors_fn(
+      const std::function<std::vector<Vec2>(Vec2)> &fn) {
+    auto *provider = get_provider();
+    if (!provider) {
+      log_error("Pathfinding plugin not initialized. Call pathfinding::init() "
+                "first.");
+      return;
+    }
+    provider->get_neighbors_fn = fn;
+  }
+
+  static void set_distance_fn(const std::function<float(Vec2, Vec2)> &fn) {
+    // TODO: extract require_provider helper
+    auto *provider = get_provider();
+    if (!provider) {
+      log_error("Pathfinding plugin not initialized. Call pathfinding::init() "
+                "first.");
+      return;
+    }
+    provider->distance_fn = fn;
+  }
+
+  static void set_step_cost_fn(const std::function<float(Vec2, Vec2)> &fn) {
+    auto *provider = get_provider();
+    if (!provider) {
+      log_error("Pathfinding plugin not initialized. Call pathfinding::init() "
+                "first.");
+      return;
+    }
+    provider->step_cost_fn = fn;
   }
 };
 

@@ -41,6 +41,14 @@ struct TextureConfig {
 // See: https://en.cppreference.com/w/cpp/language/constraints
 
 enum struct ButtonVariant { Filled, Outline, Ghost };
+
+struct SliderStyle {
+  std::optional<Color> track;
+  std::optional<Color> fill;
+  std::optional<Color> handle;
+  Size handle_size = pixels(16.f);
+  Size track_thickness = pixels(8.f);
+};
 enum struct IconPosition { Left, Right };
 
 struct ComponentConfig {
@@ -84,6 +92,7 @@ struct ComponentConfig {
   Theme::Usage color_usage = Theme::Usage::Default;
   std::optional<Color> custom_color;
   std::optional<Color> hover_color; // Per-component hover background override
+  std::optional<bool> skip_hover_override;
   // Text color settings (explicit override)
   Theme::Usage text_color_usage = Theme::Usage::Default;
   std::optional<Color> custom_text_color;
@@ -112,6 +121,7 @@ struct ComponentConfig {
   std::optional<Vector2Type> text_inset;
   std::optional<CursorType> cursor_type; // Cursor to show on hover
   bool skip_when_tabbing = false;
+  bool focus_scope = false;
   std::optional<float> focus_ring_offset;
   // Per-component ring thickness, overriding Theme::focus_ring_thickness.
   // Unset means the theme's value; 0 opts this component out of the ring.
@@ -119,6 +129,7 @@ struct ComponentConfig {
   bool ignore_pointer_events = false; // invisible to hit-testing
   bool inert = false;
   bool takes_focus = true;
+  bool hoverable = false;
   // User data, not localizable copy: the pseudo-locale stress leaves this
   // label (and this component's RTL mirroring) alone.
   bool pseudo_locale_exempt = false;
@@ -142,8 +153,7 @@ struct ComponentConfig {
   // is known. An absolute number cannot say "above whatever contains me".
   int render_layer_offset = 0;
 
-  // Custom-draw callbacks (see HasOnDraw): bg draws behind the widget's fill,
-  // fg on top of all its primitives, both receiving the widget's final rect.
+  // Custom-draw callbacks (see HasOnDraw), receiving the final rect.
   std::string tooltip_text;
   float tooltip_delay = 0.5f;
   std::optional<Size> tooltip_font_size;
@@ -151,6 +161,7 @@ struct ComponentConfig {
   float tooltip_gap = 4.f;
   RenderPrimitive::CustomDrawFn on_draw_bg;
   RenderPrimitive::CustomDrawFn on_draw_fg;
+  RenderPrimitive::CustomDrawFn on_draw_over;
 
   std::string font_name = UIComponent::UNSET_FONT;
   colors::FontWeight font_weight = colors::FontWeight::Regular;
@@ -184,6 +195,8 @@ struct ComponentConfig {
   // Text input: readonly mode (focusable, selectable, but not editable)
   bool text_readonly = false;
 
+  bool text_selectable = false;
+
   // Text input: clipboard operations this field refuses. All allowed by
   // default; masking a field does not change them.
   bool text_copy_disabled = false;
@@ -195,6 +208,8 @@ struct ComponentConfig {
 
   std::optional<std::string> checkbox_checked_indicator;
   std::optional<std::string> checkbox_unchecked_indicator;
+
+  std::optional<SliderStyle> slider_style;
 
   // Glyphs on a toggle_switch track. Unset draws nothing.
   std::optional<std::string> toggle_on_indicator;
@@ -214,6 +229,7 @@ struct ComponentConfig {
   size_t text_area_max_lines = 0;            // Max lines (0 = unlimited)
   bool text_area_auto_grow = false;          // Height follows the content
   bool text_area_submit_on_enter = false;    // Enter submits, Shift+Enter breaks
+  bool text_area_single_line = false;        // One row: Enter submits
   size_t virtual_list_overscan = VIRTUAL_LIST_OVERSCAN_DEFAULT;
 
   // Button variant configuration
@@ -231,6 +247,7 @@ struct ComponentConfig {
   std::optional<TextUnitMotion> unit_motion;
   float blur = 0.f;
   graphics::ShaderType *shader = nullptr;
+  std::optional<blend::Mode> blend_mode;
   float origin_x = 0.5f;
   float origin_y = 0.5f;
 
@@ -395,6 +412,10 @@ struct ComponentConfig {
     hover_color = color;
     return *this;
   }
+  ComponentConfig &with_skip_hover_override(bool skip = true) {
+    skip_hover_override = skip;
+    return *this;
+  }
 
   // Backwards-compatible aliases kept intentionally while call sites migrate.
   ComponentConfig &with_color_usage(Theme::Usage usage) {
@@ -426,6 +447,10 @@ struct ComponentConfig {
     text_readonly = ro;
     return *this;
   }
+  ComponentConfig &with_selectable_text(bool selectable = true) {
+    text_selectable = selectable;
+    return *this;
+  }
   ComponentConfig &with_copy_disabled(bool disabled = true) {
     text_copy_disabled = disabled;
     return *this;
@@ -436,6 +461,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_paste_disabled(bool disabled = true) {
     text_paste_disabled = disabled;
+    return *this;
+  }
+  ComponentConfig &with_slider_style(const SliderStyle &style) {
+    slider_style = style;
     return *this;
   }
   ComponentConfig &with_toggle_indicators(const std::string &on,
@@ -469,6 +498,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_word_wrap(bool enabled) {
     text_area_word_wrap = enabled;
+    // Labels read text_overflow, not text_area_word_wrap -- without this a
+    // plain label silently stayed one line, so with_word_wrap only ever
+    // wrapped a text_area.
+    text_overflow = enabled ? TextOverflow::Wrap : TextOverflow::Clip;
     return *this;
   }
   ComponentConfig &with_max_lines(size_t max) {
@@ -485,6 +518,11 @@ struct ComponentConfig {
   // default, so a text_area keeps Enter meaning newline.
   ComponentConfig &with_submit_on_enter(bool enabled = true) {
     text_area_submit_on_enter = enabled;
+    return *this;
+  }
+  // One row: Enter submits, pasted breaks become spaces.
+  ComponentConfig &with_single_line(bool enabled = true) {
+    text_area_single_line = enabled;
     return *this;
   }
   ComponentConfig &with_virtual_list_overscan(size_t overscan) {
@@ -573,7 +611,7 @@ struct ComponentConfig {
     rounded_corners = std::bitset<4>().reset();
     return *this;
   }
-  ComponentConfig &with_debug_name(const std::string &name) {
+  ComponentConfig &with_debug_name(std::string_view name) {
     debug_name = name;
     return *this;
   }
@@ -595,16 +633,24 @@ struct ComponentConfig {
     tooltip_gap = gap;
     return *this;
   }
+  // Hit rule for overlaps: highest layer wins; on a tie the element later
+  // in tree (paint) order wins -- so a close-x button drawn after its tab,
+  // or nested inside it, takes the click.
   ComponentConfig &with_render_layer(int layer) {
     render_layer = layer;
     return *this;
   }
+  // bg: behind fill; fg: over own primitives; over: over whole subtree.
   ComponentConfig &with_on_draw_bg(RenderPrimitive::CustomDrawFn fn) {
     on_draw_bg = std::move(fn);
     return *this;
   }
   ComponentConfig &with_on_draw_fg(RenderPrimitive::CustomDrawFn fn) {
     on_draw_fg = std::move(fn);
+    return *this;
+  }
+  ComponentConfig &with_on_draw_over(RenderPrimitive::CustomDrawFn fn) {
+    on_draw_over = std::move(fn);
     return *this;
   }
   ComponentConfig &with_disabled(bool dis) {
@@ -617,6 +663,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_skip_tabbing(bool skip) {
     skip_when_tabbing = skip;
+    return *this;
+  }
+  ComponentConfig &with_focus_scope(bool scope = true) {
+    focus_scope = scope;
     return *this;
   }
   ComponentConfig &with_focus_ring_offset(float offset) {
@@ -645,6 +695,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_takes_focus(bool takes = true) {
     takes_focus = takes;
+    return *this;
+  }
+  ComponentConfig &with_hoverable(bool on = true) {
+    hoverable = on;
     return *this;
   }
   ComponentConfig &with_pseudo_locale_exempt(bool exempt = true) {
@@ -687,6 +741,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_shader(graphics::ShaderType &s) {
     shader = &s;
+    return *this;
+  }
+  ComponentConfig &with_blend_mode(blend::Mode m) {
+    blend_mode = m;
     return *this;
   }
   ComponentConfig &with_blur(float radius) {
@@ -1076,6 +1134,7 @@ struct ComponentConfig {
   bool is_disabled() const { return disabled; }
   bool is_hidden() const { return hidden; }
   bool skips_when_tabbing() const { return skip_when_tabbing; }
+  bool is_focus_scope() const { return focus_scope; }
   bool selects_on_focus() const { return select_on_focus; }
   bool has_click_activation_override() const {
     return click_activation != ClickActivationMode::Default;
@@ -1113,8 +1172,8 @@ struct ComponentConfig {
     return *this;
   }
 
-  ComponentConfig apply_overrides(const ComponentConfig &overrides) const {
-    ComponentConfig merged = *this;
+  ComponentConfig &apply_overrides_from(const ComponentConfig &overrides) {
+    ComponentConfig &merged = *this;
 
     if (overrides.has_padding()) {
       merged.padding = overrides.padding;
@@ -1140,7 +1199,7 @@ struct ComponentConfig {
       merged.label_alignment = overrides.label_alignment;
 
     if (!overrides.label.empty())
-      merged.label = overrides.label;
+      if (merged.label != overrides.label) merged.label = overrides.label;
 
     if (overrides.has_any_rounded_corners())
       merged.rounded_corners = overrides.rounded_corners;
@@ -1153,6 +1212,8 @@ struct ComponentConfig {
       merged.hidden = overrides.hidden;
     if (overrides.skips_when_tabbing())
       merged.skip_when_tabbing = overrides.skip_when_tabbing;
+    if (overrides.is_focus_scope())
+      merged.focus_scope = true;
     if (overrides.focus_ring_offset.has_value())
       merged.focus_ring_offset = overrides.focus_ring_offset;
     if (overrides.focus_ring_thickness.has_value())
@@ -1165,6 +1226,8 @@ struct ComponentConfig {
       merged.inert = true;
     if (!overrides.takes_focus)
       merged.takes_focus = false;
+    if (overrides.hoverable)
+      merged.hoverable = true;
     if (overrides.pseudo_locale_exempt)
       merged.pseudo_locale_exempt = true;
     if (overrides.selects_on_focus())
@@ -1173,7 +1236,7 @@ struct ComponentConfig {
       merged.click_activation = overrides.click_activation;
 
     if (overrides.has_font_override()) {
-      merged.font_name = overrides.font_name;
+      if (merged.font_name != overrides.font_name) merged.font_name = overrides.font_name;
     }
     if (overrides.font_weight != colors::FontWeight::Regular) {
       merged.font_weight = overrides.font_weight;
@@ -1200,14 +1263,14 @@ struct ComponentConfig {
     if (overrides.render_layer_offset != 0)
       merged.render_layer_offset = overrides.render_layer_offset;
     if (!overrides.tooltip_text.empty()) {
-      merged.tooltip_text = overrides.tooltip_text;
+      if (merged.tooltip_text != overrides.tooltip_text) merged.tooltip_text = overrides.tooltip_text;
       merged.tooltip_delay = overrides.tooltip_delay;
       merged.tooltip_font_size = overrides.tooltip_font_size;
       merged.tooltip_padding = overrides.tooltip_padding;
       merged.tooltip_gap = overrides.tooltip_gap;
     }
     if (!overrides.debug_name.empty())
-      merged.debug_name = overrides.debug_name;
+      if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.debug_name;
 
     // Flexbox alignment properties
     if (overrides.justify_content != JustifyContent::FlexStart)
@@ -1244,6 +1307,8 @@ struct ComponentConfig {
       merged.on_draw_bg = overrides.on_draw_bg;
     if (overrides.on_draw_fg)
       merged.on_draw_fg = overrides.on_draw_fg;
+    if (overrides.on_draw_over)
+      merged.on_draw_over = overrides.on_draw_over;
 
     // Size constraints
     if (overrides.min_width.dim != Dim::None)
@@ -1270,6 +1335,8 @@ struct ComponentConfig {
     // Colour and corner detail
     if (overrides.hover_color.has_value())
       merged.hover_color = overrides.hover_color;
+    if (overrides.skip_hover_override.has_value())
+      merged.skip_hover_override = overrides.skip_hover_override;
     // Defaults true, so only a caller turning it off can be detected.
     if (!overrides.auto_text_color)
       merged.auto_text_color = false;
@@ -1292,7 +1359,7 @@ struct ComponentConfig {
     if (overrides.text_stroke_config.has_value())
       merged.text_stroke_config = overrides.text_stroke_config;
     if (!overrides.styled_label.empty())
-      merged.styled_label = overrides.styled_label;
+      if (merged.styled_label != overrides.styled_label) merged.styled_label = overrides.styled_label;
 
     // Interaction
     if (overrides.cursor_type.has_value())
@@ -1309,6 +1376,8 @@ struct ComponentConfig {
       merged.mask_char = overrides.mask_char;
     if (overrides.text_readonly)
       merged.text_readonly = true;
+    if (overrides.text_selectable)
+      merged.text_selectable = true;
     if (overrides.text_copy_disabled)
       merged.text_copy_disabled = true;
     if (overrides.text_cut_disabled)
@@ -1316,7 +1385,7 @@ struct ComponentConfig {
     if (overrides.text_paste_disabled)
       merged.text_paste_disabled = true;
     if (!overrides.placeholder.empty())
-      merged.placeholder = overrides.placeholder;
+      if (merged.placeholder != overrides.placeholder) merged.placeholder = overrides.placeholder;
     if (overrides.text_area_line_height.has_value())
       merged.text_area_line_height = overrides.text_area_line_height;
     // Defaults true; see auto_text_color.
@@ -1328,23 +1397,27 @@ struct ComponentConfig {
       merged.text_area_auto_grow = true;
     if (overrides.text_area_submit_on_enter)
       merged.text_area_submit_on_enter = true;
+    if (overrides.text_area_single_line)
+      merged.text_area_single_line = true;
     if (overrides.virtual_list_overscan != VIRTUAL_LIST_OVERSCAN_DEFAULT)
       merged.virtual_list_overscan = overrides.virtual_list_overscan;
 
     // Indicator glyphs
     if (overrides.checkbox_checked_indicator.has_value())
-      merged.checkbox_checked_indicator = overrides.checkbox_checked_indicator;
+      if (merged.checkbox_checked_indicator != overrides.checkbox_checked_indicator) merged.checkbox_checked_indicator = overrides.checkbox_checked_indicator;
     if (overrides.checkbox_unchecked_indicator.has_value())
-      merged.checkbox_unchecked_indicator =
-          overrides.checkbox_unchecked_indicator;
+      if (merged.checkbox_unchecked_indicator != overrides.checkbox_unchecked_indicator)
+        merged.checkbox_unchecked_indicator = overrides.checkbox_unchecked_indicator;
+    if (overrides.slider_style.has_value())
+      merged.slider_style = overrides.slider_style;
     if (overrides.toggle_on_indicator.has_value())
-      merged.toggle_on_indicator = overrides.toggle_on_indicator;
+      if (merged.toggle_on_indicator != overrides.toggle_on_indicator) merged.toggle_on_indicator = overrides.toggle_on_indicator;
     if (overrides.toggle_off_indicator.has_value())
-      merged.toggle_off_indicator = overrides.toggle_off_indicator;
+      if (merged.toggle_off_indicator != overrides.toggle_off_indicator) merged.toggle_off_indicator = overrides.toggle_off_indicator;
     if (overrides.dropdown_open_indicator.has_value())
-      merged.dropdown_open_indicator = overrides.dropdown_open_indicator;
+      if (merged.dropdown_open_indicator != overrides.dropdown_open_indicator) merged.dropdown_open_indicator = overrides.dropdown_open_indicator;
     if (overrides.dropdown_closed_indicator.has_value())
-      merged.dropdown_closed_indicator = overrides.dropdown_closed_indicator;
+      if (merged.dropdown_closed_indicator != overrides.dropdown_closed_indicator) merged.dropdown_closed_indicator = overrides.dropdown_closed_indicator;
 
     // Button and icon
     if (overrides.button_variant != ButtonVariant::Filled)
@@ -1364,6 +1437,8 @@ struct ComponentConfig {
       merged.blur = overrides.blur;
     if (overrides.shader)
       merged.shader = overrides.shader;
+    if (overrides.blend_mode.has_value())
+      merged.blend_mode = overrides.blend_mode;
     if (overrides.origin_x != 0.5f || overrides.origin_y != 0.5f) {
       merged.origin_x = overrides.origin_x;
       merged.origin_y = overrides.origin_y;
@@ -1375,15 +1450,21 @@ struct ComponentConfig {
     // set-flag per field, written by the with_* setters, so the merge is a
     // loop over flags and a new field cannot be forgotten.
     // config_size_test guards the list until then.
+    return *this;
+  }
+
+  ComponentConfig apply_overrides(const ComponentConfig &overrides) const {
+    ComponentConfig merged = *this;
+    merged.apply_overrides_from(overrides);
     return merged;
   }
 
   // Static method to create inheritable config from parent
   static ComponentConfig inherit_from(const ComponentConfig &parent,
-                                      const std::string &debug_name = "") {
-    return ComponentConfig{}
-        .with_debug_name(debug_name)
-        .apply_inheritable_from(parent);
+                                      std::string_view debug_name = "") {
+    ComponentConfig result;
+    result.with_debug_name(debug_name).apply_inheritable_from(parent);
+    return result;
   }
 
   // Copies only inheritable fields from parent into this config
@@ -1394,7 +1475,7 @@ struct ComponentConfig {
     skip_when_tabbing = parent.skip_when_tabbing;
     select_on_focus = parent.select_on_focus;
     click_activation = parent.click_activation;
-    font_name = parent.font_name;
+    if (font_name != parent.font_name) font_name = parent.font_name;
     font_weight = parent.font_weight;
     font_size = parent.font_size;
     font_size_explicitly_set = parent.font_size_explicitly_set;
