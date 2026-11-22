@@ -14,6 +14,7 @@
 #include "component_config.h"
 #include "components.h"
 #include "context.h"
+#include "selectable_text.h"
 #include "entity_management.h"
 #include "fmt/format.h"
 
@@ -321,6 +322,10 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
     st->cfg = *config.unit_motion;
     update_text_units(entity, config.label);
   }
+
+  if (entity.toggleComponent<HasSelectableText>(config.text_selectable) &&
+      !config.cursor_type.has_value())
+    entity.addComponentIfMissing<HasCursor>(CursorType::Text);
 }
 
 struct ConfiguredTexture : BaseComponent {};
