@@ -2,6 +2,7 @@
 
 #include "config.h"
 #include "graphics_common.h"
+#include "window_helpers.h"
 
 #ifdef AFTER_HOURS_USE_RAYLIB
 #include "backends/raylib/backend.h"
@@ -21,7 +22,7 @@ using PlatformAPI = RaylibPlatformAPI;
 using PlatformAPI = MetalPlatformAPI;
 #else
 #error                                                                         \
-    "No graphics backend defined. Define AFTER_HOURS_USE_RAYLIB, AFTER_HOURS_USE_SOKOL, AFTER_HOURS_USE_METAL, or AFTER_HOURS_USE_VULKAN (AFTER_HOURS_USE_NONE has no graphics API)."
+    "No graphics backend defined. Define AFTER_HOURS_USE_RAYLIB, AFTER_HOURS_USE_SOKOL, AFTER_HOURS_USE_METAL, or AFTER_HOURS_USE_VULKAN (AFTER_HOURS_USE_NONE and AFTER_HOURS_USE_PSX have no graphics API)."
 #endif
 
 using Camera2D = PlatformAPI::Camera2D;
@@ -46,11 +47,15 @@ inline bool is_window_ready() { return PlatformAPI::is_window_ready(); }
 inline bool is_window_fullscreen() {
   return PlatformAPI::is_window_fullscreen();
 }
+inline bool is_window_focused() { return PlatformAPI::is_window_focused(); }
 inline void toggle_fullscreen() { PlatformAPI::toggle_fullscreen(); }
 inline void minimize_window() { PlatformAPI::minimize_window(); }
 inline void set_window_size(int w, int h) { PlatformAPI::set_window_size(w, h); }
 inline void set_window_min_size(int w, int h) {
   PlatformAPI::set_window_min_size(w, h);
+}
+inline bool window_resize_pending() {
+  return PlatformAPI::window_resize_pending();
 }
 inline void set_window_state(unsigned int flags) {
   PlatformAPI::set_window_state(flags);
@@ -58,6 +63,7 @@ inline void set_window_state(unsigned int flags) {
 inline void clear_window_state(unsigned int flags) {
   PlatformAPI::clear_window_state(flags);
 }
+inline unsigned int window_state() { return PlatformAPI::window_state(); }
 
 inline void set_config_flags(unsigned int flags) {
   PlatformAPI::set_config_flags(flags);
@@ -125,6 +131,10 @@ inline bool is_key_pressed_repeat(int key) {
   return testing::test_input::is_key_pressed(
       key, [](int k) { return PlatformAPI::is_key_pressed_repeat(k); });
 }
+inline int get_key_pressed() {
+  return testing::test_input::get_key_pressed(
+      [] { return PlatformAPI::get_key_pressed(); });
+}
 #else
 inline bool is_key_pressed(int key) { return PlatformAPI::is_key_pressed(key); }
 inline bool is_key_down(int key) { return PlatformAPI::is_key_down(key); }
@@ -136,7 +146,9 @@ inline bool is_key_pressed_repeat(int key) {
 }
 #endif
 inline int get_char_pressed() { return PlatformAPI::get_char_pressed(); }
+#ifndef AFTER_HOURS_ENABLE_E2E_TESTING
 inline int get_key_pressed() { return PlatformAPI::get_key_pressed(); }
+#endif
 
 inline bool is_mouse_button_pressed(int btn) {
   return PlatformAPI::is_mouse_button_pressed(btn);

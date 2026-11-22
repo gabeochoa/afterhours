@@ -53,7 +53,7 @@ void install_logging_hook() {
       [](std::string_view n, SystemPhase p) {
         log().push_back({std::string(n), p, true});
       },
-      [](std::string_view n, SystemPhase p) {
+      [](std::string_view n, SystemPhase p, int) {
         log().push_back({std::string(n), p, false});
       }});
 }
@@ -69,6 +69,75 @@ bool saw(const std::string &needle, SystemPhase phase) {
 }
 
 } // namespace
+
+std::string &captured_log() {
+  static std::string s;
+  return s;
+}
+
+TEST(reset_profile_command_clears_frames_and_keeps_recording) {
+  using namespace afterhours::testing::perf_commands;
+  using afterhours::testing::PendingE2ECommand;
+  builtin_profile::reset();
+  builtin_profile::enable();
+
+  SystemManager sm;
+  sm.register_update_system(std::make_unique<UnnamedUpdateSystem>());
+  Entities entities;
+  sm.tick(entities, 0.016f);
+  profiling::default_collector().end_frame(16.0);
+  CHECK(profiling::default_collector().snapshot().frames == 1);
+
+  Entity entity;
+  PendingE2ECommand command;
+  command.name = "reset_profile";
+  HandleResetProfileCommand{}.for_each_with(entity, command, 0.f);
+  CHECK(command.is_consumed());
+  CHECK(command.succeeded());
+  CHECK(profiling::default_collector().snapshot().frames == 0);
+
+  sm.tick(entities, 0.016f);
+  profiling::default_collector().end_frame(16.0);
+  CHECK(profiling::default_collector().snapshot().frames == 1);
+
+  builtin_profile::disable();
+}
+
+TEST(dump_profile_json_emits_snapshot_as_json) {
+  using namespace afterhours::testing::perf_commands;
+  using afterhours::testing::PendingE2ECommand;
+  builtin_profile::reset();
+  builtin_profile::enable();
+
+  SystemManager sm;
+  sm.register_update_system(std::make_unique<UnnamedUpdateSystem>());
+  Entities entities;
+  sm.tick(entities, 0.016f);
+  profiling::default_collector().end_frame(16.0);
+
+  captured_log().clear();
+  log_sink_fn = [](const char *, const char *message) {
+    captured_log() += message;
+    captured_log() += '\n';
+  };
+
+  Entity entity;
+  PendingE2ECommand command;
+  command.name = "dump_profile";
+  command.args = {"--json"};
+  HandleDumpProfileCommand{}.for_each_with(entity, command, 0.f);
+  log_sink_fn = nullptr;
+
+  CHECK(command.is_consumed());
+  CHECK(command.succeeded());
+  CHECK(captured_log().find("\"frames\":1") != std::string::npos);
+  CHECK(captured_log().find("\"systems\"") != std::string::npos);
+  CHECK(captured_log().find("UnnamedUpdateSystem") != std::string::npos);
+  CHECK(captured_log().find("=== PERFORMANCE PROFILE ===") ==
+        std::string::npos);
+
+  builtin_profile::disable();
+}
 
 TEST(a_system_reports_its_own_type_name) {
   UnnamedUpdateSystem sys;
@@ -190,6 +259,53 @@ TEST(a_system_may_clear_the_hook_while_it_runs) {
   sm.tick(entities, 0.016f); // used to terminate here
   CHECK(true);
   clear_hook();
+}
+
+TEST(entities_visited_per_system) {
+  for (int world = 0; world <= 5; world += 5) {
+    afterhours::testing::perf_commands::builtin_profile::reset();
+    afterhours::testing::perf_commands::builtin_profile::enable();
+
+    SystemManager sm;
+    sm.register_update_system(std::make_unique<UnnamedUpdateSystem>());
+    Entities entities;
+    for (int i = 0; i < world; ++i) {
+      entities.push_back(std::make_shared<Entity>());
+      entities.back()->addComponent<Marker>();
+    }
+    for (int frame = 0; frame < 2; frame++) {
+      sm.tick(entities, 0.016f);
+      profiling::default_collector().end_frame(16.0);
+    }
+    auto entries = afterhours::testing::perf_commands::provider().top_entries(10);
+    bool found = false;
+    for (const auto &e : entries) {
+      if (e.name.find("UnnamedUpdateSystem") == std::string::npos) continue;
+      found = true;
+      printf("  world=%d visited=%d\n", world, e.entity_count.value_or(-1));
+      CHECK(e.entity_count.value_or(-1) == world);
+    }
+    CHECK(found);
+    const auto snapshot = profiling::default_collector().snapshot();
+    for (const auto &s : snapshot.systems) {
+      if (s.name.find("UnnamedUpdateSystem") == std::string::npos) continue;
+      CHECK(s.entity_count == world);
+    }
+    afterhours::testing::perf_commands::builtin_profile::disable();
+  }
+  clear_hook();
+}
+
+TEST(dump_profile_rejects_unknown_flags) {
+  using namespace afterhours::testing::perf_commands;
+  using afterhours::testing::PendingE2ECommand;
+  Entity entity;
+  PendingE2ECommand command;
+  command.name = "dump_profile";
+  command.args = {"--yaml"};
+  HandleDumpProfileCommand{}.for_each_with(entity, command, 0.f);
+  CHECK(command.is_consumed());
+  CHECK(!command.succeeded());
 }
 
 int main() { return ui_test::run_registered_tests("system profile"); }
