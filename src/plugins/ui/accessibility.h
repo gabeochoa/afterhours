@@ -1,7 +1,13 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 #include <utility>
+#if __has_include(<magic_enum/magic_enum.hpp>)
+#include <magic_enum/magic_enum.hpp>
+#else
+#include "../../../vendor/magic_enum/magic_enum.hpp"
+#endif
 
 #include "../../ecs.h"
 
@@ -26,41 +32,40 @@ enum struct AccessibleRole {
   Tab,
   Link,
 };
-inline const char *accessible_role_name(AccessibleRole role) {
-  switch (role) {
-  case AccessibleRole::Button: return "button";
-  case AccessibleRole::Checkbox: return "checkbox";
-  case AccessibleRole::Radio: return "radio";
-  case AccessibleRole::Slider: return "slider";
-  case AccessibleRole::Switch: return "switch";
-  case AccessibleRole::Stepper: return "stepper";
-  case AccessibleRole::Dropdown: return "dropdown";
-  case AccessibleRole::TextInput: return "text_input";
-  case AccessibleRole::Text: return "text";
-  case AccessibleRole::Group: return "group";
-  case AccessibleRole::Image: return "image";
-  case AccessibleRole::ProgressBar: return "progress_bar";
-  case AccessibleRole::Tab: return "tab";
-  case AccessibleRole::Link: return "link";
-  case AccessibleRole::None: break;
+// Every role, for name round-trips.
+inline constexpr AccessibleRole accessible_roles[] = {
+    AccessibleRole::Button,   AccessibleRole::Checkbox,
+    AccessibleRole::Radio,    AccessibleRole::Slider,
+    AccessibleRole::Switch,   AccessibleRole::Stepper,
+    AccessibleRole::Dropdown, AccessibleRole::TextInput,
+    AccessibleRole::Text,     AccessibleRole::Group,
+    AccessibleRole::Image,    AccessibleRole::ProgressBar,
+    AccessibleRole::Tab,      AccessibleRole::Link,
+    AccessibleRole::None};
+inline std::string accessible_role_name(AccessibleRole role) {
+  std::string out;
+  std::string_view name = magic_enum::enum_name(role);
+  for (size_t i = 0; i < name.size(); i++) {
+    char c = name[i];
+    if (c >= 'A' && c <= 'Z') {
+      if (i > 0) out.push_back('_');
+      out.push_back(static_cast<char>(c - 'A' + 'a'));
+    } else {
+      out.push_back(c);
+    }
   }
-  return "none";
+  return out;
 }
-inline bool accessible_role_from_name(const std::string &s,
+
+inline bool accessible_role_from_name(std::string_view s,
                                       AccessibleRole &out) {
-  for (auto r : {AccessibleRole::Button, AccessibleRole::Checkbox,
-                 AccessibleRole::Radio, AccessibleRole::Slider,
-                 AccessibleRole::Switch, AccessibleRole::Stepper,
-                 AccessibleRole::Dropdown, AccessibleRole::TextInput,
-                 AccessibleRole::Text, AccessibleRole::Group,
-                 AccessibleRole::Image, AccessibleRole::ProgressBar,
-                 AccessibleRole::Tab, AccessibleRole::Link,
-                 AccessibleRole::None}) {
+  for (auto r : accessible_roles) {
     if (s == accessible_role_name(r)) { out = r; return true; }
   }
   return false;
 }
-inline bool accessible_is_blank(const std::string &s) {
+
+inline bool accessible_is_blank(std::string_view s) {
   for (char c : s)
     if (c != ' ' && c != '\t' && c != '\n' && c != '\r') return false;
   return true;
@@ -90,12 +95,12 @@ struct HasAccessibility : BaseComponent {
            description.empty();
   }
 };
-inline std::string resolve_accessible_name(const std::string &explicit_name,
-                                           const std::string &label,
-                                           const std::string &tooltip) {
-  if (!accessible_is_blank(explicit_name)) return explicit_name;
-  if (!accessible_is_blank(label)) return label;
-  if (!accessible_is_blank(tooltip)) return tooltip;
+inline std::string resolve_accessible_name(std::string_view explicit_name,
+                                           std::string_view label,
+                                           std::string_view tooltip) {
+  if (!accessible_is_blank(explicit_name)) return std::string(explicit_name);
+  if (!accessible_is_blank(label)) return std::string(label);
+  if (!accessible_is_blank(tooltip)) return std::string(tooltip);
   return "";
 }
 } // namespace ui

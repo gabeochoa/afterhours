@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <functional>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 
 #include "../../ecs.h"
@@ -188,24 +189,35 @@ inline AccessibleRole default_accessible_role(ComponentType type) {
   case ComponentType::TextInput: return AccessibleRole::TextInput;
   case ComponentType::CircularProgress: return AccessibleRole::ProgressBar;
   case ComponentType::Image: return AccessibleRole::Image;
-  default: return AccessibleRole::None;
+  case ComponentType::ButtonGroup:
+  case ComponentType::Div:
+  case ComponentType::Pagination:
+  case ComponentType::NavigationBar:
+  case ComponentType::CheckboxGroup:
+  case ComponentType::Separator:
+  case ComponentType::TabContainer:
+  case ComponentType::DecorativeFrame:
+  case ComponentType::Tray: return AccessibleRole::None;
   }
+  return AccessibleRole::None;
 }
+
 inline void apply_accessibility(Entity &entity, const ComponentConfig &config,
                                 AccessibleRole fallback_role,
-                                const std::string &label_for_name = "",
-                                const std::string &value = "") {
+                                std::string_view label_for_name = "",
+                                std::string_view value = "") {
   HasAccessibility resolved;
   resolved.role = config.accessible.role != AccessibleRole::None
                       ? config.accessible.role
                       : fallback_role;
   resolved.name = resolve_accessible_name(
       config.accessible.name,
-      label_for_name.empty() && !config.label.empty() ? config.label
-                                                       : label_for_name,
+      label_for_name.empty() ? std::string_view(config.label)
+                             : label_for_name,
       config.tooltip_text);
-  resolved.value =
-      !config.accessible.value.empty() ? config.accessible.value : value;
+  resolved.value = !config.accessible.value.empty()
+                       ? config.accessible.value
+                       : std::string(value);
   resolved.description = config.accessible.description;
   if (resolved.description.empty() &&
       !accessible_is_blank(config.accessible.name) &&
@@ -220,6 +232,7 @@ inline void apply_accessibility(Entity &entity, const ComponentConfig &config,
     ha->description = resolved.description;
   }
 }
+
 inline void apply_flags(Entity &entity, const ComponentConfig &config) {
   entity.get<UIComponent>().skip_when_tabbing = config.skip_when_tabbing;
   entity.get<UIComponent>().focus_ring_offset = config.focus_ring_offset;
