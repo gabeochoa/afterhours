@@ -103,6 +103,8 @@ struct IgnorePointerEvents : BaseComponent {};
 struct Inert : BaseComponent {};
 struct DoesNotTakeFocus : BaseComponent {};
 
+struct Hoverable : BaseComponent {};
+
 struct HasDragListener : BaseComponent {
   bool down = false;
   std::function<void(Entity &)> cb;
@@ -152,6 +154,8 @@ struct SelectOnFocus : BaseComponent {};
 
 struct FocusClusterRoot : BaseComponent {};
 struct InFocusCluster : BaseComponent {};
+
+struct FocusScope : BaseComponent {};
 
 struct FocusProxy : BaseComponent {
   EntityID target = -1;
@@ -311,6 +315,10 @@ struct HasBlur : BaseComponent {
 
 struct HasShader : BaseComponent {
   graphics::ShaderType *shader = nullptr;
+};
+
+struct HasBlend : BaseComponent {
+  blend::Mode mode = blend::Mode::Alpha;
 };
 
 struct BlurRequest {
