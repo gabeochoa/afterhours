@@ -66,6 +66,36 @@ int main() {
                 transform_point(a, transform_point(b, {0, 0, 0}))),
           "Mat4 multiply applies right first");
   }
+
+  {
+    // Agreement with raw raymath (the delegated backend, called directly).
+    const Vec3 a{1, -2, 3}, b{-4, 5, 6};
+    raylib::Vector3 ra{a.x, a.y, a.z}, rb{b.x, b.y, b.z};
+    raylib::Vector3 rc = raylib::Vector3CrossProduct(ra, rb);
+    check(near3(cross(a, b), {rc.x, rc.y, rc.z}), "cross agrees with raymath");
+    check(near(dot(a, b), raylib::Vector3DotProduct(ra, rb)), "dot agrees with raymath");
+    Quat q1 = Quat::axis_angle({0, 0, 1}, half_pi), q2 = Quat::axis_angle({1, 0, 0}, half_pi);
+    raylib::Vector3 rr = raylib::Vector3RotateByQuaternion(
+        {0, 1, 0}, raylib::QuaternionMultiply({q1.x, q1.y, q1.z, q1.w}, {q2.x, q2.y, q2.z, q2.w}));
+    // Our operator* normalizes where raymath does not; both rotate the same.
+    check(near3(rotate(q1 * q2, {0, 1, 0}), {rr.x, rr.y, rr.z}), "quat multiply agrees with raymath");
+    Mat4 m1 = to_mat4(TRS{{1, 2, 3}, q1, {2, 1, 1}}), m2 = to_mat4(TRS{{-1, 0, 2}, q2, {1, 3, 1}});
+    auto to_rm = [](const Mat4 &m) {
+      raylib::Matrix r; r.m0=m.m[0]; r.m1=m.m[1]; r.m2=m.m[2]; r.m3=m.m[3];
+      r.m4=m.m[4]; r.m5=m.m[5]; r.m6=m.m[6]; r.m7=m.m[7]; r.m8=m.m[8]; r.m9=m.m[9];
+      r.m10=m.m[10]; r.m11=m.m[11]; r.m12=m.m[12]; r.m13=m.m[13]; r.m14=m.m[14]; r.m15=m.m[15]; return r;
+    };
+    // raymath applies its left operand first, so the raw equivalent of m1*m2 swaps.
+    raylib::Matrix rm = raylib::MatrixMultiply(to_rm(m2), to_rm(m1));
+    Mat4 prod = m1 * m2;
+    check(near(prod.m[0], rm.m0) && near(prod.m[5], rm.m5) && near(prod.m[12], rm.m12) &&
+          near(prod.m[15], rm.m15), "Mat4 multiply agrees with raymath (swapped)");
+    check(near3(rotate(Quat::axis_angle({0, 0, 0}, half_pi), {1, 0, 0}), {1, 0, 0}),
+          "zero axis is identity");
+    Quat tiny = slerp(Quat::identity(), Quat::axis_angle({0, 0, 1}, 0.02f), 0.5f);
+    check(near3(rotate(tiny, {1, 0, 0}), {std::cos(0.01f), std::sin(0.01f), 0}),
+          "slerp near-parallel midpoint");
+  }
   printf("%s: %d/%d checks passed\n", checks_passed == checks_run ? "PASS" : "FAIL",
          checks_passed, checks_run);
   return checks_passed == checks_run ? 0 : 1;
