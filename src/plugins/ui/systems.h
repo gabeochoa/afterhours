@@ -8,6 +8,7 @@
 
 #include "../../ecs.h"
 #include "../../logging.h"
+#include "../../rect.h"
 #include "../autolayout.h"
 #include "../clipboard.h"
 #include "../input_system.h"
@@ -33,16 +34,7 @@ namespace ui {
 namespace detail {
 static inline RectangleType intersect_rects(const RectangleType &a,
                                             const RectangleType &b) {
-  float x1 = std::max(a.x, b.x);
-  float y1 = std::max(a.y, b.y);
-  float x2 = std::min(a.x + a.width, b.x + b.width);
-  float y2 = std::min(a.y + a.height, b.y + b.height);
-  RectangleType r;
-  r.x = x1;
-  r.y = y1;
-  r.width = std::max(0.0f, x2 - x1);
-  r.height = std::max(0.0f, y2 - y1);
-  return r;
+  return rect::intersection(a, b);
 }
 
 // Walk the full ancestor chain and intersect ALL clip rects (HasScrollView and
@@ -84,7 +76,7 @@ compute_intersected_clip_rect(const Entity &entity, bool include_self = true) {
       break;
     Entity &parent = opt_parent.asE();
 
-    if (parent.has<HasScrollView>() || parent.has<HasClipChildren>()) {
+    if (parent.has_any<HasScrollView, HasClipChildren>()) {
       if (parent.has<HasScrollView>()) {
         const HasScrollView &sv = parent.get<HasScrollView>();
         if (sv.auto_overflow && !sv.needs_scroll_y() &&
@@ -1413,7 +1405,7 @@ struct HandleLeftRight : SystemWithUIContext<ui::HasLeftRightListener> {
 private:
   bool direction_triggered(const Entity &entity, InputAction action) {
     // Sliders and steppers step a value: pace held keys by time, not frames.
-    if (entity.has<HasStepperState>() || entity.has<HasSliderState>())
+    if (entity.has_any<HasStepperState, HasSliderState>())
       return context->pressed_or_repeat(action);
     return context->pressed(action) || context->is_held_down(action);
   }
@@ -1805,22 +1797,17 @@ inline OptEntity find_drag_tagged(DragTag tag) {
 /// Mark every entity carrying the given DragTag for cleanup.
 inline void cleanup_drag_tagged(DragTag tag) {
   auto &ui_coll = UICollectionHolder::get().collection;
-  for (Entity &e : EntityQuery(ui_coll, {.ignore_temp_warning = true})
-                       .whereHasTag(tag)
-                       .gen()) {
-    e.cleanup = true;
-  }
+  EntityQuery(ui_coll, {.ignore_temp_warning = true})
+      .whereHasTag(tag)
+      .for_each_stream([](Entity &e) { e.cleanup = true; });
 }
 
 /// Clear the given DragTag from every entity that has it.
 inline void untag_all(DragTag tag) {
   auto &ui_coll = UICollectionHolder::get().collection;
-  for (Entity &e : EntityQuery(ui_coll, {.ignore_temp_warning = true})
-                       .whereHasTag(tag)
-                       // TODO we need gen_for_each() or something
-                       .gen()) {
-    e.disableTag(tag);
-  }
+  EntityQuery(ui_coll, {.ignore_temp_warning = true})
+      .whereHasTag(tag)
+      .for_each_stream([tag](Entity &e) { e.disableTag(tag); });
 }
 
 /// Create or update the floating overlay entity at the given position.
