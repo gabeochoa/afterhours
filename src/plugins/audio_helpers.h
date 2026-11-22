@@ -158,6 +158,47 @@ inline SoundType load_sound_from_samples(std::span<const float> samples,
 #endif
 }
 
+// 16-bit PCM WAV via plain file I/O, so it works on every backend.
+inline bool export_wav(const char *path, std::span<const float> samples,
+                       int sample_rate, int channels = 1) {
+  if (!path || samples.empty() || sample_rate <= 0 || channels <= 0)
+    return false;
+  std::FILE *f = std::fopen(path, "wb");
+  if (!f) return false;
+  const auto data_bytes =
+      static_cast<std::uint32_t>(samples.size() * sizeof(std::int16_t));
+  const auto write_u32 = [&](std::uint32_t v) {
+    const unsigned char b[4] = {static_cast<unsigned char>(v & 0xff),
+                                static_cast<unsigned char>((v >> 8) & 0xff),
+                                static_cast<unsigned char>((v >> 16) & 0xff),
+                                static_cast<unsigned char>((v >> 24) & 0xff)};
+    std::fwrite(b, 1, 4, f);
+  };
+  const auto write_u16 = [&](std::uint16_t v) {
+    const unsigned char b[2] = {static_cast<unsigned char>(v & 0xff),
+                                static_cast<unsigned char>((v >> 8) & 0xff)};
+    std::fwrite(b, 1, 2, f);
+  };
+  std::fwrite("RIFF", 1, 4, f);
+  write_u32(36 + data_bytes);
+  std::fwrite("WAVEfmt ", 1, 8, f);
+  write_u32(16);
+  write_u16(1); // PCM
+  write_u16(static_cast<std::uint16_t>(channels));
+  write_u32(static_cast<std::uint32_t>(sample_rate));
+  write_u32(static_cast<std::uint32_t>(sample_rate * channels * 2));
+  write_u16(static_cast<std::uint16_t>(channels * 2));
+  write_u16(16);
+  std::fwrite("data", 1, 4, f);
+  write_u32(data_bytes);
+  for (float s : samples) {
+    const float clamped = std::clamp(s, -1.f, 1.f);
+    auto v = static_cast<std::int16_t>(clamped * 32767.f);
+    write_u16(static_cast<std::uint16_t>(v));
+  }
+  return std::fclose(f) == 0;
+}
+
 namespace synth {
 
 // Synthesized beep: a sine at freq Hz for seconds, with a short attack and
