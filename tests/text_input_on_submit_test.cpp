@@ -47,7 +47,8 @@ TEST(on_submit_sees_this_frames_captures_not_the_first_frames) {
               saw_kickoff = kickoff;
               saw_text = std::string(t);
             }));
-    CHECK(!r.submitted || calls > 0);
+    CHECK(!r.ent().template get<text_input::IsSubmittable>().submitted ||
+          calls > 0);
   };
   two_frames(h, emit);
   Entity *field = find_by_name("text_input_field");
@@ -75,7 +76,7 @@ TEST(submitted_flag_and_no_fire_without_enter) {
         ComponentConfig{}
             .with_size({pixels(220), pixels(40)})
             .with_on_submit([&](std::string_view) { calls++; }));
-    submitted = r.submitted;
+    submitted = r.ent().template get<text_input::IsSubmittable>().submitted;
   };
   two_frames(h, emit);
   CHECK(!submitted);
@@ -102,7 +103,7 @@ TEST(text_area_on_submit_fires_without_newline) {
             .with_submit_on_enter()
             .with_on_submit(
                 [&](std::string_view t) { saw_text = std::string(t); }));
-    submitted = r.submitted;
+    submitted = r.ent().template get<text_input::IsSubmittable>().submitted;
   };
   two_frames(h, emit);
   Entity *field = find_by_name("text_area_field");
@@ -116,6 +117,12 @@ TEST(text_area_on_submit_fires_without_newline) {
   CHECK(submitted);
   CHECK(saw_text == "ab");
   CHECK(text == "ab");
+  // Frame-scoped: the next call without Enter clears it, it does not stick.
+  h.context().last_action = ui_test::TestInputAction::None;
+  h.begin_frame();
+  emit();
+  h.layout_only();
+  CHECK(!submitted);
 }
 
 int main() { return ui_test::run_registered_tests("text_input_on_submit"); }

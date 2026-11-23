@@ -170,8 +170,8 @@ struct ComponentConfig {
   RenderPrimitive::CustomDrawFn on_draw_bg;
   RenderPrimitive::CustomDrawFn on_draw_fg;
   RenderPrimitive::CustomDrawFn on_draw_over;
-  // Fired synchronously inside text_input/text_area on Enter, never stored.
-  std::function<void(std::string_view)> on_submit;
+  using OnSubmitFn = std::function<void(std::string_view)>;
+  OnSubmitFn on_submit;
 
   std::string font_name = UIComponent::UNSET_FONT;
   colors::FontWeight font_weight = colors::FontWeight::Regular;
@@ -691,7 +691,7 @@ struct ComponentConfig {
     return *this;
   }
 
-  ComponentConfig &with_on_submit(std::function<void(std::string_view)> fn) {
+  ComponentConfig &with_on_submit(OnSubmitFn fn) {
     on_submit = std::move(fn);
     return *this;
   }

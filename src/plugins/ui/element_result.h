@@ -33,8 +33,6 @@ struct ElementResult {
   ElementResult(Entity &ent) : result(true), element(ent) {}
 
   operator bool() const { return result; }
-  // text_input/text_area: Enter was pressed this frame (fired on_submit too).
-  bool submitted = false;
   EntityID id() const { return element.id; }
   Entity &ent() const { return element; }
   UIComponent &cmp() const { return element.get<UIComponent>(); }

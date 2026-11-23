@@ -119,6 +119,9 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
       },
       text);
 
+  auto &submit_state = entity.template addComponentIfMissing<IsSubmittable>();
+  submit_state.submitted = false;
+
   // Apply readonly/disabled from config each frame
   state.readonly = config.text_readonly;
   state.disabled = config.disabled;
@@ -547,7 +550,6 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
         reset_blink(s);
       });
 
-  bool submitted = false;
   // Handle input when focused
   if (state.is_focused) {
     report_missing_editing_actions<InputAction>();
@@ -783,7 +785,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
 
     // Enter/Submit
     if (ctx.pressed(InputAction::WidgetPress)) {
-      submitted = true;
+      submit_state.submitted = true;
       if (entity.has<HasTextInputListener>())
         if (auto &listener = entity.get<HasTextInputListener>();
             listener.on_submit)
@@ -798,7 +800,6 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   text = state.text();
   entity.template addComponentIfMissing<FocusClusterRoot>();
   ElementResult result{state.changed_since, entity};
-  result.submitted = submitted;
   return result;
 }
 
