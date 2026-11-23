@@ -159,6 +159,7 @@ ALL_TESTS := \
 	spike_capture_test \
 	perf_provider_warn_test \
 	blend_mode_test \
+	blur_shader_test \
 	rect_test \
 	math3d_test \
 	rounded_corners_test \
@@ -416,6 +417,7 @@ RAYLIB_TESTS := \
 	render_capture_test \
 	presented_frame_test \
 	triangle_winding_test \
+	blur_shader_test \
 	rounded_outline_mask_test \
 	clipboard_test \
 	mk_cost_test \
@@ -653,6 +655,8 @@ $(OUT)/triangle_winding_metal_test: triangle_winding_test.cpp ../examples/web/so
 
 $(OUT)/image_metal_test: image_test.cpp ../examples/web/sokol_impl.cc
 	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) -DAFTER_HOURS_USE_SOKOL -x objective-c++ $(filter %.cpp %.cc,$^) $(SOKOL_FRAMEWORKS) -o $@
+
+$(OUT)/blur_shader_test: ../src/plugins/files.cpp
 
 $(OUT)/image_raylib_test: image_test.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $< $(LDFLAGS_RAYLIB) -o $@
