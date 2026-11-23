@@ -9,6 +9,7 @@
 #include <span>
 #include <vector>
 
+#include "../developer.h"
 #include "../logging.h"
 #include "../warn_once.h"
 
@@ -296,7 +297,7 @@ inline SoundType beep(float freq, float seconds) {
         std::min(1.f, static_cast<float>(frames - i) /
                            static_cast<float>(release));
     samples[static_cast<size_t>(i)] = static_cast<short>(
-        sinf(2.f * 3.14159265f * freq * t) * env * 8000.f);
+        sinf(2.f * PI * freq * t) * env * 8000.f);
   }
   WaveType wave{.frameCount = static_cast<unsigned>(frames),
                 .sampleRate = static_cast<unsigned>(sample_rate),
