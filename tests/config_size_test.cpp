@@ -16,15 +16,15 @@
 using namespace afterhours::ui::imm;
 
 // Measured in this suite's build config; see the note above about ABI.
-static constexpr size_t kExpectedSize = 1792;
+static constexpr size_t EXPECTED_SIZE = 1792;
 
 TEST(component_config_has_not_grown_unnoticed) {
-  CHECK(sizeof(ComponentConfig) == kExpectedSize);
-  if (sizeof(ComponentConfig) != kExpectedSize)
+  CHECK(sizeof(ComponentConfig) == EXPECTED_SIZE);
+  if (sizeof(ComponentConfig) != EXPECTED_SIZE)
     fprintf(stderr,
             "        sizeof(ComponentConfig) is %zu, expected %zu. Merge the "
-            "new field in apply_overrides, then update kExpectedSize.\n",
-            sizeof(ComponentConfig), kExpectedSize);
+            "new field in apply_overrides, then update EXPECTED_SIZE.\n",
+            sizeof(ComponentConfig), EXPECTED_SIZE);
 }
 
 int main() { return ui_test::run_registered_tests("config size"); }
