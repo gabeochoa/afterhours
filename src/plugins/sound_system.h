@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <functional>
 #include <map>
@@ -199,6 +200,47 @@ struct sound_system : developer::Plugin {
             return it == range_by_name.end() ? fallback : it->second;
         }
 
+        // Closed captions: a sound name maps to accessibility text. Playing
+        // the sound stamps the caption; last_caption() is the query UI uses.
+        // No rendering here by design.
+        static constexpr float DEFAULT_CAPTION_DURATION = 4.f;
+
+        struct Caption {
+            std::string text;
+            float started_at = 0.f;
+            float duration = DEFAULT_CAPTION_DURATION;
+        };
+
+        void set_caption(const std::string &name, const std::string &text,
+                         float duration = DEFAULT_CAPTION_DURATION) {
+            captions_[name] = Caption{text, 0.f, duration};
+        }
+
+        void clear_caption(const std::string &name) { captions_.erase(name); }
+
+        [[nodiscard]] bool has_caption(const std::string &name) const {
+            return captions_.contains(name);
+        }
+
+        // Seconds, for caption timestamps; tests inject a fake clock.
+        void set_caption_clock(std::function<float()> clock) {
+            caption_clock_ = std::move(clock);
+        }
+
+        [[nodiscard]] std::optional<Caption> last_caption() const {
+            if (!last_) return std::nullopt;
+            if (now() - last_->started_at >= last_->duration)
+                return std::nullopt;
+            return last_;
+        }
+
+        void note_played(const std::string &name) {
+            auto it = captions_.find(name);
+            if (it == captions_.end()) return;
+            last_ = it->second;
+            last_->started_at = now();
+        }
+
         void play(const char *const name) { play_loaded(name); }
 
         void play_loaded(const std::string &name, float volume_scale = 1.f,
@@ -225,6 +267,7 @@ struct sound_system : developer::Plugin {
                                    pitch,
                                    positional ? std::optional<Vector3Type>(position)
                                               : std::nullopt});
+            note_played(name);
         }
 
         void stop(const std::string &name) {
@@ -325,6 +368,15 @@ struct sound_system : developer::Plugin {
         std::map<std::string, std::string> bus_by_name;
         std::map<std::string, float> bus_volumes;
         std::map<std::string, float> range_by_name;
+        std::map<std::string, Caption> captions_;
+        std::optional<Caption> last_;
+        std::function<float()> caption_clock_ = [] {
+            return std::chrono::duration<float>(
+                       std::chrono::steady_clock::now().time_since_epoch())
+                .count();
+        };
+
+        [[nodiscard]] float now() const { return caption_clock_(); }
 
         struct SoundLibraryImpl : Library<SoundType> {
             virtual SoundType convert_filename_to_object(
@@ -583,6 +635,7 @@ struct sound_system : developer::Plugin {
                             (void)s;
 #endif
                             lib.play_loaded(alias_name);
+                            lib.note_played(base);
                             idx = (try_index + 1) % names.size();
                             return;
                         }
