@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <optional>
 #include <vector>
@@ -457,6 +458,7 @@ inline void apply_exit_frame(Entity &entity) {
   }
 }
 
+template <typename Ctx>
 struct PresentExitingWidgets : System<ui::imm::HasExitPresence> {
   void for_each_with(Entity &entity, ui::imm::HasExitPresence &xp,
                      float) override {
@@ -466,6 +468,20 @@ struct PresentExitingWidgets : System<ui::imm::HasExitPresence> {
     if (parent.valid() && parent->template has<ui::UIComponent>())
       parent->template get<ui::UIComponent>().add_child(entity.id);
     apply_exit_frame(entity);
+    // Retained widgets are not built this frame, so nothing queued them for
+    // render (apply_render_layer only runs on build). Both renderers draw
+    // exactly the queued commands, so queue the retained widget here or it
+    // fades in state while never reaching pixels.
+    if (auto *ctx = EntityHelper::get_singleton_cmp<Ctx>()) {
+      const bool queued = std::any_of(
+          ctx->render_cmds.begin(), ctx->render_cmds.end(),
+          [&](const ui::RenderInfo &cmd) { return cmd.id == entity.id; });
+      if (!queued)
+        ctx->queue_render(ui::RenderInfo{
+            entity.id, entity.has<ui::UIComponent>()
+                           ? entity.get<ui::UIComponent>().render_layer
+                           : 0});
+    }
   }
 };
 
@@ -560,7 +576,7 @@ template <typename Ctx> inline void register_bridge() {
         [] { return std::make_unique<motion::AdvanceTracks>(); });
     ui::imm::ui_exit_retention_hook = [](Entity &e) { return exit_retention(e); };
     ui::imm::register_ui_post_update_system(
-        [] { return std::make_unique<PresentExitingWidgets>(); });
+        [] { return std::make_unique<PresentExitingWidgets<Ctx>>(); });
     return true;
   }();
   (void)once;

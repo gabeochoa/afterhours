@@ -1,5 +1,7 @@
 #include "ui_test_harness.h"
 
+#include <algorithm>
+
 #include <afterhours/src/plugins/ui_motion.h>
 
 using namespace afterhours;
@@ -24,7 +26,7 @@ static void advance_tracks(ImmTestHarness &h, float dt) {
 }
 
 static void present_exiting(ImmTestHarness &h) {
-  ui_motion::PresentExitingWidgets sys;
+  ui_motion::PresentExitingWidgets<UIContext<ui_test::TestInputAction>> sys;
   h.coll.merge_entity_arrays();
   for (const auto &e : h.coll.get_entities())
     if (e && e->has<HasExitPresence>())
@@ -112,6 +114,44 @@ TEST(rebuild_mid_exit_cancels_it) {
   CHECK(alive(h, id));
   CHECK(!ent(id).has<HasExitPresence>());
   CHECK(!ent(id).get<ui_motion::HasMotionState>().exiting);
+}
+
+TEST(retained_exit_row_is_drawn_mid_exit_and_not_after_completion) {
+  ui_motion::register_bridge<UIContext<ui_test::TestInputAction>>();
+  ImmTestHarness h;
+  EntityHelper::registerSingleton<UIContext<ui_test::TestInputAction>>(
+      h.context_entity());
+  auto built = div(h.context(), mk(h.root(), 0),
+                   row_config().with_custom_background(Color{200, 90, 40, 255}));
+  const EntityID id = built.ent().id;
+  h.layout_only();
+  // Production clears the queue at frame start (BeginUIContextManager); the
+  // build above queued the row, so drop that or a stale command would draw
+  // it even if exit presentation never queued it again.
+  h.context().render_cmds.clear();
+
+  exit_frame(h);
+  exit_frame(h);
+  exit_frame(h);
+  CHECK(alive(h, id));
+  const bool queued_mid_exit =
+      std::any_of(h.context().render_cmds.begin(), h.context().render_cmds.end(),
+                  [&](const RenderInfo &cmd) { return cmd.id == id; });
+  CHECK(queued_mid_exit);
+  bool drawn_mid_exit = false;
+  for (const auto &call : h.render())
+    drawn_mid_exit = drawn_mid_exit || call.entity_id == id;
+  CHECK(drawn_mid_exit);
+
+  for (int i = 0; i < 20 && alive(h, id); i++)
+    exit_frame(h);
+  CHECK(!alive(h, id));
+  h.context().render_cmds.clear();
+  present_exiting(h);
+  bool drawn_after_completion = false;
+  for (const auto &call : h.render())
+    drawn_after_completion = drawn_after_completion || call.entity_id == id;
+  CHECK(!drawn_after_completion);
 }
 
 int main() { return ui_test::run_registered_tests("exit_animation_test"); }
