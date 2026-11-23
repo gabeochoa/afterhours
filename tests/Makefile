@@ -349,6 +349,7 @@ ALL_TESTS := \
 	theme_io_test \
 	tree_view_test \
 	window_helpers_test \
+	skeletal_test \
 	translation_test \
 	layout_inspector_test \
 	letter_spacing_zero_test
@@ -383,6 +384,7 @@ endif
 
 RAYLIB_TESTS := \
 	auto_text_color_test \
+	skeletal_test \
 	math3d_test \
 	value_types_test \
 	wrappers_test \
