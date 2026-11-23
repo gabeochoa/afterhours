@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -25,12 +27,12 @@ struct SettingsPreset {
 template <typename Values>
 size_t active_preset_index(const Values &values,
                            const std::vector<SettingsPreset<Values>> &presets) {
-  for (size_t i = 0; i < presets.size(); ++i) {
-    if (values == presets[i].values) {
-      return i;
-    }
-  }
-  return presets.size();
+  const auto it =
+      std::find_if(presets.begin(), presets.end(),
+                   [&](const SettingsPreset<Values> &preset) {
+                     return values == preset.values;
+                   });
+  return static_cast<size_t>(std::distance(presets.begin(), it));
 }
 
 template <typename Values>
@@ -47,9 +49,10 @@ std::vector<std::string>
 preset_option_names(const std::vector<SettingsPreset<Values>> &presets) {
   std::vector<std::string> names;
   names.reserve(presets.size() + 1);
-  for (const auto &preset : presets) {
-    names.push_back(preset.name);
-  }
+  std::transform(presets.begin(), presets.end(), std::back_inserter(names),
+                 [](const SettingsPreset<Values> &preset) {
+                   return preset.name;
+                 });
   names.emplace_back(CUSTOM_PRESET_NAME);
   return names;
 }
