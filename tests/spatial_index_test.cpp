@@ -1,4 +1,11 @@
-#include <afterhours/src/spatial_index.h>
+#ifndef AFTER_HOURS_USE_NONE
+#define AFTER_HOURS_USE_NONE 1
+#endif
+
+#define AFTER_HOURS_ENTITY_HELPER
+#define AFTER_HOURS_SYSTEM
+#include <afterhours/ah.h>
+#include <afterhours/src/plugins/spatial_index.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -6,7 +13,7 @@
 #include <vector>
 
 using namespace afterhours;
-using Index = SpatialIndex<int>;
+using Index = spatial_index::Index<int>;
 using Entry = Index::Entry;
 
 static int checks = 0, failures = 0;
@@ -21,16 +28,14 @@ static std::vector<int> sorted(std::vector<int> v) {
   return v;
 }
 
-static std::vector<int> brute_radius(const std::vector<Entry> &es, Index::Point c, float r) {
+static std::vector<int> brute_radius(const std::vector<Entry> &es, Vector2Type c, float r) {
   std::vector<int> out;
-  for (auto &e : es) {
-    float dx = e.pos.x - c.x, dy = e.pos.y - c.y;
-    if (dx * dx + dy * dy <= r * r) out.push_back(e.id);
-  }
+  for (auto &e : es)
+    if (distance_sq(e.pos, c) <= r * r) out.push_back(e.id);
   return sorted(out);
 }
 
-static std::vector<int> brute_box(const std::vector<Entry> &es, Index::Point mn, Index::Point mx) {
+static std::vector<int> brute_box(const std::vector<Entry> &es, Vector2Type mn, Vector2Type mx) {
   std::vector<int> out;
   for (auto &e : es)
     if (e.pos.x >= mn.x && e.pos.x <= mx.x && e.pos.y >= mn.y && e.pos.y <= mx.y)
@@ -83,14 +88,44 @@ int main() {
       idx.rebuild_static(statik);
       idx.rebuild_dynamic(dyn);
       for (int t = 0; t < 100; t++) {
-        Index::Point c{q(rng), q(rng)};
+        Vector2Type c{q(rng), q(rng)};
         float r = rad(rng);
         CHECK(sorted(idx.query_radius(c, r)) == brute_radius(all, c, r));
-        Index::Point mn{q(rng), q(rng)};
-        Index::Point mx{mn.x + rad(rng), mn.y + rad(rng)};
+        Vector2Type mn{q(rng), q(rng)};
+        Vector2Type mx{mn.x + rad(rng), mn.y + rad(rng)};
         CHECK(sorted(idx.query_box(mn, mx)) == brute_box(all, mn, mx));
       }
     }
+  }
+  // ECS surface: HasSpatialPosition entities are indexed by the plugin
+  // system and queried by entity id, with moves picked up next update.
+  {
+    SystemManager sm;
+    Entity &manager = EntityHelper::createEntity();
+    spatial_index::add_singleton_components(manager);
+    spatial_index::enforce_singletons(sm);
+    spatial_index::register_update_systems(sm);
+
+    Entity &wall = EntityHelper::createEntity();
+    wall.addComponent<spatial_index::HasSpatialPosition>(Vector2Type{0.f, 0.f}, true);
+    Entity &npc = EntityHelper::createEntity();
+    npc.addComponent<spatial_index::HasSpatialPosition>(Vector2Type{3.f, 4.f});
+    Entity &far = EntityHelper::createEntity();
+    far.addComponent<spatial_index::HasSpatialPosition>(Vector2Type{100.f, 100.f});
+    EntityHelper::merge_entity_arrays();
+
+    sm.run(1.f / 60.f);
+    CHECK(sorted(spatial_index::query_radius({0.f, 0.f}, 5.f)) ==
+          std::vector<EntityID>({wall.id, npc.id}));
+    CHECK(sorted(spatial_index::query_box({-1.f, -1.f}, {1.f, 1.f})) ==
+          std::vector<EntityID>({wall.id}));
+
+    npc.get<spatial_index::HasSpatialPosition>().pos = {100.f, 100.f};
+    sm.run(1.f / 60.f);
+    CHECK(sorted(spatial_index::query_radius({0.f, 0.f}, 5.f)) ==
+          std::vector<EntityID>({wall.id}));
+    CHECK(sorted(spatial_index::query_radius({100.f, 100.f}, 1.f)) ==
+          std::vector<EntityID>({npc.id, far.id}));
   }
   std::printf("spatial_index_test: %d checks, %d failures\n", checks, failures);
   return failures ? 1 : 0;
