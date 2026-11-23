@@ -634,8 +634,8 @@ struct HasLabel : BaseComponent {
     return *this;
   }
 
-  auto &set_vertical(VerticalAlignment v_) {
-    vertical = v_;
+  auto &set_vertical(VerticalAlignment v) {
+    vertical = v;
     return *this;
   }
   auto &set_text_overflow(TextOverflow overflow) {
