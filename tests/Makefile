@@ -172,6 +172,7 @@ ALL_TESTS := \
 	crash_handler_web_sim_test \
 	crash_report_file_test \
 	setting_row_style_test \
+	settings_presets_test \
 	singleton_iteration_test \
 	get_unique_test \
 	singleton_add_test \
