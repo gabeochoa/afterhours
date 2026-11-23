@@ -138,6 +138,26 @@ class SystemBase {
         return static_cast<const SystemBase &>(*this).should_run(dt);
     }
     virtual bool should_run(const float) const { return true; }
+    virtual void on_activate(const float dt) {
+        static_cast<const SystemBase &>(*this).on_activate(dt);
+    }
+    virtual void on_activate(const float) const {}
+    virtual void on_deactivate(const float dt) {
+        static_cast<const SystemBase &>(*this).on_deactivate(dt);
+    }
+    virtual void on_deactivate(const float) const {}
+    bool is_active() const { return active; }
+    bool advance_lifecycle(const float dt) {
+        const bool running = should_run(dt);
+        if (running != active) {
+            active = running;
+            if (running)
+                on_activate(dt);
+            else
+                on_deactivate(dt);
+        }
+        return running;
+    }
     virtual void once(const float) {}
     virtual void once(const float) const {}
     virtual void on_iteration_begin(const float) {}
@@ -169,6 +189,7 @@ class SystemBase {
 
    private:
     mutable std::string cached_name_;
+    bool active = false;
 };
 
 template<typename S>
@@ -667,11 +688,6 @@ struct SystemManager {
         return g == group_states.end() || g->second;
     }
 
-    bool gate_ok(SystemBase *sys, const float dt) const {
-        return system_group_enabled(sys) &&
-               sys->should_run(dt);
-    }
-
    public:
     void register_update_system(std::unique_ptr<SystemBase> system) {
         update_systems_.emplace_back(std::move(system));
@@ -742,7 +758,9 @@ struct SystemManager {
 
     void tick(Entities &entities, const float dt) {
         for (auto &system : update_systems_) {
-            if (!gate_ok(system.get(), dt)) continue;
+            if (!system_group_enabled(system.get()) ||
+                !system->advance_lifecycle(dt))
+                continue;
             ProfileScope profile_scope(system.get(), SystemPhase::Update);
             system->once(dt);
             profile_scope.entity_count = run_system_over(
@@ -755,7 +773,9 @@ struct SystemManager {
 
     void fixed_tick(Entities &entities, const float dt) {
         for (auto &system : fixed_update_systems_) {
-            if (!gate_ok(system.get(), dt)) continue;
+            if (!system_group_enabled(system.get()) ||
+                !system->advance_lifecycle(dt))
+                continue;
             ProfileScope profile_scope(system.get(), SystemPhase::FixedUpdate);
             system->once(dt);
             profile_scope.entity_count = run_system_over(
@@ -767,7 +787,9 @@ struct SystemManager {
 
     void render(Entities &entities, const float dt) {
         for (auto &system : render_systems_) {
-            if (!gate_ok(system.get(), dt)) continue;
+            if (!system_group_enabled(system.get()) ||
+                !system->advance_lifecycle(dt))
+                continue;
             ProfileScope profile_scope(system.get(), SystemPhase::Render);
             system->once(dt);
             profile_scope.entity_count = run_system_over(
