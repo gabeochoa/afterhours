@@ -888,6 +888,7 @@ inline void draw_quad(const Vector2Type (&p)[4], Color color) {
   capture::record("quad", RectangleType{min_x, min_y, max_x - min_x, max_y - min_y}, color, "");
   draw_rectangle(RectangleType{min_x, min_y, max_x - min_x, max_y - min_y}, color);
 }
+
 inline void draw_texture_quad(TextureType tex, const Vector2Type (&p)[4], Color tint) {
   const float min_x = std::min({p[0].x, p[1].x, p[2].x, p[3].x}), max_x = std::max({p[0].x, p[1].x, p[2].x, p[3].x});
   const float min_y = std::min({p[0].y, p[1].y, p[2].y, p[3].y}), max_y = std::max({p[0].y, p[1].y, p[2].y, p[3].y});
@@ -1017,10 +1018,12 @@ inline afterhours::Font &default_font_override() {
 inline void set_default_font(afterhours::Font font) {
   detail::default_font_override() = font;
 }
+
 inline void clear_default_font() { detail::default_font_override() = {}; }
 inline afterhours::Font get_default_font() {
   return detail::default_font_override();
 }
+
 inline afterhours::Font get_unset_font() { return get_default_font(); }
 
 // Reused across render textures. Not destroyed on unload: sokol_gl's pipeline
@@ -1220,6 +1223,7 @@ inline graphics::RenderTextureType load_render_texture_with_samples(int w,
 inline graphics::RenderTextureType load_render_texture(int w, int h) {
   return load_render_texture_with_samples(w, h, 1);
 }
+
 inline graphics::RenderTextureType load_msaa_render_texture(int w, int h,
                                                              int samples) {
   return load_render_texture_with_samples(w, h, samples);
@@ -1890,6 +1894,11 @@ inline TextureType load_texture(const char *path) {
   TextureType tex = metal_texture_detail::load_texture_from_pixels(pixels, w, h);
   stbi_image_free(pixels);
   return tex;
+}
+
+// sg_make_* is only valid once the backend is initialized.
+inline bool texture_is_usable() {
+  return graphics::metal_detail::g_initialized;
 }
 
 inline TextureType load_texture_from_rgba(const std::uint8_t *rgba, int w,

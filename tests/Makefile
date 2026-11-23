@@ -179,6 +179,7 @@ ALL_TESTS := \
 	get_unique_test \
 	singleton_add_test \
 	ui_idle_cost_test \
+	cached_singleton_test \
 	press_delay_test \
 	graphics_key_injection_test \
 	e2e_gamepad_test \
@@ -332,6 +333,8 @@ ALL_TESTS := \
 	world_label_test \
 	image_test \
 	image_raylib_test \
+	texture_usable_test \
+	texture_usable_raylib_test \
 	per_draw_filter_test \
 	stepper_test \
 	styling_test \
@@ -369,6 +372,7 @@ ALL_TESTS += native_dialogs_macos_test
 ALL_TESTS += render_capture_metal_test
 ALL_TESTS += triangle_winding_metal_test
 ALL_TESTS += image_metal_test
+ALL_TESTS += texture_usable_metal_test
 # Sokol is Metal here, so macOS-only; renders headless, no window.
 ALL_TESTS += sokol_blend_test
 ALL_TESTS += sokol_capture_test
@@ -666,6 +670,12 @@ $(OUT)/image_metal_test: image_test.cpp ../examples/web/sokol_impl.cc
 $(OUT)/blur_shader_test: ../src/plugins/files.cpp
 
 $(OUT)/image_raylib_test: image_test.cpp
+	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $< $(LDFLAGS_RAYLIB) -o $@
+
+$(OUT)/texture_usable_metal_test: texture_usable_test.cpp ../examples/web/sokol_impl.cc
+	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) -DAFTER_HOURS_USE_SOKOL -x objective-c++ $(filter %.cpp %.cc,$^) $(SOKOL_FRAMEWORKS) -o $@
+
+$(OUT)/texture_usable_raylib_test: texture_usable_test.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $< $(LDFLAGS_RAYLIB) -o $@
 
 $(OUT)/per_draw_filter_test: per_draw_filter_test.cpp
