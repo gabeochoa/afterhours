@@ -3,12 +3,12 @@
 #include <functional>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "core/entity_collection.h"
 #include "core/entity_helper.h"
+#include "library.h"
 
 namespace afterhours::prefabs {
 
@@ -21,16 +21,25 @@ using ApplyFn = std::function<void(Entity &)>;
 struct Registry {
   void define(std::string name, ApplyFn builder) {
     if (!builder) return;
-    if (builders_.find(name) == builders_.end()) order_.push_back(name);
-    builders_[std::move(name)] = std::move(builder); // re-define replaces, keeps position
+    if (impl.contains(name)) {
+      impl.storage[name] = std::move(builder);
+      return;
+    }
+    order_.push_back(name);
+    impl.add(name.c_str(), builder);
   }
 
   [[nodiscard]] bool has(std::string_view name) const {
-    return builders_.find(std::string(name)) != builders_.end();
+    return impl.contains(std::string(name));
   }
 
   [[nodiscard]] std::vector<std::string> names() const { return order_; }
-  void clear() { builders_.clear(); order_.clear(); }
+
+  void clear() {
+    impl.unload_all();
+    impl.storage.clear();
+    order_.clear();
+  }
 
   // Unknown name returns empty OptEntity and creates nothing.
   OptEntity spawn(EntityCollection &collection, std::string_view name) const {
@@ -39,16 +48,20 @@ struct Registry {
 
   OptEntity spawn(EntityCollection &collection, std::string_view name,
                   const ApplyFn &overrides) const {
-    auto it = builders_.find(std::string(name));
-    if (it == builders_.end()) return OptEntity{};
+    if (!impl.contains(std::string(name))) return OptEntity{};
     Entity &entity = collection.createEntity();
-    it->second(entity);              // bundle defaults first
-    if (overrides) overrides(entity); // caller wins: it runs last
+    impl.get(std::string(name))(entity);
+    if (overrides) overrides(entity);
     return OptEntity{entity};
   }
 
  private:
-  std::unordered_map<std::string, ApplyFn> builders_;
+  struct Impl : Library<ApplyFn> {
+    ApplyFn convert_filename_to_object(const char *, const char *) override {
+      return ApplyFn{};
+    }
+    void unload(ApplyFn) override {}
+  } impl;
   std::vector<std::string> order_;
 };
 

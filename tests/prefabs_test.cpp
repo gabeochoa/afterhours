@@ -63,6 +63,16 @@ int main() {
     CHECK(local.names() == std::vector<std::string>({"b", "a"}));
     CHECK(!local.spawn(ec, "ice_machine").has_value());
   }
+  { // re-define replaces, keeps position
+    prefabs::Registry local;
+    local.define("b", [](Entity &e) { e.addComponent<Transform>().x = 1; });
+    local.define("a", [](Entity &e) { e.addComponent<Health>(); });
+    local.define("b", [](Entity &e) { e.addComponent<Transform>().x = 2; });
+    CHECK(local.names() == std::vector<std::string>({"b", "a"}));
+    auto e = local.spawn(ec, "b");
+    CHECK(e.has_value());
+    CHECK(e.asE().get<Transform>().x == 2);
+  }
 
   prefabs::clear();
   printf("%d/%d checks passed\n", passed, run);
