@@ -296,7 +296,7 @@ inline void draw_rectangle_rounded_lines(
   const float rBL = corners.test(1) ? r : 0.f;
   const float rBR = corners.test(0) ? r : 0.f;
   const int segs = segments > 0 ? segments : 8;
-  const float PI_HALF = 3.14159265f * 0.5f;
+  const float PI_HALF = PI * 0.5f;
 
   Vector2Type prev{x + rTL, y};
   bool has_prev = true;
@@ -320,7 +320,7 @@ inline void draw_rectangle_rounded_lines(
   line_to(Vector2Type{x + rBL, y + h});
   arc_to(x + rBL, y + h - rBL, rBL, PI_HALF);
   line_to(Vector2Type{x, y + rTL});
-  arc_to(x + rTL, y + rTL, rTL, 3.14159265f);
+  arc_to(x + rTL, y + rTL, rTL, PI);
   line_to(Vector2Type{x + rTL, y});
 }
 

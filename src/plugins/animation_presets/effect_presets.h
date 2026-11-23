@@ -119,12 +119,12 @@ inline EffectQuad effect_quad(const EffectPreset &e, RectangleType r, float p) {
     scale_about({cx, cy}, 1.f + p * 0.5f, 1.f - p * 0.25f);
     break;
   case EffectId::Flip:
-    scale_about({cx, cy}, std::cos(p * 3.14159265f), 1.f);
+    scale_about({cx, cy}, std::cos(p * PI), 1.f);
     break;
   case EffectId::Tumble:
     for (Vector2Type &pt : q.corners)
       pt = rotate(pt, {cx, cy}, p * 1.2f);
-    scale_about({cx, cy}, 1.f, std::max(0.2f, std::cos(p * 3.14159265f)));
+    scale_about({cx, cy}, 1.f, std::max(0.2f, std::cos(p * PI)));
     break;
   case EffectId::Swing:
     for (Vector2Type &pt : q.corners)
