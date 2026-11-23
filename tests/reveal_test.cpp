@@ -1,5 +1,5 @@
 
-#include <afterhours/src/plugins/reveal.h>
+#include <afterhours/src/plugins/animation/reveal.h>
 
 #include <cmath>
 #include <cstdio>
@@ -22,7 +22,7 @@ static bool near(float a, float b) { return std::fabs(a - b) < 1e-5f; }
 
 int main() {
   {
-    Reveal r{.duration = 0.4f};
+    motion::Reveal r{.duration = 0.4f};
     check(near(r.update(0.1f, true), 0.25f), "quarter open");
     check(near(r.update(0.1f, true), 0.5f), "half open");
     check(!r.settled(true), "not settled mid-flight");
@@ -32,7 +32,7 @@ int main() {
   }
 
   {
-    Reveal r{.duration = 0.4f};
+    motion::Reveal r{.duration = 0.4f};
     r.update(0.2f, true);
     check(near(r.update(0.1f, false), 0.25f), "reverse from half");
     check(near(r.update(0.5f, false), 0.f), "overshoot clamps at 0");
@@ -40,16 +40,16 @@ int main() {
   }
 
   {
-    Reveal r{.duration = 0.4f};
+    motion::Reveal r{.duration = 0.4f};
     check(near(r.update(0.f, true), 0.f), "zero dt no change");
     check(near(r.update(-1.f, true), 0.f), "negative dt no change");
-    Reveal no_dur{.duration = 0.f};
+    motion::Reveal no_dur{.duration = 0.f};
     check(near(no_dur.update(0.001f, true), 1.f), "zero duration snaps open");
     check(near(no_dur.update(0.001f, false), 0.f), "zero duration snaps closed");
   }
 
   {
-    Reveal r{.duration = 5.f};
+    motion::Reveal r{.duration = 5.f};
     motion::set_instant(true);
     check(near(r.update(0.001f, true), 1.f), "instant snaps open");
     check(near(r.update(0.001f, false), 0.f), "instant snaps closed");
@@ -57,7 +57,7 @@ int main() {
   }
 
   {
-    Reveal r{.duration = 1.f, .curve = &motion::curves::ease_out_quad};
+    motion::Reveal r{.duration = 1.f, .curve = &motion::curves::ease_out_quad};
     float prev = -1.f;
     bool mono = true;
     for (int i = 0; i < 10; ++i) {
@@ -69,7 +69,7 @@ int main() {
     }
     check(mono && near(r.eased(), 1.f), "ease_out_quad monotonic to 1");
     const float mid = [] {
-      Reveal q{.duration = 1.f, .curve = &motion::curves::ease_out_quad};
+      motion::Reveal q{.duration = 1.f, .curve = &motion::curves::ease_out_quad};
       q.update(0.5f, true);
       return q.eased();
     }();
@@ -77,7 +77,7 @@ int main() {
   }
 
   {
-    Reveal r{};
+    motion::Reveal r{};
     r.snap(true);
     check(r.settled(true), "snap open");
     r.snap(false);
