@@ -356,11 +356,36 @@ inline Collector &default_collector() {
     return collector;
 }
 
+class ScopedZone {
+ public:
+#if AFTERHOURS_ENABLE_PROFILING
+    explicit ScopedZone(std::string_view name, SystemPhase phase = SystemPhase::Update)
+        : timing_(name, phase) {}
+    ScopedZone(const ScopedZone &) = delete;
+    ScopedZone &operator=(const ScopedZone &) = delete;
+    ScopedZone(ScopedZone &&) = delete;
+    ScopedZone &operator=(ScopedZone &&) = delete;
+    ~ScopedZone() = default;
+ private:
+    detail::TimingScope timing_;
+#else
+    explicit ScopedZone(std::string_view, SystemPhase = SystemPhase::Update) {}
+    ScopedZone(const ScopedZone &) = delete;
+    ScopedZone &operator=(const ScopedZone &) = delete;
+    ScopedZone(ScopedZone &&) = delete;
+    ScopedZone &operator=(ScopedZone &&) = delete;
+    ~ScopedZone() = default;
+#endif
+};
+
 }
 
 #if AFTERHOURS_ENABLE_PROFILING
 #define AFTERHOURS_PROFILE_COUNTER(collector, name, unit, value) \
     do { if ((collector).recording()) (collector).counter(name, unit, value); } while (false)
+#define AFTERHOURS_PROFILE_ZONE(name) \
+    const auto afterhours_zone_##__LINE__ = ::afterhours::profiling::ScopedZone{name}
 #else
 #define AFTERHOURS_PROFILE_COUNTER(collector, name, unit, value) do {} while (false)
+#define AFTERHOURS_PROFILE_ZONE(name) do {} while (false)
 #endif
