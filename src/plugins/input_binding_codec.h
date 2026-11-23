@@ -17,7 +17,7 @@ struct NamedCode {
   std::string_view name;
 };
 
-constexpr NamedCode kGamepadButtons[] = {
+constexpr NamedCode GAMEPAD_BUTTONS[] = {
     {gamepad_buttons::LEFT_FACE_UP, "LeftFaceUp"},
     {gamepad_buttons::LEFT_FACE_RIGHT, "LeftFaceRight"},
     {gamepad_buttons::LEFT_FACE_DOWN, "LeftFaceDown"},
@@ -37,14 +37,14 @@ constexpr NamedCode kGamepadButtons[] = {
     {gamepad_buttons::RIGHT_THUMB, "RightThumb"},
 };
 
-constexpr NamedCode kGamepadAxes[] = {
+constexpr NamedCode GAMEPAD_AXES[] = {
     {gamepad_axes::LEFT_X, "LeftX"},       {gamepad_axes::LEFT_Y, "LeftY"},
     {gamepad_axes::RIGHT_X, "RightX"},     {gamepad_axes::RIGHT_Y, "RightY"},
     {gamepad_axes::LEFT_TRIGGER, "LeftTrigger"},
     {gamepad_axes::RIGHT_TRIGGER, "RightTrigger"},
 };
 
-constexpr NamedCode kMouseAxes[] = {
+constexpr NamedCode MOUSE_AXES[] = {
     {static_cast<int>(input::MouseAxis::X), "X"},
     {static_cast<int>(input::MouseAxis::Y), "Y"},
 };
@@ -103,21 +103,21 @@ inline std::string encode(const input::AnyInput &binding) {
                    std::to_string(value.has_explicit_modifiers);
         } else if constexpr (std::is_same_v<T, input::GamepadAxisWithDir>) {
             return "v1:gamepad_axis:" +
-                   detail::code_name(detail::kGamepadAxes,
+                   detail::code_name(detail::GAMEPAD_AXES,
                                      static_cast<int>(value.axis)) +
                    ":" + std::to_string(value.dir);
         } else if constexpr (std::is_same_v<T, input::MouseAxisWithDir>) {
             return "v1:mouse_axis:" +
-                   detail::code_name(detail::kMouseAxes,
+                   detail::code_name(detail::MOUSE_AXES,
                                      static_cast<int>(value.axis)) +
                    ":" + std::to_string(value.dir);
         } else if constexpr (std::is_enum_v<T>) {
             return "v1:gamepad_button:" +
-                   detail::code_name(detail::kGamepadButtons,
+                   detail::code_name(detail::GAMEPAD_BUTTONS,
                                      static_cast<int>(value));
         } else {
             return "v1:gamepad_button:" +
-                   detail::code_name(detail::kGamepadButtons, value.value);
+                   detail::code_name(detail::GAMEPAD_BUTTONS, value.value);
         }
     }, binding);
 }
@@ -149,7 +149,7 @@ inline std::optional<input::AnyInput> decode(std::string_view text) {
     }
     if (fields[1] == "gamepad_button") {
         if (count != 3) return std::nullopt;
-        const auto code = detail::code_value(detail::kGamepadButtons, fields[2],
+        const auto code = detail::code_value(detail::GAMEPAD_BUTTONS, fields[2],
                                              gamepad_buttons::LEFT_FACE_UP,
                                              gamepad_buttons::RIGHT_THUMB);
         if (!code) return std::nullopt;
@@ -159,14 +159,14 @@ inline std::optional<input::AnyInput> decode(std::string_view text) {
     const auto direction = detail::integer(fields[3]);
     if (!direction || (*direction != -1 && *direction != 1)) return std::nullopt;
     if (fields[1] == "gamepad_axis") {
-        const auto code = detail::code_value(detail::kGamepadAxes, fields[2],
+        const auto code = detail::code_value(detail::GAMEPAD_AXES, fields[2],
                                              gamepad_axes::LEFT_X,
                                              gamepad_axes::RIGHT_TRIGGER);
         if (!code) return std::nullopt;
         return input::GamepadAxisWithDir{static_cast<input::GamepadAxis>(*code), *direction};
     }
     if (fields[1] == "mouse_axis") {
-        const auto code = detail::code_value(detail::kMouseAxes, fields[2], 0, 1);
+        const auto code = detail::code_value(detail::MOUSE_AXES, fields[2], 0, 1);
         if (!code) return std::nullopt;
         return input::MouseAxisWithDir{static_cast<input::MouseAxis>(*code), *direction};
     }
