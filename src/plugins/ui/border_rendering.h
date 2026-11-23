@@ -15,11 +15,7 @@ inline void draw_uniform_border(RectangleType rect, float roundness, int segment
   const float width = std::min(thickness, shorter * .5f);
   const float radius = std::clamp(roundness, 0.f, 1.f) * shorter * .5f;
   const int steps = std::max(4, segments);
-#ifdef AFTER_HOURS_USE_RAYLIB
-  const std::array<int, 4> bits{1, 3, 2, 0};
-#else
   const std::array<int, 4> bits{2, 0, 1, 3};
-#endif
   Vector2Type first_outer{}, first_inner{}, previous_outer{}, previous_inner{};
   const auto join = [&](Vector2Type outer, Vector2Type inner) {
     draw_triangle(previous_outer, previous_inner, outer, color);
