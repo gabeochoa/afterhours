@@ -79,12 +79,12 @@ int main() {
     HasCountdown t(12.f, true);
     t.pause();
     t.set_remaining(4.5f);
-    const timer::HasCountdownDTO dto = t.to_dto();
-    check(approx(dto.duration, 12.f), "dto keeps duration");
-    check(approx(dto.remaining, 4.5f), "dto keeps remaining");
-    HasCountdown restored = HasCountdown::from_dto(dto);
-    check(restored.auto_reset, "dto keeps auto_reset");
-    check(restored.paused, "dto keeps paused");
+    const timer::HasCountdownSerializable serializable = t.to_serializable();
+    check(approx(serializable.duration, 12.f), "serializable keeps duration");
+    check(approx(serializable.remaining, 4.5f), "serializable keeps remaining");
+    HasCountdown restored = HasCountdown::from_serializable(serializable);
+    check(restored.auto_reset, "serializable keeps auto_reset");
+    check(restored.paused, "serializable keeps paused");
     check(approx(restored.duration, 12.f), "restored duration kept");
     check(approx(restored.remaining, 4.5f), "restored remaining kept");
     check(approx(restored.get_remaining(), 4.5f), "restored remaining read");

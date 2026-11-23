@@ -64,7 +64,7 @@ struct timer : developer::Plugin {
     }
   };
 
-  struct HasCountdownDTO {
+  struct HasCountdownSerializable {
     float duration = 0.0f;
     float remaining = 0.0f;
     bool auto_reset = false;
@@ -128,19 +128,19 @@ struct timer : developer::Plugin {
       return false;
     }
 
-    [[nodiscard]] HasCountdownDTO to_dto() const {
-      return HasCountdownDTO{.duration = duration,
+    [[nodiscard]] HasCountdownSerializable to_serializable() const {
+      return HasCountdownSerializable{.duration = duration,
                              .remaining = remaining,
                              .auto_reset = auto_reset,
                              .paused = paused};
     }
 
-    static HasCountdown from_dto(const HasCountdownDTO &dto) {
+    static HasCountdown from_serializable(const HasCountdownSerializable &serializable) {
       HasCountdown countdown;
-      countdown.duration = dto.duration;
-      countdown.remaining = dto.remaining;
-      countdown.auto_reset = dto.auto_reset;
-      countdown.paused = dto.paused;
+      countdown.duration = serializable.duration;
+      countdown.remaining = serializable.remaining;
+      countdown.auto_reset = serializable.auto_reset;
+      countdown.paused = serializable.paused;
       return countdown;
     }
   };
