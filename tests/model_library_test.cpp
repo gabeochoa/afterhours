@@ -19,7 +19,7 @@ static bool near(std::array<float, 3> a, float x, float y, float z) {
   return std::fabs(a[0] - x) < 1e-6f && std::fabs(a[1] - y) < 1e-6f && std::fabs(a[2] - z) < 1e-6f;
 }
 
-static const char *kGltf = R"({
+static const char *GLTF = R"({
   "asset": {"version": "2.0"},
   "accessors": [
     {"componentType": 5126, "count": 3, "type": "VEC3", "min": [-1, 0, 2], "max": [3, 4, 5]},
@@ -61,14 +61,14 @@ int main() {
   check(reg.find("wood") == &t1 && reg.find("nope") == nullptr, "find by name");
 
   auto json_bounds = gltf_bounds_from_bytes(
-      {reinterpret_cast<const std::uint8_t *>(kGltf), std::strlen(kGltf)});
+      {reinterpret_cast<const std::uint8_t *>(GLTF), std::strlen(GLTF)});
   check(json_bounds.has_value(), "gltf JSON bounds parse");
   if (json_bounds) {
     check(near(json_bounds->min, -1, -7, 1), "gltf bounds min exact (union, NORMAL ignored)");
     check(near(json_bounds->max, 3, 4, 9), "gltf bounds max exact");
     check(near(json_bounds->center(), 1, -1.5f, 5), "gltf bounds center");
   }
-  auto glb = make_glb(kGltf);
+  auto glb = make_glb(GLTF);
   auto glb_bounds = gltf_bounds_from_bytes(glb);
   check(glb_bounds && near(glb_bounds->min, -1, -7, 1) && near(glb_bounds->max, 3, 4, 9),
         "glb bounds from header chunk exact");
@@ -86,7 +86,7 @@ int main() {
   check(!none && none.error() == GltfError::NO_POSITION_BOUNDS, "no POSITION -> NO_POSITION_BOUNDS");
 
   auto path = std::filesystem::temp_directory_path() / "afterhours_r204_fixture.glb";
-  { std::ofstream out(path, std::ios::binary); auto full = make_glb(kGltf); out.write(reinterpret_cast<const char *>(full.data()), static_cast<std::streamsize>(full.size())); }
+  { std::ofstream out(path, std::ios::binary); auto full = make_glb(GLTF); out.write(reinterpret_cast<const char *>(full.data()), static_cast<std::streamsize>(full.size())); }
   auto from_file = gltf_bounds_from_file(path.string().c_str());
   check(from_file && near(from_file->max, 3, 4, 9), "glb bounds from file");
   std::error_code ec; std::filesystem::remove(path, ec);
