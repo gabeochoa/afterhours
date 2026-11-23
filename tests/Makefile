@@ -213,6 +213,7 @@ ALL_TESTS := \
 	font_catalog_test \
 	frame_rate_stats_test \
 	tunable_test \
+	intro_sequence_test \
 	graphics_concepts_pedantic_test \
 	fixed_tick_rate_test \
 	sound_playback_test \
@@ -319,6 +320,7 @@ ALL_TESTS := \
 	text_action_names_test \
 	sizing_repro_test \
 	slider_test \
+	form_binding_test \
 	split_test \
 	downstream_gaps_test \
 	headless_fallback_test \
@@ -363,7 +365,8 @@ ALL_TESTS := \
 	skeletal_test \
 	translation_test \
 	layout_inspector_test \
-	letter_spacing_zero_test
+	letter_spacing_zero_test \
+	mouse_pre_event_test
 
 # .app packaging is macOS-only, and the test shells out to plutil.
 ifeq ($(UNAME_S),Darwin)
@@ -391,6 +394,7 @@ ALL_TESTS += sokol_include_order_test
 ALL_TESTS += sokol_wrappers_test
 ALL_TESTS += sokol_frame_dt_test
 ALL_TESTS += sokol_msaa_test
+ALL_TESTS += sokol_mouse_pre_init_test
 ALL_TESTS += sokol_startup_order_test
 ALL_TESTS += staging_texture_leak_test
 endif
@@ -450,6 +454,7 @@ RAYLIB_TESTS := \
 	setup_test \
 	size_constraints_test \
 	slider_test \
+	form_binding_test \
 	split_test \
 	stepper_test \
 	styling_test \
@@ -525,7 +530,7 @@ $(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test: LDFLAGS_T = $(
 
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/middle_click_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/wheel_input_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
-$(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test $(OUT)/graphics_key_injection_test $(OUT)/input_activity_snapshot_test $(OUT)/e2e_gamepad_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
+$(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test $(OUT)/graphics_key_injection_test $(OUT)/input_activity_snapshot_test $(OUT)/e2e_gamepad_test $(OUT)/form_binding_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 
 # Filter to sources: the .d files list every header as a prerequisite, and a
 # bare $^ would hand them all to clang. .cc is the sokol implementation TU.
@@ -772,3 +777,8 @@ $(OUT)/models_test: CXXFLAGS_T += -DAFTERHOURS_MODEL_FIXTURE=\"$(realpath ../exa
 $(OUT)/house_of_cards_test: CXXFLAGS_T += -DAFTERHOURS_MODELS_DIR=\"$(realpath ../examples/catalog/3d)\"
 $(OUT)/instance_batcher_test: CXXFLAGS_T += -DAFTERHOURS_MODELS_DIR=\"$(realpath ../examples/catalog/3d)\"
 $(OUT)/instance_batcher_persist_test: CXXFLAGS_T += -DAFTERHOURS_MODELS_DIR=\"$(realpath ../examples/catalog/3d)\"
+
+$(OUT)/sokol_mouse_pre_init_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_mouse_pre_init_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_mouse_pre_init_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_mouse_pre_init_test: ../src/backends/sokol/backend.h
