@@ -363,6 +363,11 @@ struct HasUIModifiers : BaseComponent {
   }
 };
 
+struct HasHitExpand : BaseComponent {
+  float pad_x = 0.f;
+  float pad_y = 0.f;
+};
+
 // Shadow styles for UI elements
 enum struct ShadowStyle {
   Hard, // Sharp offset shadow (retro/flat design)
