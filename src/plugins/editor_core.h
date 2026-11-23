@@ -17,59 +17,59 @@ template <typename State, typename Id = EntityID> struct EditorCore {
   explicit EditorCore(std::size_t max_depth = 100) : history(max_depth) {}
 
   void select(Id id, bool additive = false) {
-    if (!additive) selection_.clear();
-    selection_.insert(id);
-    primary_ = id;
+    if (!additive) selection.clear();
+    selection.insert(id);
+    primary_id = id;
   }
 
   void toggle(Id id) {
-    if (selection_.erase(id)) {
-      if (primary_ == id)
-        primary_ = selection_.empty() ? std::nullopt
-                                      : std::optional<Id>(*selection_.begin());
+    if (selection.erase(id)) {
+      if (primary_id == id)
+        primary_id = selection.empty() ? std::nullopt
+                                      : std::optional<Id>(*selection.begin());
     } else {
-      selection_.insert(id);
-      primary_ = id;
+      selection.insert(id);
+      primary_id = id;
     }
   }
 
   void deselect(Id id) { toggle_off(id); }
 
-  void clear_selection() { selection_.clear(); primary_.reset(); }
+  void clear_selection() { selection.clear(); primary_id.reset(); }
 
-  [[nodiscard]] bool is_selected(Id id) const { return selection_.contains(id); }
+  [[nodiscard]] bool is_selected(Id id) const { return selection.contains(id); }
 
-  [[nodiscard]] const std::set<Id> &selected() const { return selection_; }
+  [[nodiscard]] const std::set<Id> &selected() const { return selection; }
 
-  [[nodiscard]] std::optional<Id> primary() const { return primary_; }
+  [[nodiscard]] std::optional<Id> primary() const { return primary_id; }
 
-  [[nodiscard]] std::size_t selection_size() const { return selection_.size(); }
+  [[nodiscard]] std::size_t selection_size() const { return selection.size(); }
 
   void execute(typename CommandHistory<State>::CommandPtr cmd, State &state) {
     history.execute(std::move(cmd), state);
-    ++revision_;
+    ++revision;
   }
 
   void record(typename CommandHistory<State>::CommandPtr cmd) {
     history.push(std::move(cmd));
-    ++revision_;
+    ++revision;
   }
 
-  void mark_dirty() { ++revision_; }
+  void mark_dirty() { ++revision; }
 
   bool undo(State &state) {
     if (!history.undo(state)) return false;
-    --revision_;
+    --revision;
     return true;
   }
 
   bool redo(State &state) {
     if (!history.redo(state)) return false;
-    ++revision_;
+    ++revision;
     return true;
   }
 
-  [[nodiscard]] bool dirty() const { return revision_ != saved_revision_; }
+  [[nodiscard]] bool dirty() const { return revision != saved_revision; }
 
   [[nodiscard]] bool can_undo() const { return history.can_undo(); }
 
@@ -83,20 +83,20 @@ template <typename State, typename Id = EntityID> struct EditorCore {
     return history.next_redo_description();
   }
 
-  void mark_saved() { saved_revision_ = revision_; }
+  void mark_saved() { saved_revision = revision; }
 
 private:
   void toggle_off(Id id) {
-    if (!selection_.erase(id)) return;
-    if (primary_ == id)
-      primary_ = selection_.empty() ? std::nullopt
-                                    : std::optional<Id>(*selection_.begin());
+    if (!selection.erase(id)) return;
+    if (primary_id == id)
+      primary_id = selection.empty() ? std::nullopt
+                                    : std::optional<Id>(*selection.begin());
   }
 
-  std::set<Id> selection_;
-  std::optional<Id> primary_;
-  long long revision_ = 0;
-  long long saved_revision_ = 0;
+  std::set<Id> selection;
+  std::optional<Id> primary_id;
+  long long revision = 0;
+  long long saved_revision = 0;
 };
 
 } // namespace afterhours::editor
