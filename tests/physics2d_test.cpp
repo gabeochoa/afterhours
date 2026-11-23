@@ -1,4 +1,4 @@
-#include <afterhours/src/physics2d.h>
+#include <afterhours/src/plugins/physics2d.h>
 
 #include <cmath>
 #include <cstdio>
@@ -39,14 +39,14 @@ int main() {
   CHECK(ip && NEAR(ip->x, 200) && NEAR(ip->y, 0));
   CHECK(!intercept_time({0, 0}, {100, 0}, {20, 0}, 10).has_value());
 
-  Vec2 pos{0, 0}, vel{0, 0};
-  Vec2 target{100, 0};
+  Vector2Type pos{0, 0}, vel{0, 0};
+  Vector2Type target{100, 0};
   for (int i = 0; i < 60 * 10; i++) {
     vel = arrive_velocity(pos, vel, target, 100, 50, 500, 1.f / 60, 1.f);
-    pos = pos + vel * (1.f / 60);
+    pos = {pos.x + vel.x * (1.f / 60), pos.y + vel.y * (1.f / 60)};
   }
-  CHECK(length(target - pos) < 2.f);
-  CHECK(length(vel) < 5.f);
+  CHECK(std::sqrt(afterhours::distance_sq(target, pos)) < 2.f);
+  CHECK(std::sqrt(vel.x * vel.x + vel.y * vel.y) < 5.f);
 
   Ellipse fixed{{100, 0}, {20, 10}};
   auto hit = swept_ellipse({{0, 0}, {10, 10}}, {100, 0}, fixed);
@@ -57,9 +57,10 @@ int main() {
   CHECK(!ellipses_overlap({{0, 0}, {5, 5}}, {{150, 0}, {5, 20}}));
   Ellipse a{{0, 0}, {10, 10}}, b{{15, 0}, {10, 10}};
   CHECK(ellipses_overlap(a, b));
-  Vec2 sep = ellipse_separation(a, b);
-  a.center = a.center + sep;
-  CHECK(!ellipses_overlap(a, b) || NEAR(ellipse_metric(a.center - b.center, {20, 20}), 1.f));
+  Vector2Type sep = ellipse_separation(a, b);
+  a.center = {a.center.x + sep.x, a.center.y + sep.y};
+  Vector2Type delta{a.center.x - b.center.x, a.center.y - b.center.y};
+  CHECK(!ellipses_overlap(a, b) || NEAR(ellipse_metric(delta, {20, 20}), 1.f));
 
   printf("%d/%d checks passed\n", passed, run);
   return passed == run ? 0 : 1;
