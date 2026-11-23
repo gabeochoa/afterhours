@@ -679,9 +679,9 @@ public:
   };
 
   void render(const RenderCommandBuffer &buffer, FontManager &fonts) {
-    stats_ = {}; // Reset stats
+    statistics = {}; // Reset stats
     const auto &commands = buffer.commands();
-    stats_.total_commands = commands.size();
+    statistics.total_commands = commands.size();
 
     std::optional<std::array<int, 4>> active_clip;
     blend::Mode active_blend = blend::current();
@@ -709,7 +709,7 @@ public:
       case RenderPrimitiveType::Rectangle: {
         size_t batch_end = find_batch_end(commands, i);
         render_rectangle_batch(commands, i, batch_end);
-        stats_.rectangle_batches++;
+        statistics.rectangle_batches++;
         i = batch_end;
         break;
       }
@@ -717,7 +717,7 @@ public:
       case RenderPrimitiveType::RoundedRectangle: {
         size_t batch_end = find_batch_end(commands, i);
         render_rounded_rectangle_batch(commands, i, batch_end);
-        stats_.rectangle_batches++;
+        statistics.rectangle_batches++;
         i = batch_end;
         break;
       }
@@ -738,19 +738,19 @@ public:
 
       case RenderPrimitiveType::Text:
         render_text(cmd, fonts);
-        stats_.text_commands++;
+        statistics.text_commands++;
         i++;
         break;
 
       case RenderPrimitiveType::TextUnits:
         render_text_units(cmd, fonts);
-        stats_.text_commands++;
+        statistics.text_commands++;
         i++;
         break;
 
       case RenderPrimitiveType::Image:
         render_image(cmd);
-        stats_.image_commands++;
+        statistics.image_commands++;
         i++;
         break;
 
@@ -759,7 +759,7 @@ public:
                        cmd.data.scissor.width, cmd.data.scissor.height};
         begin_scissor_mode(cmd.data.scissor.x, cmd.data.scissor.y,
                            cmd.data.scissor.width, cmd.data.scissor.height);
-        stats_.scissor_operations++;
+        statistics.scissor_operations++;
         i++;
         break;
 
@@ -774,21 +774,21 @@ public:
         }
         active_clip.reset();
         end_scissor_mode();
-        stats_.scissor_operations++;
+        statistics.scissor_operations++;
         i++;
         break;
 
       case RenderPrimitiveType::ShaderStart:
         if (cmd.data.shader.shader && cmd.data.shader.shader->id != 0) {
           ::afterhours::begin_shader_mode(*cmd.data.shader.shader);
-          stats_.shader_operations++;
+          statistics.shader_operations++;
         }
         i++;
         break;
 
       case RenderPrimitiveType::ShaderEnd:
         ::afterhours::end_shader_mode();
-        stats_.shader_operations++;
+        statistics.shader_operations++;
         i++;
         break;
 
@@ -797,7 +797,7 @@ public:
         if (cmd.data.blend.mode != active_blend) {
           set_blend_mode(cmd.data.blend.mode);
           active_blend = cmd.data.blend.mode;
-          stats_.blend_operations++;
+          statistics.blend_operations++;
         }
         i++;
         break;
@@ -812,7 +812,7 @@ public:
         if (active_blend != blend::Mode::Alpha) {
           set_blend_mode(blend::Mode::Alpha);
           active_blend = blend::Mode::Alpha;
-          stats_.blend_operations++;
+          statistics.blend_operations++;
         }
         i++;
         break;
@@ -849,30 +849,30 @@ public:
       }
     }
 #if AFTERHOURS_ENABLE_PROFILING
-    stats_.creates =
+    statistics.creates =
         static_cast<size_t>(render_counters::take_creates());
     auto &collector = profiling::default_collector();
     AFTERHOURS_PROFILE_COUNTER(collector, "render.draws", "count",
-                               static_cast<double>(stats_.draws));
+                               static_cast<double>(statistics.draws));
     AFTERHOURS_PROFILE_COUNTER(collector, "render.binds", "count",
-                               static_cast<double>(stats_.binds));
+                               static_cast<double>(statistics.binds));
     AFTERHOURS_PROFILE_COUNTER(collector, "render.creates", "count",
-                               static_cast<double>(stats_.creates));
+                               static_cast<double>(statistics.creates));
 #endif
   }
 
-  [[nodiscard]] const Stats &stats() const { return stats_; }
+  [[nodiscard]] const Stats &stats() const { return statistics; }
 
 private:
-  Stats stats_;
+  Stats statistics;
 
   // A bind is the texture a draw samples; text draws bind the font texture.
   // Compiled out when profiling is off (same pattern as
   // render_counters::note_create), so disabled builds pay nothing per draw.
   void note_draw(bool binds_texture = false) {
 #if AFTERHOURS_ENABLE_PROFILING
-    ++stats_.draws;
-    if (binds_texture) ++stats_.binds;
+    ++statistics.draws;
+    if (binds_texture) ++statistics.binds;
 #else
     (void)binds_texture;
 #endif

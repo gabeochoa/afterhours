@@ -708,7 +708,7 @@ inline bool capture_render_texture(const graphics::RenderTextureType &rt,
   return ok;
 }
 
-inline std::optional<RgbaCapture>
+inline std::optional<RGBACapture>
 capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
   if (rt.texture.id == 0) return std::nullopt;
   raylib::Image img = raylib::LoadImageFromTexture(rt.texture);
@@ -721,12 +721,12 @@ capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
   }
   const auto *bytes = static_cast<const uint8_t *>(img.data);
   const auto size = static_cast<size_t>(img.width) * static_cast<size_t>(img.height) * 4;
-  RgbaCapture result{img.width, img.height, {bytes, bytes + size}};
+  RGBACapture result{img.width, img.height, {bytes, bytes + size}};
   raylib::UnloadImage(img);
   return result;
 }
 
-inline std::optional<PngCapture>
+inline std::optional<PNGCapture>
 capture_render_texture_png(const graphics::RenderTextureType &rt) {
   if (rt.texture.id == 0) return std::nullopt;
   raylib::Image img = raylib::LoadImageFromTexture(rt.texture);
@@ -743,7 +743,7 @@ capture_render_texture_png(const graphics::RenderTextureType &rt) {
   }
   raylib::UnloadImage(img);
   if (result.empty()) return std::nullopt;
-  return PngCapture{std::move(result)};
+  return PNGCapture{std::move(result)};
 }
 
 inline std::vector<uint8_t>

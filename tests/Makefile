@@ -174,6 +174,7 @@ ALL_TESTS := \
 	crash_handler_web_sim_test \
 	crash_report_file_test \
 	setting_row_style_test \
+	settings_presets_test \
 	singleton_iteration_test \
 	get_unique_test \
 	singleton_add_test \
@@ -236,11 +237,13 @@ ALL_TESTS := \
 	grapheme_edit_test \
 	entity_mapping_test \
 	files_atomic_write_test \
+	files_confined_path_test \
 	files_resource_path_test \
 	files_cache_path_test \
 	files_documents_test \
 	capture_test \
 	capture_perf_test \
+	capture_async_test \
 	polyline_test \
 	measure_memo_test \
 	design_defaults_test \
@@ -543,6 +546,7 @@ $(OUT)/audio_plugin_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/audio_stream_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(OUT)/audio_stream_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/files_atomic_write_test: ../src/plugins/files.cpp
+$(OUT)/files_confined_path_test: ../src/plugins/files.cpp
 $(OUT)/files_resource_path_test: ../src/plugins/files.cpp
 $(OUT)/files_test_roots_test: ../src/plugins/files.cpp
 $(OUT)/files_e2e_temp_roots_test: ../src/plugins/files.cpp
