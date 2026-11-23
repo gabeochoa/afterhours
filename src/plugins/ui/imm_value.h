@@ -720,47 +720,47 @@ struct DelayedBusy {
   float sweep_period = 1.0f;
 
   void start() {
-    elapsed_ = 0.f;
-    drain_ = 0.f;
-    shown_ = false;
-    finished_ = false;
-    started_ = true;
+    elapsed_time = 0.f;
+    drain = 0.f;
+    shown = false;
+    finished = false;
+    started = true;
   }
 
   void update(float dt) {
-    if (!started_) return;
+    if (!started) return;
     if (!std::isfinite(dt) || dt < 0.f) dt = 0.f;
-    if (finished_) {
-      drain_ = std::max(0.f, drain_ - dt);
+    if (finished) {
+      drain = std::max(0.f, drain - dt);
       return;
     }
-    elapsed_ += dt;
-    if (elapsed_ >= delay) shown_ = true;
+    elapsed_time += dt;
+    if (elapsed_time >= delay) shown = true;
   }
 
   void finish() {
-    if (!started_ || finished_) return;
-    finished_ = true;
-    if (shown_) drain_ = std::max(0.f, delay + min_visible - elapsed_);
+    if (!started || finished) return;
+    finished = true;
+    if (shown) drain = std::max(0.f, delay + min_visible - elapsed_time);
   }
 
   [[nodiscard]] bool visible() const {
-    return started_ && shown_ && (!finished_ || drain_ > 0.f);
+    return started && shown && (!finished || drain > 0.f);
   }
 
   [[nodiscard]] float indeterminate() const {
     const float period = sweep_period > 0.f ? sweep_period : 1.f;
-    return std::fmod(elapsed_ / period, 1.f);
+    return std::fmod(elapsed_time / period, 1.f);
   }
 
-  [[nodiscard]] float elapsed() const { return elapsed_; }
+  [[nodiscard]] float elapsed() const { return elapsed_time; }
 
 private:
-  float elapsed_ = 0.f;
-  float drain_ = 0.f;
-  bool shown_ = false;
-  bool finished_ = false;
-  bool started_ = false;
+  float elapsed_time = 0.f;
+  float drain = 0.f;
+  bool shown = false;
+  bool finished = false;
+  bool started = false;
 };
 
 inline ElementResult
