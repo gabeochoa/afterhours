@@ -67,24 +67,24 @@ void test_string_seed_stable() {
 }
 
 void test_golden_vectors() {
-  RngStream raw(std::uint32_t{12345});
+  RNGStream raw(std::uint32_t{12345});
   const std::uint32_t expected_raw[] = {
       3992670690u, 3823185381u, 1358822685u, 561383553u,
       789925284u,  170765737u,  878579710u,  3549516158u};
   for (auto want : expected_raw) CHECK(raw.next_u32() == want);
 
-  RngStream raw42(std::uint32_t{42});
+  RNGStream raw42(std::uint32_t{42});
   CHECK(raw42.next_u32() == 1608637542u);
   CHECK(raw42.next_u32() == 3421126067u);
   CHECK(raw42.next_u32() == 4083286876u);
   CHECK(raw42.next_u32() == 787846414u);
 
-  RngStream ints(std::uint32_t{12345});
+  RNGStream ints(std::uint32_t{12345});
   const int expected_ints[] = {929617, 890155, 316375, 130707,
                                183918, 39759,  204560, 826436};
   for (int want : expected_ints) CHECK(ints.get_int(0, 1000000) == want);
 
-  RngStream floats(std::uint32_t{12345});
+  RNGStream floats(std::uint32_t{12345});
   const std::uint32_t expected_float_bits[] = {0x3f5bf6a2u, 0x3f47c25au,
                                                0xbebc080cu, 0xbf3d13f0u};
   for (auto want : expected_float_bits) {
@@ -95,20 +95,20 @@ void test_golden_vectors() {
     CHECK(got >= -1.0f && got < 1.0f);
   }
 
-  RngStream bools(std::uint32_t{12345});
+  RNGStream bools(std::uint32_t{12345});
   const int expected_bools[] = {1, 1, 0, 0, 0, 0, 0, 1};
   for (int want : expected_bools) CHECK((bools.get_bool() ? 1 : 0) == want);
 
-  RngStream named(std::string{"level-3"});
+  RNGStream named(std::string{"level-3"});
   CHECK(named.get_seed() == 2911412057u);
   CHECK(named.get_int(0, 1000000) == 288888);
 
-  RngStream degenerate(std::uint32_t{7});
+  RNGStream degenerate(std::uint32_t{7});
   CHECK(degenerate.get_int(42, 42) == 42);
-  RngStream full(std::uint32_t{7});
+  RNGStream full(std::uint32_t{7});
   CHECK(full.get_int(INT32_MIN, INT32_MAX) == -1819742033);
   CHECK(full.get_int(INT32_MIN, INT32_MAX) == -1171069756);
-  RngStream flat(std::uint32_t{7});
+  RNGStream flat(std::uint32_t{7});
   CHECK(flat.get_float(3.0f, 3.0f) == 3.0f);
 }
 
@@ -177,25 +177,25 @@ void test_gen_random_reproducible() {
 }
 
 void test_stream_save_restores_mid_sequence() {
-  RngStream live(std::uint32_t{2024});
+  RNGStream live(std::uint32_t{2024});
   for (int i = 0; i < 37; i++) (void)live.get_int(0, 1000);
   const std::string saved = live.save();
   std::vector<int> expected;
   for (int i = 0; i < 20; i++) expected.push_back(live.get_int(0, 1000000));
 
-  auto restored = RngStream::load(saved);
+  auto restored = RNGStream::load(saved);
   CHECK(restored.has_value());
   if (!restored) return;
   CHECK(restored->get_seed() == 2024u);
   std::vector<int> got;
   for (int i = 0; i < 20; i++) got.push_back(restored->get_int(0, 1000000));
   CHECK(got == expected);
-  CHECK(!RngStream::load("not a stream").has_value());
+  CHECK(!RNGStream::load("not a stream").has_value());
 }
 
 void test_streams_are_independent() {
-  RngStream shop(std::uint32_t{7}), battle(std::uint32_t{7});
-  RngStream battle_alone(std::uint32_t{7});
+  RNGStream shop(std::uint32_t{7}), battle(std::uint32_t{7});
+  RNGStream battle_alone(std::uint32_t{7});
   for (int i = 0; i < 50; i++) (void)shop.get_int(0, 100);
   bool same = true;
   for (int i = 0; i < 20; i++)
@@ -209,7 +209,7 @@ void test_gen_random_takes_a_stream() {
   for (int i = 0; i < 10; i++)
     EntityHelper::createEntity().addComponent<Pick>();
   EntityHelper::merge_entity_arrays();
-  RngStream a(std::uint32_t{99}), b(std::uint32_t{99});
+  RNGStream a(std::uint32_t{99}), b(std::uint32_t{99});
   auto first = EntityQuery().whereHasComponent<Pick>().gen_random(a);
   auto second = EntityQuery().whereHasComponent<Pick>().gen_random(b);
   CHECK(first.has_value() && second.has_value() && first->id == second->id);

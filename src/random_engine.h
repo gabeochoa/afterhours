@@ -15,10 +15,10 @@
 
 namespace afterhours {
 
-struct RngStream {
-  RngStream() : RngStream(std::random_device{}()) {}
-  explicit RngStream(std::uint32_t new_seed) { set_seed(new_seed); }
-  explicit RngStream(const std::string &new_seed) { set_seed(new_seed); }
+struct RNGStream {
+  RNGStream() : RNGStream(std::random_device{}()) {}
+  explicit RNGStream(std::uint32_t new_seed) { set_seed(new_seed); }
+  explicit RNGStream(const std::string &new_seed) { set_seed(new_seed); }
 
   void set_seed(const std::string &new_seed) {
     std::uint32_t hash = 2166136261u;
@@ -38,7 +38,7 @@ struct RngStream {
 
   [[nodiscard]] int get_int(int a, int b) {
     if (a > b)
-      log_error("RngStream::get_int: inverted range [{}, {}] (a must be <= b)",
+      log_error("RNGStream::get_int: inverted range [{}, {}] (a must be <= b)",
                 a, b);
     const std::int64_t span = static_cast<std::int64_t>(b) -
                               static_cast<std::int64_t>(a) + 1;
@@ -67,7 +67,7 @@ struct RngStream {
   [[nodiscard]] float get_float(float a, float b) {
     if (a > b)
       log_error(
-          "RngStream::get_float: inverted range [{}, {}) (a must be <= b)", a,
+          "RNGStream::get_float: inverted range [{}, {}) (a must be <= b)", a,
           b);
     const double unit =
         static_cast<double>(next_u32() >> 8) * (1.0 / 16777216.0);
@@ -97,12 +97,12 @@ struct RngStream {
     return out.str();
   }
 
-  [[nodiscard]] static std::optional<RngStream> load(std::string_view text) {
+  [[nodiscard]] static std::optional<RNGStream> load(std::string_view text) {
     std::istringstream in{std::string(text)};
-    RngStream stream(0u);
+    RNGStream stream(0u);
     in >> stream.seed >> stream.rng;
     if (in.fail()) {
-      log_warn("RngStream::load: not a saved RngStream");
+      log_warn("RNGStream::load: not a saved RNGStream");
       return std::nullopt;
     }
     return stream;
@@ -134,10 +134,10 @@ struct RandomEngine {
     return rng.get_index(container);
   }
   [[nodiscard]] std::mt19937 &engine() { return rng.engine(); }
-  [[nodiscard]] RngStream &stream() { return rng; }
+  [[nodiscard]] RNGStream &stream() { return rng; }
 
 private:
-  RngStream rng;
+  RNGStream rng;
 };
 
 } // namespace afterhours
