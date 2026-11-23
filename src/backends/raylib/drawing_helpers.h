@@ -220,13 +220,7 @@ inline void draw_text_ex(const raylib::Font font, const char *content,
 inline void draw_text(const char *content, const float x, const float y,
                       const float font_size, const Color color) {
   if (!content) return;
-  if (!detail::default_font_override()) {
-    raylib::DrawText(content, static_cast<int>(x), static_cast<int>(y),
-                     static_cast<int>(font_size), color);
-    return;
-  }
-  raylib::DrawTextEx(*detail::default_font_override(), content, {x, y},
-                     font_size, 1.f, color);
+  draw_text_ex(get_default_font(), content, {x, y}, font_size, 1.f, color);
 }
 
 inline void draw_rectangle_outline(const RectangleType rect,
