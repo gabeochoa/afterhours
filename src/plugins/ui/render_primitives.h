@@ -137,6 +137,7 @@ struct RenderPrimitive {
       RectangleType source_rect;
       TextureType texture;
       Color tint;
+      int filter = -1; // Per-draw filter override; -1 = texture's own
     } image;
 
     struct {
@@ -275,12 +276,13 @@ public:
   static RenderPrimitive image(const RectangleType &dest_rect,
                                const RectangleType &source_rect,
                                TextureType texture, Color tint, int layer,
-                               EntityID entity_id = -1) {
+                               EntityID entity_id = -1, int filter = -1) {
     RenderPrimitive cmd(RenderPrimitiveType::Image, layer, entity_id);
     cmd.data.image.dest_rect = dest_rect;
     cmd.data.image.source_rect = source_rect;
     cmd.data.image.texture = texture;
     cmd.data.image.tint = tint;
+    cmd.data.image.filter = filter;
     return cmd;
   }
 
@@ -564,9 +566,10 @@ public:
   // Add image
   void add_image(const RectangleType &dest_rect,
                  const RectangleType &source_rect, TextureType texture,
-                 Color tint, int layer, EntityID entity_id = -1) {
+                 Color tint, int layer, EntityID entity_id = -1,
+                 int filter = -1) {
     commands_.push_back(RenderPrimitive::image(dest_rect, source_rect, texture,
-                                               tint, layer, entity_id));
+                                               tint, layer, entity_id, filter));
   }
 
   // Add a custom draw callback. `fn` must outlive the render pass (it lives on
@@ -1063,7 +1066,7 @@ private:
         cmd.data.image.texture, cmd.data.image.source_rect,
         cmd.data.image.dest_rect,
         {cmd.data.image.dest_rect.width, cmd.data.image.dest_rect.height}, 0.f,
-        cmd.data.image.tint);
+        cmd.data.image.tint, cmd.data.image.filter);
     note_draw(true);
   }
 
