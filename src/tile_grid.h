@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <span>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -15,13 +16,13 @@ struct Cell {
   bool operator==(const Cell &) const = default;
 };
 
-struct Grid {
+template <typename Tile> struct Grid {
   int w = 0;
   int h = 0;
-  std::vector<int> tiles;
+  std::vector<Tile> tiles;
 
   Grid() = default;
-  Grid(int width, int height, int fill = 0)
+  Grid(int width, int height, Tile fill = Tile{})
       : w(width > 0 ? width : 0), h(height > 0 ? height : 0),
         tiles(static_cast<std::size_t>(w) * static_cast<std::size_t>(h),
               fill) {}
@@ -31,18 +32,22 @@ struct Grid {
   }
 
   [[nodiscard]] bool in_bounds(Cell c) const { return in_bounds(c.x, c.y); }
+
   [[nodiscard]] std::size_t index(Cell c) const {
     return static_cast<std::size_t>(c.y) * static_cast<std::size_t>(w) +
            static_cast<std::size_t>(c.x);
   }
 
-  [[nodiscard]] int at(Cell c) const { return tiles[index(c)]; }
-  void set(Cell c, int tile) { tiles[index(c)] = tile; }
+  [[nodiscard]] Tile at(Cell c) const { return tiles[index(c)]; }
+
+  void set(Cell c, Tile tile) { tiles[index(c)] = tile; }
 };
 
-inline int stamp(Grid &grid, std::span<const std::string_view> pattern,
-                 std::span<const std::pair<char, int>> legend, int origin_x,
-                 int origin_y) {
+template <typename Tile>
+inline int stamp(Grid<Tile> &grid, std::span<const std::string_view> pattern,
+                 std::span<const std::pair<char, std::type_identity_t<Tile>>>
+                     legend,
+                 int origin_x, int origin_y) {
   int written = 0;
   for (std::size_t row = 0; row < pattern.size(); row++) {
     int y = origin_y + static_cast<int>(row);
@@ -63,48 +68,6 @@ inline int stamp(Grid &grid, std::span<const std::string_view> pattern,
     }
   }
   return written;
-}
-
-template <typename Passable>
-[[nodiscard]] std::vector<char> reachable(const Grid &grid, Cell start,
-                                          Passable passable) {
-  std::vector<char> mask(grid.tiles.size(), 0);
-  if (!grid.in_bounds(start) || !passable(grid.at(start)))
-    return mask;
-  std::vector<Cell> queue{start};
-  mask[grid.index(start)] = 1;
-  for (std::size_t head = 0; head < queue.size(); head++) {
-    Cell c = queue[head];
-    constexpr Cell DIRS[4] = {{0, -1}, {1, 0}, {0, 1}, {-1, 0}};
-    for (Cell d : DIRS) {
-      Cell n{c.x + d.x, c.y + d.y};
-      if (!grid.in_bounds(n) || mask[grid.index(n)] ||
-          !passable(grid.at(n)))
-        continue;
-      mask[grid.index(n)] = 1;
-      queue.push_back(n);
-    }
-  }
-  return mask;
-}
-
-template <typename Passable>
-[[nodiscard]] std::vector<Cell>
-unreachable_targets(const Grid &grid, Cell start,
-                    std::span<const Cell> targets, Passable passable) {
-  std::vector<char> mask = reachable(grid, start, passable);
-  std::vector<Cell> out;
-  for (Cell t : targets)
-    if (!grid.in_bounds(t) || !mask[grid.index(t)])
-      out.push_back(t);
-  return out;
-}
-
-template <typename Passable>
-[[nodiscard]] bool all_targets_reachable(const Grid &grid, Cell start,
-                                         std::span<const Cell> targets,
-                                         Passable passable) {
-  return unreachable_targets(grid, start, targets, passable).empty();
 }
 
 }

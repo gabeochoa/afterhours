@@ -1,4 +1,5 @@
 #include <afterhours/src/tile_grid.h>
+#include <afterhours/src/tile_grid_pathfinding.h>
 
 #include <cstdio>
 #include <string_view>
@@ -18,37 +19,40 @@ static void check(bool cond, const char *expr, int line) {
 }
 #define CHECK(expr) check((expr), #expr, __LINE__)
 
-static bool open_tile(int tile) { return tile != 1; }
+enum class Tile { Empty, Wall, Floor, Actor };
+
+static bool open_tile(Tile tile) { return tile != Tile::Wall; }
 
 int main() {
   {
-    Grid g(5, 3, 0);
-    const std::pair<char, int> legend[] = {{'#', 1}, {'.', 2}, {'@', 3}};
+    Grid<Tile> g(5, 3, Tile::Empty);
+    const std::pair<char, Tile> legend[] = {
+        {'#', Tile::Wall}, {'.', Tile::Floor}, {'@', Tile::Actor}};
     const std::string_view room[] = {"###", "#.#", "###"};
     CHECK(stamp(g, room, legend, 0, 0) == 9);
-    CHECK(g.at({1, 1}) == 2);
+    CHECK(g.at({1, 1}) == Tile::Floor);
     const std::string_view actor[] = {" @ "};
     CHECK(stamp(g, actor, legend, 0, 1) == 1);
-    CHECK(g.at({1, 1}) == 3);
-    CHECK(g.at({0, 1}) == 1);
+    CHECK(g.at({1, 1}) == Tile::Actor);
+    CHECK(g.at({0, 1}) == Tile::Wall);
   }
 
   {
-    Grid g(3, 3, 0);
-    const std::pair<char, int> legend[] = {{'#', 1}};
+    Grid<Tile> g(3, 3, Tile::Empty);
+    const std::pair<char, Tile> legend[] = {{'#', Tile::Wall}};
     const std::string_view block[] = {"##", "##"};
     CHECK(stamp(g, block, legend, -1, -1) == 1);
-    CHECK(g.at({0, 0}) == 1);
+    CHECK(g.at({0, 0}) == Tile::Wall);
     CHECK(stamp(g, block, legend, 2, 2) == 1);
-    CHECK(g.at({2, 2}) == 1);
+    CHECK(g.at({2, 2}) == Tile::Wall);
     CHECK(stamp(g, block, legend, 10, 10) == 0);
   }
 
   {
-    const std::pair<char, int> legend[] = {{'#', 1}};
+    const std::pair<char, Tile> legend[] = {{'#', Tile::Wall}};
     const std::string_view walls[] = {"#####", "#...#", "#####", "#...#",
                                       "#####"};
-    Grid walled(5, 5, 0);
+    Grid<Tile> walled(5, 5, Tile::Empty);
     stamp(walled, walls, legend, 0, 0);
     auto mask = reachable(walled, {1, 1}, open_tile);
     CHECK(mask[walled.index({2, 1})] == 1);
@@ -68,11 +72,12 @@ int main() {
   }
 
   {
-    const std::pair<char, int> legend[] = {{'#', 1}, {'.', 2}};
+    const std::pair<char, Tile> legend[] = {{'#', Tile::Wall},
+                                            {'.', Tile::Floor}};
     const std::string_view pat[] = {"#..#", ".##.", "#..#"};
-    Grid a(6, 4, 0), b(6, 4, 0);
+    Grid<Tile> a(6, 4, Tile::Empty), b(6, 4, Tile::Empty);
     for (int run = 0; run < 50; run++) {
-      Grid c(6, 4, 0);
+      Grid<Tile> c(6, 4, Tile::Empty);
       stamp(c, pat, legend, 1, 0);
       if (run == 0)
         a = c;
