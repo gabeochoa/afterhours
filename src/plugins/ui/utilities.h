@@ -245,7 +245,7 @@ inline void run_systems_on_ui_entities(
     ui_coll.merge_entity_arrays();
 
     for (auto &system : systems) {
-        if (!system->should_run(dt)) continue;
+        if (!system->advance_lifecycle(dt)) continue;
 
         auto &entities = ui_coll.get_entities_for_mod();
 
