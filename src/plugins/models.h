@@ -83,6 +83,7 @@ struct Lighting {
   float fog_far = 0.f; // <= fog_near: no fog
 };
 
+// TODO: split this header by platform/backend.
 #ifdef AFTER_HOURS_USE_RAYLIB
 using ModelType = raylib::Model;
 using graphics::ShaderType;
