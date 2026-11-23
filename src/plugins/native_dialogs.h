@@ -44,7 +44,7 @@ AsyncBackend native_async_backend();
 class Queue {
  public:
     explicit Queue(Backend backend = show_native) : backend_(std::move(backend)) {}
-    explicit Queue(AsyncBackend backend) : async_backend_(std::move(backend)) {}
+    explicit Queue(AsyncBackend backend) : async_backend(std::move(backend)) {}
     Queue(const Queue &) = delete;
     Queue &operator=(const Queue &) = delete;
 
@@ -64,7 +64,7 @@ class Queue {
         drain_inbox();
         auto batch = std::exchange(pending_, {});
         for (const auto &[id, request] : batch) {
-            if (async_backend_) {
+            if (async_backend) {
                 start_async(id, request);
             } else {
                 try {
@@ -90,12 +90,12 @@ class Queue {
         }
         CancelFn cancel_fn;
         {
-            std::lock_guard lock(mutex_);
-            auto it = cancels_.find(id);
-            if (it == cancels_.end()) return false;
+            std::lock_guard lock(mutex);
+            auto it = cancels.find(id);
+            if (it == cancels.end()) return false;
             cancel_fn = std::move(it->second);
-            cancels_.erase(it);
-            ignored_.insert(id);
+            cancels.erase(it);
+            ignored.insert(id);
         }
         store_completed(id, Cancelled{});
         if (cancel_fn) cancel_fn();
@@ -112,30 +112,30 @@ class Queue {
  private:
     void start_async(RequestId id, const Request &request) {
         {
-            std::lock_guard lock(mutex_);
-            cancels_.emplace(id, CancelFn{});
+            std::lock_guard lock(mutex);
+            cancels.emplace(id, CancelFn{});
         }
         try {
-            auto cancel_fn = async_backend_(request, [this, id](Result result) {
-                std::lock_guard lock(mutex_);
-                if (ignored_.erase(id)) return;
-                inbox_.emplace_back(id, std::move(result));
+            auto cancel_fn = async_backend(request, [this, id](Result result) {
+                std::lock_guard lock(mutex);
+                if (ignored.erase(id)) return;
+                inbox.emplace_back(id, std::move(result));
             });
-            std::lock_guard lock(mutex_);
-            if (auto it = cancels_.find(id); it != cancels_.end())
+            std::lock_guard lock(mutex);
+            if (auto it = cancels.find(id); it != cancels.end())
                 it->second = std::move(cancel_fn);
         } catch (const std::exception &e) {
-            std::lock_guard lock(mutex_);
-            cancels_.erase(id);
-            inbox_.emplace_back(id, Error{e.what()});
+            std::lock_guard lock(mutex);
+            cancels.erase(id);
+            inbox.emplace_back(id, Error{e.what()});
         }
     }
 
     void drain_inbox() {
         std::deque<std::pair<RequestId, Result>> ready;
         {
-            std::lock_guard lock(mutex_);
-            ready = std::exchange(inbox_, {});
+            std::lock_guard lock(mutex);
+            ready = std::exchange(inbox, {});
         }
         for (auto &[id, result] : ready) store_completed(id, std::move(result));
     }
@@ -148,15 +148,15 @@ class Queue {
     }
 
     Backend backend_;
-    AsyncBackend async_backend_;
+    AsyncBackend async_backend;
     RequestId next_id_ = 1;
     bool processing_ = false;
     std::deque<std::pair<RequestId, Request>> pending_;
     std::map<RequestId, Result> completed_;
-    std::mutex mutex_;
-    std::deque<std::pair<RequestId, Result>> inbox_;
-    std::map<RequestId, CancelFn> cancels_;
-    std::set<RequestId> ignored_;
+    std::mutex mutex;
+    std::deque<std::pair<RequestId, Result>> inbox;
+    std::map<RequestId, CancelFn> cancels;
+    std::set<RequestId> ignored;
 };
 
 }
