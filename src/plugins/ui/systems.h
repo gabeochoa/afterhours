@@ -142,6 +142,13 @@ static inline RectangleType hit_rect(const Entity &entity,
   RectangleType rect = component.rect();
   if (entity.has<HasUIModifiers>())
     rect = entity.get<HasUIModifiers>().apply_modifier(rect);
+  if (entity.has<HasHitExpand>()) {
+    const HasHitExpand &pad = entity.get<HasHitExpand>();
+    rect.x -= pad.pad_x;
+    rect.y -= pad.pad_y;
+    rect.width += pad.pad_x * 2.f;
+    rect.height += pad.pad_y * 2.f;
+  }
   rect = apply_ancestor_transform(entity, rect);
   return clip_hit_rect(entity, rect);
 }
