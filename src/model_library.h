@@ -13,6 +13,8 @@
 #include <utility>
 #include <vector>
 
+#include "core/hash.h"
+
 #if __has_include(<expected>)
 #include <expected>
 #if defined(__cpp_lib_expected)
@@ -28,21 +30,13 @@ namespace model_lib_std = tl;
 
 namespace afterhours {
 
-// FNV-1a: a dedup key, not a security hash — collisions share a texture.
-inline std::uint64_t texture_content_hash(std::span<const std::uint8_t> bytes) {
-  std::uint64_t h = 1469598103934665603ull;
-  for (std::uint8_t b : bytes) { h ^= b; h *= 1099511628211ull; }
-  return h;
-}
-
-// One GPU upload per distinct byte content, however many names use it.
 template <typename Texture> struct TextureRegistry {
   enum struct Error { DUPLICATE_NAME };
   std::size_t upload_count = 0;
 
   template <typename Upload>
   const Texture &get_or_upload(std::span<const std::uint8_t> bytes, Upload &&upload) {
-    std::uint64_t key = texture_content_hash(bytes);
+    std::uint64_t key = core_hash(bytes);
     auto it = by_hash.find(key);
     if (it != by_hash.end()) return *it->second;
     upload_count++;
@@ -75,7 +69,7 @@ private:
   std::map<std::string, const Texture *> by_name;
 };
 
-struct GltfBounds {
+struct GLTFBounds {
   std::array<float, 3> min{}, max{};
   [[nodiscard]] std::array<float, 3> center() const {
     return {(min[0] + max[0]) * .5f, (min[1] + max[1]) * .5f, (min[2] + max[2]) * .5f};
@@ -86,7 +80,7 @@ struct GltfBounds {
   }
 };
 
-enum struct GltfError {
+enum struct GLTFError {
   FILE_OPEN_FAILED, BAD_MAGIC, UNSUPPORTED_VERSION, TRUNCATED,
   BAD_JSON, NO_POSITION_BOUNDS,
 };
@@ -174,16 +168,16 @@ inline bool vec3(const Json *j, std::array<float, 3> &out) {
 }
 }
 
-inline model_lib_std::expected<GltfBounds, GltfError>
+inline model_lib_std::expected<GLTFBounds, GLTFError>
 gltf_bounds_from_json(std::span<const char> text) {
   using namespace detail_gltf;
   Json root; Parser parser{text.data(), text.data() + text.size()};
-  if (!parser.parse(root)) return model_lib_std::unexpected(GltfError::BAD_JSON);
+  if (!parser.parse(root)) return model_lib_std::unexpected(GLTFError::BAD_JSON);
   const Json *accessors = root.find("accessors"), *meshes = root.find("meshes");
   if (accessors == nullptr || meshes == nullptr || accessors->type != Json::Arr ||
       meshes->type != Json::Arr)
-    return model_lib_std::unexpected(GltfError::NO_POSITION_BOUNDS);
-  GltfBounds bounds; bool have = false;
+    return model_lib_std::unexpected(GLTFError::NO_POSITION_BOUNDS);
+  GLTFBounds bounds; bool have = false;
   for (const Json &mesh : meshes->arr) {
     const Json *prims = mesh.find("primitives");
     if (prims == nullptr) continue;
@@ -192,10 +186,10 @@ gltf_bounds_from_json(std::span<const char> text) {
       const Json *pos = attrs ? attrs->find("POSITION") : nullptr;
       if (pos == nullptr || pos->type != Json::Num) continue;
       auto idx = static_cast<std::size_t>(pos->num);
-      if (idx >= accessors->arr.size()) return model_lib_std::unexpected(GltfError::BAD_JSON);
+      if (idx >= accessors->arr.size()) return model_lib_std::unexpected(GLTFError::BAD_JSON);
       std::array<float, 3> mn{}, mx{};
       if (!vec3(accessors->arr[idx].find("min"), mn) || !vec3(accessors->arr[idx].find("max"), mx))
-        return model_lib_std::unexpected(GltfError::NO_POSITION_BOUNDS);
+        return model_lib_std::unexpected(GLTFError::NO_POSITION_BOUNDS);
       if (!have) { bounds = {mn, mx}; have = true; continue; }
       for (int i = 0; i < 3; i++) {
         auto k = static_cast<std::size_t>(i);
@@ -204,35 +198,35 @@ gltf_bounds_from_json(std::span<const char> text) {
       }
     }
   }
-  if (!have) return model_lib_std::unexpected(GltfError::NO_POSITION_BOUNDS);
+  if (!have) return model_lib_std::unexpected(GLTFError::NO_POSITION_BOUNDS);
   return bounds;
 }
 
-inline model_lib_std::expected<GltfBounds, GltfError>
+inline model_lib_std::expected<GLTFBounds, GLTFError>
 gltf_bounds_from_bytes(std::span<const std::uint8_t> bytes) {
   auto as_text = [&] {
     return gltf_bounds_from_json({reinterpret_cast<const char *>(bytes.data()), bytes.size()});
   };
   if (bytes.size() < 4 || std::memcmp(bytes.data(), "glTF", 4) != 0) {
     std::size_t first = 0; while (first < bytes.size() && (bytes[first] == ' ' || bytes[first] == '\n')) first++;
-    if (first < bytes.size() && bytes[first] != '{') return model_lib_std::unexpected(GltfError::BAD_MAGIC);
+    if (first < bytes.size() && bytes[first] != '{') return model_lib_std::unexpected(GLTFError::BAD_MAGIC);
     return as_text();
   }
-  if (bytes.size() < 20) return model_lib_std::unexpected(GltfError::TRUNCATED);
+  if (bytes.size() < 20) return model_lib_std::unexpected(GLTFError::TRUNCATED);
   auto u32 = [&](std::size_t off) {
     std::uint32_t v; std::memcpy(&v, bytes.data() + off, 4); return v;
   };
-  if (u32(4) != 2) return model_lib_std::unexpected(GltfError::UNSUPPORTED_VERSION);
+  if (u32(4) != 2) return model_lib_std::unexpected(GLTFError::UNSUPPORTED_VERSION);
   std::uint32_t json_len = u32(12);
   if (u32(16) != 0x4E4F534A || 20ull + json_len > bytes.size())
-    return model_lib_std::unexpected(GltfError::TRUNCATED);
+    return model_lib_std::unexpected(GLTFError::TRUNCATED);
   return gltf_bounds_from_json({reinterpret_cast<const char *>(bytes.data() + 20), json_len});
 }
 
-inline model_lib_std::expected<GltfBounds, GltfError>
+inline model_lib_std::expected<GLTFBounds, GLTFError>
 gltf_bounds_from_file(const char *path) {
   std::ifstream in(path, std::ios::binary);
-  if (!in) return model_lib_std::unexpected(GltfError::FILE_OPEN_FAILED);
+  if (!in) return model_lib_std::unexpected(GLTFError::FILE_OPEN_FAILED);
   std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
   return gltf_bounds_from_bytes(bytes);
 }

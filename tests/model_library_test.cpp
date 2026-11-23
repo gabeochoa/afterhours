@@ -74,16 +74,16 @@ int main() {
         "glb bounds from header chunk exact");
 
   auto missing = gltf_bounds_from_file("does/not/exist.glb");
-  check(!missing && missing.error() == GltfError::FILE_OPEN_FAILED, "missing file -> FILE_OPEN_FAILED");
+  check(!missing && missing.error() == GLTFError::FILE_OPEN_FAILED, "missing file -> FILE_OPEN_FAILED");
   std::vector<std::uint8_t> corrupt{'N', 'O', 'P', 'E'};
   auto bad = gltf_bounds_from_bytes(corrupt);
-  check(!bad && bad.error() == GltfError::BAD_MAGIC, "corrupt magic -> BAD_MAGIC");
+  check(!bad && bad.error() == GLTFError::BAD_MAGIC, "corrupt magic -> BAD_MAGIC");
   glb.resize(16);
   auto trunc = gltf_bounds_from_bytes(glb);
-  check(!trunc && trunc.error() == GltfError::TRUNCATED, "truncated glb -> TRUNCATED");
+  check(!trunc && trunc.error() == GLTFError::TRUNCATED, "truncated glb -> TRUNCATED");
   const char *no_pos = R"({"accessors": [], "meshes": [{"primitives": [{"attributes": {}}]}]})";
   auto none = gltf_bounds_from_bytes({reinterpret_cast<const std::uint8_t *>(no_pos), std::strlen(no_pos)});
-  check(!none && none.error() == GltfError::NO_POSITION_BOUNDS, "no POSITION -> NO_POSITION_BOUNDS");
+  check(!none && none.error() == GLTFError::NO_POSITION_BOUNDS, "no POSITION -> NO_POSITION_BOUNDS");
 
   auto path = std::filesystem::temp_directory_path() / "afterhours_r204_fixture.glb";
   { std::ofstream out(path, std::ios::binary); auto full = make_glb(GLTF); out.write(reinterpret_cast<const char *>(full.data()), static_cast<std::streamsize>(full.size())); }

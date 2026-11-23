@@ -12,6 +12,7 @@
 
 #include "entity.h"
 #include "entity_helper.h"
+#include "hash.h"
 #include "pointer_policy.h"
 
 namespace afterhours::snapshot {
@@ -125,11 +126,6 @@ inline void append_token(std::string &out, const std::string &v) {
   out += ':';
   out += v;
 }
-inline std::uint64_t fnv1a(const std::string &s) {
-  std::uint64_t h = 14695981039346656037ull;
-  for (unsigned char c : s) { h ^= c; h *= 1099511628211ull; }
-  return h;
-}
 inline void sort_fields(std::vector<Field> &f) {
   std::sort(f.begin(), f.end());
 }
@@ -152,7 +148,8 @@ inline std::string CanonicalSnapshot::encode() const {
   return out;
 }
 inline std::uint64_t CanonicalSnapshot::hash() const {
-  return detail::fnv1a(encode());
+  const std::string encoded = encode();
+  return core_hash({reinterpret_cast<const std::uint8_t *>(encoded.data()), encoded.size()});
 }
 
 // IdentityFn: std::string(const EntityHandle &). Throws on empty/duplicate.
