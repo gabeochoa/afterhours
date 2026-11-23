@@ -8,11 +8,11 @@ namespace afterhours {
 
 class StagedRestore {
 public:
-  EntityCollection &staging() { return staging_; }
-  const EntityCollection &staging() const { return staging_; }
-  bool committed() const { return committed_; }
+  EntityCollection &staging() { return stage; }
+  const EntityCollection &staging() const { return stage; }
+  bool committed() const { return is_committed; }
 
-  void discard() { staging_.delete_all_entities_NO_REALLY_I_MEAN_ALL(); }
+  void discard() { stage.delete_all_entities_NO_REALLY_I_MEAN_ALL(); }
 
   bool commit(EntityCollection &live) {
     return commit_if(live, [](EntityCollection &) { return true; });
@@ -20,20 +20,20 @@ public:
 
   template <typename Validate>
   bool commit_if(EntityCollection &live, Validate &&validate) {
-    if (committed_)
+    if (is_committed)
       return false;
-    staging_.merge_entity_arrays();
-    if (!validate(staging_))
+    stage.merge_entity_arrays();
+    if (!validate(stage))
       return false;
-    live.swap_contents(staging_);
-    committed_ = true;
+    live.swap_contents(stage);
+    is_committed = true;
     discard();
     return true;
   }
 
 private:
-  EntityCollection staging_;
-  bool committed_ = false;
+  EntityCollection stage;
+  bool is_committed = false;
 };
 
 template <typename Build, typename Validate>
