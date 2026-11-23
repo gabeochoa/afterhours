@@ -159,6 +159,7 @@ ALL_TESTS := \
 	spike_capture_test \
 	perf_provider_warn_test \
 	blend_mode_test \
+	blur_shader_test \
 	rect_test \
 	math3d_test \
 	rounded_corners_test \
@@ -383,6 +384,7 @@ ALL_TESTS += sokol_resize_test
 ALL_TESTS += sokol_multires_capture_test
 ALL_TESTS += sokol_headless_run_test
 ALL_TESTS += web_metal_symbols_test
+ALL_TESTS += sokol_lazy_gl_test
 ALL_TESTS += sokol_include_order_test
 ALL_TESTS += sokol_wrappers_test
 ALL_TESTS += sokol_frame_dt_test
@@ -419,6 +421,7 @@ RAYLIB_TESTS := \
 	render_capture_test \
 	presented_frame_test \
 	triangle_winding_test \
+	blur_shader_test \
 	rounded_outline_mask_test \
 	clipboard_test \
 	mk_cost_test \
@@ -622,6 +625,10 @@ $(OUT)/sokol_multires_capture_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_headless_run_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_headless_run_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_headless_run_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_lazy_gl_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_lazy_gl_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_lazy_gl_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_lazy_gl_test: ../src/backends/sokol/drawing_helpers.h ../src/backends/sokol/backend.h
 $(OUT)/sokol_include_order_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_include_order_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_include_order_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
@@ -656,6 +663,8 @@ $(OUT)/triangle_winding_metal_test: triangle_winding_test.cpp ../examples/web/so
 
 $(OUT)/image_metal_test: image_test.cpp ../examples/web/sokol_impl.cc
 	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) -DAFTER_HOURS_USE_SOKOL -x objective-c++ $(filter %.cpp %.cc,$^) $(SOKOL_FRAMEWORKS) -o $@
+
+$(OUT)/blur_shader_test: ../src/plugins/files.cpp
 
 $(OUT)/image_raylib_test: image_test.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $< $(LDFLAGS_RAYLIB) -o $@
