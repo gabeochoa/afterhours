@@ -2,6 +2,7 @@
 #pragma once
 
 #include <algorithm>
+#include <filesystem>
 #include <map>
 #include <optional>
 #include <vector>
@@ -28,11 +29,15 @@ inline std::optional<raylib::Font> &default_font_override() {
   static std::optional<raylib::Font> font;
   return font;
 }
+
+inline std::optional<raylib::Font> &bundled_default_font();
 } // namespace detail
 
 // The face for text drawn without one: get_default_font(), get_unset_font(),
-// draw_text and the library's debug overlays. Unset, it is raylib's built-in
-// pixel font. Set it before the UI plugin loads its fonts so imm's default
+// draw_text and the library's debug overlays. Unset, it is the library's
+// bundled Roboto Regular (src/assets/fonts/Roboto-Regular.ttf); if that file
+// cannot be found or rasterized, raylib's built-in pixel font is the
+// fallback. Set before the UI plugin loads its fonts so imm's default
 // and unset fonts pick it up too. The caller keeps the font loaded.
 inline void set_default_font(raylib::Font font) {
   detail::default_font_override() = font;
@@ -40,7 +45,12 @@ inline void set_default_font(raylib::Font font) {
 inline void clear_default_font() { detail::default_font_override().reset(); }
 
 inline raylib::Font get_default_font() {
-  return detail::default_font_override().value_or(raylib::GetFontDefault());
+  if (const auto &chosen = detail::default_font_override())
+    return *chosen;
+  const auto &bundled = detail::bundled_default_font();
+  if (bundled && bundled->glyphCount > 0)
+    return *bundled;
+  return raylib::GetFontDefault();
 }
 inline raylib::Font get_unset_font() { return get_default_font(); }
 
@@ -286,6 +296,43 @@ inline raylib::Font load_font_from_memory(const unsigned char *data, int size,
   }
   return font;
 }
+
+namespace detail {
+
+inline std::string bundled_default_font_path() {
+#ifdef AFTERHOURS_ROBOTO_FONT_PATH
+  return AFTERHOURS_ROBOTO_FONT_PATH;
+#else
+  return (std::filesystem::path(__FILE__).parent_path() / ".." / ".." /
+          "assets" / "fonts" / "Roboto-Regular.ttf")
+      .string();
+#endif
+}
+
+inline std::optional<raylib::Font> load_bundled_default_font() {
+  std::vector<unsigned char> bytes;
+  if (!font_coverage::read_file(bundled_default_font_path().c_str(), bytes))
+    return std::nullopt;
+  const raylib::Font font = load_font_from_memory(
+      bytes.data(), static_cast<int>(bytes.size()), "Roboto-Regular");
+  if (font.glyphCount <= 0)
+    return std::nullopt;
+  return font;
+}
+
+// The bundled Roboto Regular, loaded once and kept for the process. A load
+// before any GL context produces glyphs but no atlas; the next call after a
+// context exists reloads it once so text measures and draws for real.
+inline std::optional<raylib::Font> &bundled_default_font() {
+  static std::optional<raylib::Font> font = load_bundled_default_font();
+  if (font && font->texture.id == 0 && font_gl_ready()) {
+    if (const auto reloaded = load_bundled_default_font())
+      font = reloaded;
+  }
+  return font;
+}
+
+} // namespace detail
 
 // Whether the loaded face actually covers a codepoint. raylib maps anything it
 // does not have to glyph 0, so asking is the only way to tell a real glyph
