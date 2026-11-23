@@ -72,15 +72,26 @@ int main() {
   }
   {
     TimeOfDay tod;
-    tod.keys = {{0.f, {1.f, 0.f, 0.f}, 2.f, {0.f, 0.f, 0.f}, 0.f, {0.f, 0.f, 0.f}, 0.f},
-                {12.f, {0.f, 0.f, 1.f}, 4.f, {1.f, 1.f, 1.f}, 1.f, {1.f, 1.f, 1.f}, 1.f}};
+    tod.keys = {{0.f, {255, 0, 0, 255}, 2.f, {0, 0, 0, 255}, 0.f, {0, 0, 0, 255}, 0.f},
+                {12.f, {0, 0, 255, 255}, 4.f, {255, 255, 255, 255}, 1.f, {255, 255, 255, 255}, 1.f}};
     tod.hour = 6.f;
     Lighting l = tod.evaluate();
     CHECK(near(l.sun_intensity, 3.f, 1e-4f));
-    CHECK(near(l.sun_color.r, 0.5f, 1e-4f));
-    CHECK(near(l.sun_color.b, 0.5f, 1e-4f));
+    // colors::lerp works on Color bytes and truncates toward zero, so the
+    // halfway blend of 255 and 0 is 128 from the red side and 127 from blue.
+    CHECK(l.sun_color.r == 128 && l.sun_color.b == 127);
     CHECK(near(l.ambient_intensity, 0.5f, 1e-4f));
     CHECK(near(l.fog_density, 0.5f, 1e-4f));
+  }
+  {
+    // Default cycle ships byte Colors: noon sun/fog match the keyframe.
+    TimeOfDay tod;
+    tod.hour = 12.f;
+    Lighting l = tod.evaluate();
+    CHECK(l.sun_color.r == 255 && l.sun_color.g == 245 &&
+          l.sun_color.b == 224);
+    CHECK(l.fog_color.r == 191 && l.fog_color.g == 209 &&
+          l.fog_color.b == 242);
   }
   {
     TimeOfDay tod;

@@ -1,47 +1,51 @@
 #pragma once
 
+// Time-of-day evaluation: pure math, opt-in per game.
+// A game owns its own TimeOfDay, calls evaluate() each frame, and applies
+// the returned Lighting to its own lights (e.g. SceneLights). Including this
+// header registers nothing: no singleton, no system, no auto-registration,
+// and nothing changes in a game that never constructs a TimeOfDay.
+
 #include <algorithm>
 #include <cmath>
 #include <vector>
 
-namespace afterhours::time_of_day {
+#include "color.h"
 
-struct Rgb {
-  float r = 1.f, g = 1.f, b = 1.f;
-};
+namespace afterhours::time_of_day {
 
 struct Keyframe {
   float hour = 0.f;
-  Rgb sun_color{};
+  Color sun_color{255, 255, 255, 255};
   float sun_intensity = 0.f;
-  Rgb ambient_color{0.2f, 0.25f, 0.4f};
+  Color ambient_color{51, 64, 102, 255};
   float ambient_intensity = 0.15f;
-  Rgb fog_color{0.02f, 0.03f, 0.08f};
+  Color fog_color{5, 8, 20, 255};
   float fog_density = 0.02f;
 };
 
 struct Lighting {
-  Rgb sun_color{};
+  Color sun_color{255, 255, 255, 255};
   float sun_intensity = 0.f;
   struct Dir {
     float x = 0.f, y = 1.f, z = 0.f;
   };
   Dir sun_direction{};
   float sun_elevation_deg = -90.f;
-  Rgb ambient_color{};
+  Color ambient_color{0, 0, 0, 255};
   float ambient_intensity = 0.f;
-  Rgb fog_color{};
+  Color fog_color{0, 0, 0, 255};
   float fog_density = 0.f;
 };
 
 inline std::vector<Keyframe> default_day_cycle() {
   return {
-      {0.f, {0.6f, 0.7f, 1.f}, 0.f, {0.12f, 0.16f, 0.3f}, 0.12f, {0.015f, 0.02f, 0.06f}, 0.02f},
-      {5.f, {0.7f, 0.75f, 1.f}, 0.f, {0.14f, 0.18f, 0.32f}, 0.14f, {0.02f, 0.03f, 0.08f}, 0.02f},
-      {6.5f, {1.f, 0.6f, 0.35f}, 0.35f, {0.35f, 0.3f, 0.35f}, 0.3f, {0.35f, 0.28f, 0.25f}, 0.015f},
-      {12.f, {1.f, 0.96f, 0.88f}, 1.f, {0.55f, 0.6f, 0.7f}, 0.55f, {0.75f, 0.82f, 0.95f}, 0.008f},
-      {17.5f, {1.f, 0.55f, 0.3f}, 0.4f, {0.35f, 0.3f, 0.3f}, 0.35f, {0.5f, 0.38f, 0.28f}, 0.015f},
-      {19.f, {0.8f, 0.45f, 0.5f}, 0.05f, {0.2f, 0.18f, 0.3f}, 0.2f, {0.1f, 0.08f, 0.18f}, 0.02f},
+      {0.f,   {153, 179, 255, 255}, 0.f,   {31, 41, 77, 255},   0.12f, {4, 5, 15, 255},     0.02f},
+      {5.f,   {179, 191, 255, 255}, 0.f,   {36, 46, 82, 255},   0.14f, {5, 8, 20, 255},     0.02f},
+      {6.5f,  {255, 153, 89, 255},  0.35f, {89, 77, 89, 255},   0.3f,  {89, 71, 64, 255},   0.015f},
+      {12.f,  {255, 245, 224, 255}, 1.f,   {140, 153, 179, 255}, 0.55f, {191, 209, 242, 255}, 0.008f},
+      {17.5f, {255, 140, 77, 255},  0.4f,  {89, 77, 77, 255},   0.35f, {128, 97, 71, 255},  0.015f},
+      {19.f,  {204, 115, 128, 255}, 0.05f, {51, 46, 77, 255},   0.2f,  {26, 20, 46, 255},   0.02f},
   };
 }
 
@@ -89,20 +93,17 @@ struct TimeOfDay {
     if (f < 0.f) f = 0.f;
     if (f > 1.f) f = 1.f;
     auto lerp = [](float u, float v, float t) { return u + (v - u) * t; };
-    auto lerp_rgb = [&lerp](Rgb u, Rgb v, float t) {
-      return Rgb{lerp(u.r, v.r, t), lerp(u.g, v.g, t), lerp(u.b, v.b, t)};
-    };
     return {a.hour + span * f,
-            lerp_rgb(a.sun_color, b.sun_color, f),
+            colors::lerp(a.sun_color, b.sun_color, f),
             lerp(a.sun_intensity, b.sun_intensity, f),
-            lerp_rgb(a.ambient_color, b.ambient_color, f),
+            colors::lerp(a.ambient_color, b.ambient_color, f),
             lerp(a.ambient_intensity, b.ambient_intensity, f),
-            lerp_rgb(a.fog_color, b.fog_color, f),
+            colors::lerp(a.fog_color, b.fog_color, f),
             lerp(a.fog_density, b.fog_density, f)};
   }
 
   void sun_position(Lighting &out) const {
-    constexpr float PI = 3.14159265f;
+    // PI: afterhours::PI off raylib; raylib.h's PI macro on raylib builds.
     const float day_len = sunset_hour - sunrise_hour;
     float f = (hour - sunrise_hour) / day_len;
     const float elev = max_elevation_deg * std::sin(PI * f);
@@ -119,4 +120,4 @@ struct TimeOfDay {
   }
 };
 
-}
+} // namespace afterhours::time_of_day
