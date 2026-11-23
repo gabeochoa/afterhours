@@ -111,6 +111,7 @@ ALL_TESTS := \
 	wrappers_test \
 	window_state_test \
 	animation_presets_test \
+	shimmer_test \
 	particles_test \
 	trigger_volume_test \
 	ui_modifiers_test \
@@ -150,6 +151,7 @@ ALL_TESTS := \
 	charts_test \
 	system_profile_test \
 	allocation_counters_test \
+	system_groups_test \
 	profiling_test \
 	profiling_disabled_test \
 	profiling_collapsed_test \

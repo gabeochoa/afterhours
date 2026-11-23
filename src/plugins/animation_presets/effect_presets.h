@@ -144,5 +144,52 @@ inline EffectQuad effect_quad(const EffectPreset &e, RectangleType r, float p) {
   return q;
 }
 
+struct Shimmer {
+  bool enabled = true;
+  float period = 1.6f;
+  float band = 0.35f;
+  ColorType base{0, 0, 0, 255};
+  ColorType highlight{255, 255, 255, 255};
+  int strips = 16;
+};
+
+struct ShimmerStrip {
+  RectangleType rect;
+  ColorType color;
+};
+
+inline std::array<ShimmerStrip, 32> shimmer_strips(const Shimmer &s,
+                                                   RectangleType r, float t,
+                                                   int &count) {
+  std::array<ShimmerStrip, 32> out{};
+  count = 0;
+  if (r.width <= 0.f || r.height <= 0.f)
+    return out;
+  if (!s.enabled || s.period <= 0.f) {
+    out[0] = {r, s.base};
+    count = 1;
+    return out;
+  }
+  const int n = std::clamp(s.strips, 1, 32);
+  const float phase = std::fmod(t, s.period) / s.period;
+  const float band = std::clamp(s.band, 0.01f, 2.f);
+  const float center = (-band / 2.f + phase * (1.f + band)) * r.width;
+  const float half = band / 2.f * r.width;
+  const float w = r.width / n;
+  for (int i = 0; i < n; ++i) {
+    const float x = r.x + i * w;
+    const float xc = x + w / 2.f - r.x;
+    const float k = std::clamp(1.f - std::abs(xc - center) / half, 0.f, 1.f);
+    ColorType c;
+    c.r = static_cast<unsigned char>(s.base.r + (s.highlight.r - s.base.r) * k);
+    c.g = static_cast<unsigned char>(s.base.g + (s.highlight.g - s.base.g) * k);
+    c.b = static_cast<unsigned char>(s.base.b + (s.highlight.b - s.base.b) * k);
+    c.a = static_cast<unsigned char>(s.base.a + (s.highlight.a - s.base.a) * k);
+    out[i] = {{x, r.y, w, r.height}, c};
+  }
+  count = n;
+  return out;
+}
+
 } // namespace presets
 } // namespace afterhours
