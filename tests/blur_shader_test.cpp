@@ -32,18 +32,18 @@ static graphics::RenderTextureType sharp_edge() {
   return rt;
 }
 
-static int px(const RgbaCapture &c, int x, int y) {
+static int px(const RGBACapture &c, int x, int y) {
   return c.pixels[(static_cast<size_t>(y) * c.width + x) * 4];
 }
 
-static int max_step(const RgbaCapture &c, int y) {
+static int max_step(const RGBACapture &c, int y) {
   int m = 0;
   for (int x = 1; x < c.width; x++)
     m = std::max(m, std::abs(px(c, x, y) - px(c, x - 1, y)));
   return m;
 }
 
-static void write_shot(const RgbaCapture &c, const char *name) {
+static void write_shot(const RGBACapture &c, const char *name) {
   const char *dir = std::getenv("BLUR_SHOT_DIR");
   if (!dir)
     return;
