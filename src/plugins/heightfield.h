@@ -27,11 +27,11 @@ struct Heightfield {
   std::vector<float> heights;
 
   Heightfield() = default;
-  Heightfield(int cols_, int rows_, float cell_, std::vector<float> heights_,
-              float origin_x_ = 0.f, float origin_z_ = 0.f)
-      : cols(cols_), rows(rows_), cell(cell_ > 0.f ? cell_ : 1.f),
-        origin_x(origin_x_), origin_z(origin_z_),
-        heights(std::move(heights_)) {}
+  Heightfield(int cols, int rows, float cell, std::vector<float> heights,
+              float origin_x = 0.f, float origin_z = 0.f)
+      : cols(cols), rows(rows), cell(cell > 0.f ? cell : 1.f),
+        origin_x(origin_x), origin_z(origin_z),
+        heights(std::move(heights)) {}
 
   [[nodiscard]] bool valid() const {
     return cols >= 2 && rows >= 2 &&
