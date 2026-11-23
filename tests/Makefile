@@ -123,6 +123,7 @@ ALL_TESTS := \
 	text_unit_motion_test \
 	text_alignment_test \
 	sound_volume_test \
+	caption_test \
 	audio_plugin_test \
 	audio_stream_test \
 	synth_beep_test \
@@ -158,6 +159,7 @@ ALL_TESTS := \
 	perf_provider_warn_test \
 	blend_mode_test \
 	rect_test \
+	math3d_test \
 	rounded_corners_test \
 	rounded_outline_mask_test \
 	viewport_test \
@@ -170,6 +172,7 @@ ALL_TESTS := \
 	crash_handler_web_sim_test \
 	crash_report_file_test \
 	setting_row_style_test \
+	settings_presets_test \
 	singleton_iteration_test \
 	get_unique_test \
 	singleton_add_test \
@@ -232,11 +235,13 @@ ALL_TESTS := \
 	grapheme_edit_test \
 	entity_mapping_test \
 	files_atomic_write_test \
+	files_confined_path_test \
 	files_resource_path_test \
 	files_cache_path_test \
 	files_documents_test \
 	capture_test \
 	capture_perf_test \
+	capture_async_test \
 	polyline_test \
 	measure_memo_test \
 	design_defaults_test \
@@ -348,6 +353,7 @@ ALL_TESTS := \
 	theme_io_test \
 	tree_view_test \
 	window_helpers_test \
+	skeletal_test \
 	translation_test \
 	layout_inspector_test \
 	letter_spacing_zero_test
@@ -382,6 +388,8 @@ endif
 
 RAYLIB_TESTS := \
 	auto_text_color_test \
+	skeletal_test \
+	math3d_test \
 	value_types_test \
 	wrappers_test \
 	window_focus_test \
@@ -530,11 +538,14 @@ $(OUT)/graphics_concepts_pedantic_test: CXXFLAGS_T += -Wpedantic -Werror
 $(OUT)/graphics_concepts_pedantic_test: INCLUDES_T = -I$(INCLUDE_ROOT) -isystem $(AFTERHOURS_ROOT)/vendor -isystem $(BREW_PREFIX)/include
 $(OUT)/sound_volume_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(OUT)/sound_volume_test: INCLUDES_T = $(INCLUDES_RAYLIB)
+$(OUT)/caption_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
+$(OUT)/caption_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/audio_plugin_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(OUT)/audio_plugin_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/audio_stream_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(OUT)/audio_stream_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/files_atomic_write_test: ../src/plugins/files.cpp
+$(OUT)/files_confined_path_test: ../src/plugins/files.cpp
 $(OUT)/files_resource_path_test: ../src/plugins/files.cpp
 $(OUT)/files_test_roots_test: ../src/plugins/files.cpp
 $(OUT)/files_e2e_temp_roots_test: ../src/plugins/files.cpp
