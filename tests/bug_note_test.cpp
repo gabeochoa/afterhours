@@ -1,6 +1,6 @@
 
 #define FMT_HEADER_ONLY
-#include <afterhours/src/bug_note.h>
+#include <afterhours/src/plugins/bug_note.h>
 #include <afterhours/src/drawing_helpers.h>
 #include <afterhours/src/graphics.h>
 
