@@ -102,12 +102,12 @@ struct TimeOfDay {
   }
 
   void sun_position(Lighting &out) const {
-    constexpr float kPi = 3.14159265f;
+    constexpr float PI = 3.14159265f;
     const float day_len = sunset_hour - sunrise_hour;
     float f = (hour - sunrise_hour) / day_len;
-    const float elev = max_elevation_deg * std::sin(kPi * f);
-    const float az = kPi * f;
-    const float el = elev * kPi / 180.f;
+    const float elev = max_elevation_deg * std::sin(PI * f);
+    const float az = PI * f;
+    const float el = elev * PI / 180.f;
     float x = std::cos(az) * std::cos(el);
     float y = std::sin(el);
     float z = tilt * std::sin(az) * std::cos(el);
