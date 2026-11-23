@@ -653,18 +653,18 @@ struct SystemManager {
     std::vector<std::unique_ptr<SystemBase>> render_systems_;
 
    private:
-    std::unordered_map<SystemBase *, std::string> system_group_;
-    std::unordered_map<std::string, bool> group_enabled_;
+    std::unordered_map<SystemBase *, std::string> system_groups;
+    std::unordered_map<std::string, bool> group_states;
 
     void assign_group(SystemBase *sys, std::string_view group) {
-        system_group_[sys] = std::string(group);
+        system_groups[sys] = std::string(group);
     }
 
     bool system_group_enabled(SystemBase *sys) const {
-        const auto it = system_group_.find(sys);
-        if (it == system_group_.end()) return true;
-        const auto g = group_enabled_.find(it->second);
-        return g == group_enabled_.end() || g->second;
+        const auto it = system_groups.find(sys);
+        if (it == system_groups.end()) return true;
+        const auto g = group_states.find(it->second);
+        return g == group_states.end() || g->second;
     }
 
     bool gate_ok(SystemBase *sys, const float dt) const {
@@ -704,12 +704,12 @@ struct SystemManager {
     }
 
     void set_group_enabled(std::string_view group, bool enabled) {
-        group_enabled_[std::string(group)] = enabled;
+        group_states[std::string(group)] = enabled;
     }
 
     bool group_enabled(std::string_view group) const {
-        const auto it = group_enabled_.find(std::string(group));
-        return it == group_enabled_.end() || it->second;
+        const auto it = group_states.find(std::string(group));
+        return it == group_states.end() || it->second;
     }
 
     std::vector<std::string_view> systems_in_group(
@@ -717,8 +717,8 @@ struct SystemManager {
         std::vector<std::string_view> out;
         auto scan = [&](const auto &list) {
             for (const auto &sys : list) {
-                const auto it = system_group_.find(sys.get());
-                if (it != system_group_.end() && it->second == group)
+                const auto it = system_groups.find(sys.get());
+                if (it != system_groups.end() && it->second == group)
                     out.push_back(sys->name());
             }
         };
