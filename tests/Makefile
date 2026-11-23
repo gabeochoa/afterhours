@@ -191,6 +191,7 @@ ALL_TESTS := \
 	e2e_resize_steps_test \
 	e2e_render_checkpoint_test \
 	e2e_window_size_test \
+	e2e_audio_commands_test \
 	e2e_register_command_test \
 	e2e_screenshot_test \
 	e2e_expect_screenshot_test \
