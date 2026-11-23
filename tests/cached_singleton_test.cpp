@@ -35,12 +35,12 @@ static void register_test(const char *name, void (*fn)()) {
   test_registry().push_back({name, fn});
 }
 
-static void check(bool cond, const char *expr, const char *file_, int line) {
+static void check(bool cond, const char *expr, const char *file, int line) {
   tests_run++;
   if (cond) {
     tests_passed++;
   } else {
-    fprintf(stderr, "  FAIL: %s  (%s:%d)\n", expr, file_, line);
+    fprintf(stderr, "  FAIL: %s  (%s:%d)\n", expr, file, line);
   }
 }
 
