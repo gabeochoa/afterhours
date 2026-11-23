@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "core/base_component.h"
+#include "developer.h"
 #include "core/entity.h"
 #include "core/entity_collection.h"
 
@@ -36,7 +37,7 @@ namespace attachment {
 using Filter = std::function<bool(const Entity &child, const Entity &parent)>;
 
 inline Pose2D compose(const Pose2D &parent, const Pose2D &local) {
-  const float r = parent.angle_deg * 3.14159265358979323846f / 180.f;
+  const float r = parent.angle_deg * DEG2RAD;
   const float c = std::cos(r), s = std::sin(r);
   return {parent.x + local.x * c - local.y * s,
           parent.y + local.x * s + local.y * c, parent.angle_deg + local.angle_deg};
