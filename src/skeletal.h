@@ -56,9 +56,11 @@ inline void compute_skinning(const Skeleton &sk,
                                     : mat4_identity());
 }
 
-struct Vec3Track { std::vector<float> times; std::vector<Vec3> values; };
+template <typename T>
+struct Track { std::vector<float> times; std::vector<T> values; };
 
-struct QuatTrack { std::vector<float> times; std::vector<Quat> values; };
+using Vec3Track = Track<Vec3>;
+using QuatTrack = Track<Quat>;
 
 struct JointTracks { Vec3Track pos; QuatTrack rot; Vec3Track scale; };
 
@@ -77,22 +79,17 @@ inline void segment(const std::vector<float> &times, float t, std::size_t &i,
   float span = times[i + 1] - times[i];
   f = span > 0.f ? (t - times[i]) / span : 0.f;
 }
+inline Vec3 interpolate(Vec3 a, Vec3 b, float f) { return lerp(a, b, f); }
+inline Quat interpolate(Quat a, Quat b, float f) { return slerp(a, b, f); }
 }
 
-inline Vec3 sample(const Vec3Track &tr, float t, Vec3 fallback) {
+template <typename T>
+inline T sample(const Track<T> &tr, float t, T fallback) {
   if (tr.values.empty()) return fallback;
   if (tr.values.size() == 1) return tr.values[0];
   std::size_t i; float f;
   detail::segment(tr.times, t, i, f);
-  return lerp(tr.values[i], tr.values[i + 1], f);
-}
-
-inline Quat sample(const QuatTrack &tr, float t, Quat fallback) {
-  if (tr.values.empty()) return fallback;
-  if (tr.values.size() == 1) return tr.values[0];
-  std::size_t i; float f;
-  detail::segment(tr.times, t, i, f);
-  return slerp(tr.values[i], tr.values[i + 1], f);
+  return detail::interpolate(tr.values[i], tr.values[i + 1], f);
 }
 
 inline void sample(const Clip &clip, float t, Pose &out) {
