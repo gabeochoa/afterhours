@@ -25,6 +25,7 @@ static bool approx(float a, float b) { return std::fabs(a - b) < 1e-5f; }
 int main() {
   printf("Running timer tests...\n\n");
   using HasTimer = timer::HasTimer;
+  using HasCountdown = timer::HasCountdown;
 
   {
     HasTimer t(10.f);
@@ -38,8 +39,8 @@ int main() {
   }
 
   {
-    HasTimer t = HasTimer::make_countdown(10.f);
-    check(t.countdown, "countdown flag set");
+    HasCountdown t(10.f);
+    check(approx(t.duration, 10.f), "countdown duration set");
     check(approx(t.get_remaining(), 10.f), "countdown starts full");
     check(!t.is_ready(), "countdown not ready at start");
     check(!t.update(3.f), "countdown no fire early");
@@ -52,14 +53,14 @@ int main() {
   }
 
   {
-    HasTimer t = HasTimer::make_countdown(5.f, true);
+    HasCountdown t(5.f, true);
     check(t.update(5.f), "auto countdown fires at zero");
     check(approx(t.get_remaining(), 5.f), "auto countdown refills");
     check(!t.is_ready(), "auto countdown not immediately ready again");
   }
 
   {
-    HasTimer t = HasTimer::make_countdown(8.f);
+    HasCountdown t(8.f);
     t.pause();
     check(!t.update(2.f), "paused countdown does not tick");
     check(approx(t.get_remaining(), 8.f), "paused remaining held");
@@ -68,34 +69,29 @@ int main() {
     check(approx(t.get_remaining(), 6.f), "resumed remaining down");
     t.reset();
     check(approx(t.get_remaining(), 8.f), "countdown reset refills");
-    t.set_time(2.f);
-    check(approx(t.get_remaining(), 2.f), "countdown set_time sets remaining");
+    t.set_remaining(2.f);
+    check(approx(t.get_remaining(), 2.f), "countdown set_remaining sets remaining");
     t.add_time(1.f);
     check(approx(t.get_remaining(), 1.f), "countdown add_time subtracts");
   }
 
   {
-    HasTimer t = HasTimer::make_countdown(12.f, true);
+    HasCountdown t(12.f, true);
     t.pause();
-    t.set_time(4.5f);
-    const HasTimer::HasTimerDTO dto = t.to_dto();
-    HasTimer restored = HasTimer::from_dto(dto);
-    check(restored.countdown, "dto keeps countdown");
+    t.set_remaining(4.5f);
+    const timer::HasCountdownDTO dto = t.to_dto();
+    check(approx(dto.duration, 12.f), "dto keeps duration");
+    check(approx(dto.remaining, 4.5f), "dto keeps remaining");
+    HasCountdown restored = HasCountdown::from_dto(dto);
     check(restored.auto_reset, "dto keeps auto_reset");
     check(restored.paused, "dto keeps paused");
-    check(approx(restored.reset_time, 12.f), "dto keeps duration");
-    check(approx(restored.current_time, 4.5f), "dto keeps remaining");
+    check(approx(restored.duration, 12.f), "restored duration kept");
+    check(approx(restored.remaining, 4.5f), "restored remaining kept");
     check(approx(restored.get_remaining(), 4.5f), "restored remaining read");
     check(restored.is_ready() == t.is_ready(), "restored ready matches");
-  }
-
-  {
-    HasTimer t(6.f, true);
-    t.current_time = 2.25f;
-    HasTimer restored = HasTimer::from_dto(t.to_dto());
-    check(!restored.countdown, "dto count-up stays count-up");
-    check(approx(restored.current_time, 2.25f), "dto count-up elapsed kept");
-    check(approx(restored.get_remaining(), 3.75f), "restored count-up remaining");
+    check(approx(restored.get_progress(), t.get_progress()),
+          "restored progress matches");
+    check(!restored.update(1.f), "restored paused does not tick");
   }
 
   printf("timer_test: %d/%d checks passed\n", checks_passed, checks_run);
