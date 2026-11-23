@@ -23,7 +23,7 @@ static void check(bool cond, const std::string &what) {
 static bool near(float a, float b, float eps = 1e-4f) { return std::fabs(a - b) <= eps; }
 
 int main() {
-  constexpr float kPi = 3.14159265f;
+  constexpr float PI_F = 3.14159265f;
 
   WaterSurface flat;
   flat.base_height = 2.5f;
@@ -36,8 +36,8 @@ int main() {
   water.add_wave({0.5f, 4.f, 1.f, 0.f, 0.7f, 0.3f, 0.f});
   water.add_wave({0.25f, 2.f, 0.f, 1.f, -1.1f, 0.f, 0.f});
   auto analytic = [&](float x, float z, float t) {
-    return 1.f + 0.5f * std::sin(x * (2.f * kPi / 4.f) + 0.3f + 0.7f * t) +
-                  0.25f * std::sin(z * (2.f * kPi / 2.f) - 1.1f * t);
+    return 1.f + 0.5f * std::sin(x * (2.f * PI_F / 4.f) + 0.3f + 0.7f * t) +
+                  0.25f * std::sin(z * (2.f * PI_F / 2.f) - 1.1f * t);
   };
   for (auto [x, z, t] : std::array<std::array<float, 3>, 4>{{{0.f, 0.f, 0.f},
                                                               {1.5f, -2.f, 0.4f},
@@ -97,14 +97,14 @@ int main() {
   WaterSurface slope_x;
   slope_x.add_wave({0.5f, 4.f, 1.f, 0.f, 0.f, 0.f, 0.f});
   FloatingPose pose_x = floating_pose(slope_x, {0.f, 0.f, 0.f}, 0.f, {});
-  check(near(pose_x.roll, std::atan(0.5f * kPi / 2.f), 1e-4f), "roll follows X slope");
+  check(near(pose_x.roll, std::atan(0.5f * PI_F / 2.f), 1e-4f), "roll follows X slope");
   check(near(pose_x.pitch, 0.f), "pitch stays 0 on X slope");
   check(near(pose_x.position.y, 0.f), "pose height at centre");
 
   WaterSurface slope_z;
   slope_z.add_wave({0.5f, 4.f, 0.f, 1.f, 0.f, 0.f, 0.f});
   FloatingPose pose_z = floating_pose(slope_z, {0.f, 0.f, 0.f}, 0.f, {});
-  check(near(pose_z.pitch, -std::atan(0.5f * kPi / 2.f), 1e-4f), "pitch follows Z slope");
+  check(near(pose_z.pitch, -std::atan(0.5f * PI_F / 2.f), 1e-4f), "pitch follows Z slope");
   check(near(pose_z.roll, 0.f), "roll stays 0 on Z slope");
 
   printf("water_surface: %d/%d checks passed\n", checks_passed, checks_run);

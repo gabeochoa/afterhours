@@ -21,14 +21,14 @@ struct WaterWave {
 };
 
 struct WaterSurface {
-  static constexpr int kMaxWaves = 4;
+  static constexpr int MAX_WAVES = 4;
 
   float base_height = 0.f;
-  WaterWave waves[kMaxWaves]{};
+  WaterWave waves[MAX_WAVES]{};
   int wave_count = 0;
 
   void add_wave(const WaterWave &wave) {
-    if (wave_count < kMaxWaves) waves[wave_count++] = wave;
+    if (wave_count < MAX_WAVES) waves[wave_count++] = wave;
   }
 
   static float wave_phase(const WaterWave &w, float x, float z, float t) {
@@ -40,7 +40,7 @@ struct WaterSurface {
 
   [[nodiscard]] float sample_height(float x, float z, float t) const {
     float h = base_height;
-    int n = wave_count < 0 ? 0 : (wave_count > kMaxWaves ? kMaxWaves : wave_count);
+    int n = wave_count < 0 ? 0 : (wave_count > MAX_WAVES ? MAX_WAVES : wave_count);
     for (int i = 0; i < n; i++) {
       const WaterWave &w = waves[i];
       if (w.wavelength <= 0.f || w.amplitude == 0.f) continue;
@@ -51,7 +51,7 @@ struct WaterSurface {
 
   [[nodiscard]] Vector3Type sample_normal(float x, float z, float t) const {
     float gx = 0.f, gz = 0.f;
-    int n = wave_count < 0 ? 0 : (wave_count > kMaxWaves ? kMaxWaves : wave_count);
+    int n = wave_count < 0 ? 0 : (wave_count > MAX_WAVES ? MAX_WAVES : wave_count);
     for (int i = 0; i < n; i++) {
       const WaterWave &w = waves[i];
       if (w.wavelength <= 0.f || w.amplitude == 0.f) continue;
@@ -69,7 +69,7 @@ struct WaterSurface {
 
   [[nodiscard]] Vector3Type sample_displaced(float x, float z, float t) const {
     float px = x, pz = z;
-    int n = wave_count < 0 ? 0 : (wave_count > kMaxWaves ? kMaxWaves : wave_count);
+    int n = wave_count < 0 ? 0 : (wave_count > MAX_WAVES ? MAX_WAVES : wave_count);
     for (int i = 0; i < n; i++) {
       const WaterWave &w = waves[i];
       if (w.wavelength <= 0.f || w.amplitude == 0.f || w.steepness == 0.f) continue;
