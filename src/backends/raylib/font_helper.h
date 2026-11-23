@@ -44,6 +44,22 @@ inline raylib::Font get_default_font() {
 }
 inline raylib::Font get_unset_font() { return get_default_font(); }
 
+inline float font_display_scale() {
+  float scale = static_cast<float>(graphics::render_scale());
+  if (raylib::IsWindowReady()) {
+    const float dpi = raylib::GetWindowScaleDPI().x;
+    if (dpi > scale)
+      scale = dpi;
+  }
+  return scale > 1.f ? scale : 1.f;
+}
+
+inline int display_scaled_size(int nominal) {
+  const float scaled = std::round(static_cast<float>(nominal) *
+                                  font_display_scale());
+  return scaled >= 1.f ? static_cast<int>(scaled) : 1;
+}
+
 // Passing nullptr asks raylib for its default set, which is 95 ASCII glyphs.
 // So an arrow, a chevron, a checkmark or an ellipsis drew nothing at all, and
 // both floatinghotel and hanabi shipped invisible UI furniture before noticing.
@@ -231,7 +247,7 @@ inline bool font_gl_ready() {
 
 inline raylib::Font load_font_from_file(const char *file, int size = 0) {
   std::vector<int> cps = default_codepoints();
-  const int px = size > 0 ? size : 32;
+  const int px = size > 0 ? size : display_scaled_size(32);
   raylib::Font font =
       raylib::LoadFontEx(file, px, cps.data(), (int)cps.size());
   if (font.glyphCount <= 0) {
@@ -247,8 +263,14 @@ inline raylib::Font load_font_from_file(const char *file, int size = 0) {
   return font;
 }
 
+inline raylib::Font load_font_at_display_size(const char *file, int nominal = 32) {
+  return load_font_from_file(file, display_scaled_size(nominal));
+}
+
 inline raylib::Font load_font_from_memory(const unsigned char *data, int size,
-                                          const char *name, int px = 32) {
+                                          const char *name, int px = 0) {
+  if (px <= 0)
+    px = display_scaled_size(32);
   std::vector<int> cps = default_codepoints();
   raylib::Font font = raylib::LoadFontFromMemory(
       ".ttf", data, size, px, cps.data(), static_cast<int>(cps.size()));
@@ -394,7 +416,9 @@ inline void warn_on_missing_glyphs(const raylib::Font font, const char *text) {
 // Add codepoint-based font loading for CJK support
 inline raylib::Font
 load_font_from_file_with_codepoints(const char *file, int *codepoints,
-                                    int codepoint_count, int size = 32) {
+                                    int codepoint_count, int size = 0) {
+  if (size <= 0)
+    size = display_scaled_size(32);
   if (!file || !codepoints || codepoint_count <= 0) {
     log_error("Invalid parameters for font loading: file={}, codepoints={}, "
               "count={}",
@@ -464,7 +488,9 @@ inline void unload_font(raylib::Font &font) {
 
 inline raylib::Font load_font_for_string(const std::string &content,
                                          const std::string &font_filename,
-                                         int size = 96) {
+                                         int size = 0) {
+  if (size <= 0)
+    size = display_scaled_size(96);
   if (content.empty() || font_filename.empty()) {
     log_warn("Empty content or font filename passed to load_font_for_string");
     return get_default_font();
