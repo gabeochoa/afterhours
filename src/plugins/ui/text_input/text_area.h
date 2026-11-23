@@ -6,10 +6,14 @@
 #include "../entity_management.h"
 #include "../rendering.h"
 #include "../rounded_corners.h"
+#include "../text_measure.h"
 #include "text_area_state.h"
 #include "utils.h"
 #include <algorithm>
+#include <bit>
 #include <cmath>
+#include <format>
+#include <functional>
 
 namespace afterhours {
 namespace text_input {
@@ -264,17 +268,20 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
   auto line_width = [&](std::string_view s) -> float {
     if (!font_manager)
       return static_cast<float>(s.size()) * resolved_font_size * 0.5f;
-    return measure_text(font_manager->get_font(font_name),
-                        std::string(s).c_str(), resolved_font_size, 1.f)
+    return measure_text_line(std::string(s), font_name, resolved_font_size,
+                             1.f)
         .x;
   };
+  const uint64_t measure_key = TextMeasureCache::compute_hash(
+      std::format("{}", measure_memo::generation()), font_name,
+      resolved_font_size, 1.f);
   // The 6px horizontal padding each side is already out of viewport_width.
   const float wrap_width = (config.text_area_word_wrap &&
                             !config.text_area_single_line)
                                ? viewport_width
                                : 0.f;
   state.layout_cache.rebuild(display_text, wrap_width, line_height,
-                             line_width);
+                             line_width, measure_key);
   const auto &vlines = state.layout_cache.lines();
 
   // Rows are VISUAL from here down: with wrapping on, one source line can
@@ -744,7 +751,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
     // Ensure cursor stays visible after any input
     if (text_changed) {
       state.layout_cache.rebuild(state.text(), wrap_width, line_height,
-                                 line_width);
+                                 line_width, measure_key);
       state.ensure_cursor_visible_at_row(
           state.layout_cache.line_at_offset(state.cursor_position),
           viewport_height, state.layout_cache.line_count());
