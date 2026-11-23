@@ -672,9 +672,9 @@ public:
   };
 
   void render(const RenderCommandBuffer &buffer, FontManager &fonts) {
-    stats_ = {}; // Reset stats
+    stats_data = {}; // Reset stats
     const auto &commands = buffer.commands();
-    stats_.total_commands = commands.size();
+    stats_data.total_commands = commands.size();
 
     std::optional<std::array<int, 4>> active_clip;
     blend::Mode active_blend = blend::current();
@@ -701,7 +701,7 @@ public:
       case RenderPrimitiveType::Rectangle: {
         size_t batch_end = find_batch_end(commands, i);
         render_rectangle_batch(commands, i, batch_end);
-        stats_.rectangle_batches++;
+        stats_data.rectangle_batches++;
         i = batch_end;
         break;
       }
@@ -709,7 +709,7 @@ public:
       case RenderPrimitiveType::RoundedRectangle: {
         size_t batch_end = find_batch_end(commands, i);
         render_rounded_rectangle_batch(commands, i, batch_end);
-        stats_.rectangle_batches++;
+        stats_data.rectangle_batches++;
         i = batch_end;
         break;
       }
@@ -730,19 +730,19 @@ public:
 
       case RenderPrimitiveType::Text:
         render_text(cmd, fonts);
-        stats_.text_commands++;
+        stats_data.text_commands++;
         i++;
         break;
 
       case RenderPrimitiveType::TextUnits:
         render_text_units(cmd, fonts);
-        stats_.text_commands++;
+        stats_data.text_commands++;
         i++;
         break;
 
       case RenderPrimitiveType::Image:
         render_image(cmd);
-        stats_.image_commands++;
+        stats_data.image_commands++;
         i++;
         break;
 
@@ -755,7 +755,7 @@ public:
         }
         active_clip = clip;
         begin_scissor_mode(clip[0], clip[1], clip[2], clip[3]);
-        stats_.scissor_operations++;
+        stats_data.scissor_operations++;
         i++;
         break;
       }
@@ -775,7 +775,7 @@ public:
         }
         active_clip.reset();
         end_scissor_mode();
-        stats_.scissor_operations++;
+        stats_data.scissor_operations++;
         i++;
         break;
 
@@ -788,7 +788,7 @@ public:
         }
         active_shader = *shader;
         ::afterhours::begin_shader_mode(*shader);
-        stats_.shader_operations++;
+        stats_data.shader_operations++;
         i++;
         break;
       }
@@ -807,7 +807,7 @@ public:
         }
         active_shader.reset();
         ::afterhours::end_shader_mode();
-        stats_.shader_operations++;
+        stats_data.shader_operations++;
         i++;
         break;
 
@@ -816,7 +816,7 @@ public:
         if (cmd.data.blend.mode != active_blend) {
           set_blend_mode(cmd.data.blend.mode);
           active_blend = cmd.data.blend.mode;
-          stats_.blend_operations++;
+          stats_data.blend_operations++;
         }
         i++;
         break;
@@ -831,7 +831,7 @@ public:
         if (active_blend != blend::Mode::Alpha) {
           set_blend_mode(blend::Mode::Alpha);
           active_blend = blend::Mode::Alpha;
-          stats_.blend_operations++;
+          stats_data.blend_operations++;
         }
         i++;
         break;
@@ -864,10 +864,10 @@ public:
     }
   }
 
-  [[nodiscard]] const Stats &stats() const { return stats_; }
+  [[nodiscard]] const Stats &stats() const { return stats_data; }
 
 private:
-  Stats stats_;
+  Stats stats_data;
 
   // Find the end of a batch of commands with same type and layer
   static size_t find_batch_end(const ArenaVector<RenderPrimitive> &cmds,
