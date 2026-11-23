@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -33,6 +34,11 @@ struct TextLayoutCache {
   std::vector<VisualLine> lines_;
   float total_height_ = 0.f;
   float max_width_ = 0.f;
+  std::string cached_text_;
+  float cached_wrap_width_ = 0.f;
+  float cached_line_height_ = 0.f;
+  uint64_t cached_measure_key_ = 0;
+  bool has_cache_ = false;
 
   /// Rebuild layout from text.
   /// @param text The source text
@@ -41,7 +47,11 @@ struct TextLayoutCache {
   /// @param measure_fn Function to measure text width: (string_view) -> float
   template <typename MeasureFn>
   void rebuild(std::string_view text, float wrap_width, float line_height,
-               MeasureFn measure_fn) {
+               MeasureFn measure_fn, uint64_t measure_key = 0) {
+    if (has_cache_ && cached_measure_key_ == measure_key &&
+        cached_wrap_width_ == wrap_width &&
+        cached_line_height_ == line_height && cached_text_ == text)
+      return;
     lines_.clear();
     total_height_ = 0.f;
     max_width_ = 0.f;
@@ -67,6 +77,11 @@ struct TextLayoutCache {
     }
 
     total_height_ = y;
+    cached_text_ = source;
+    cached_wrap_width_ = wrap_width;
+    cached_line_height_ = line_height;
+    cached_measure_key_ = measure_key;
+    has_cache_ = true;
   }
 
   [[nodiscard]] const std::vector<VisualLine> &lines() const { return lines_; }
