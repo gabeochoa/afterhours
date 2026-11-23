@@ -701,6 +701,7 @@ struct HasScrollView : BaseComponent {
 
   // Off for a view that supplies its own bar, or where one would be noise.
   bool show_scrollbar = true;
+  bool scrollbar_gutter = false;
   // Set while the thumb is held. The drag owns scroll_offset until released.
   bool dragging_scrollbar = false;
   bool drag_is_vertical = true;
