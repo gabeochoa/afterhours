@@ -103,6 +103,7 @@ ALL_TESTS := \
 	appearance_test \
 	frame_loop_test \
 	headless_cadence_test \
+	frame_phases_test \
 	color_value_test \
 	value_types_test \
 	value_types_none_test \
@@ -301,6 +302,7 @@ ALL_TESTS := \
 	render_order_test \
 	draw_over_test \
 	scroll_smoothing_test \
+	scrollbar_gutter_test \
 	setup_test \
 	slot_at_creation_test \
 	size_constraints_test \
@@ -346,6 +348,7 @@ ALL_TESTS := \
 	tab_toggle_geometry_test \
 	small_components_test \
 	text_area_test \
+	text_area_wrap_cache_test \
 	text_input_test \
 	toast_test \
 	text_wrap_test \
