@@ -25,6 +25,7 @@ Started partway through the project's life, so it does not go all the way back.
 ### Added
 
 - **Settings presets that flip to Custom** (`ui::imm::SettingsPreset`, `active_preset_name`, `settings_preset_stepper` in `src/plugins/ui/settings_presets.h`). A preset table over a comparable values struct; the stepper selector derives its index from the values each frame, so editing any value off a preset reads "Custom" and editing back reads the preset name. The Custom slot is read-only. Covered by `settings_presets_test`.
+- **E2E `expect_sound_level` / `expect_sound_pan` commands** (`src/plugins/e2e_testing/audio_commands.h`). `expect_sound_level <name> <min> [max]` asserts the last play's effective volume is in range and `expect_sound_pan <name> <min> [max]` asserts its pan (0..1); both retry like other `expect_*` assertions so a play that lands a frame late still passes. Covered by `e2e_audio_commands_test`.
 
 ### Breaking
 
