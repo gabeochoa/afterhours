@@ -1,7 +1,9 @@
 // default_font_test.cpp
-// set_default_font replaces raylib's built-in pixel face wherever the library
-// falls back to "no font": get_default_font, get_unset_font, and the UI
-// plugin's default and unset fonts. No window: the font is a plain struct.
+// set_default_font replaces the library's bundled Roboto Regular wherever the
+// library falls back to "no font": get_default_font, get_unset_font, and the
+// UI plugin's default and unset fonts. With no override set, the default is
+// the bundled face (src/assets/fonts/Roboto-Regular.ttf), not raylib's
+// built-in pixel font. No window: the font is a plain struct.
 
 #include <cstdio>
 #include <string>
@@ -25,9 +27,14 @@ static void check(bool cond, const std::string &what) {
 
 int main() {
   raylib::Font builtin = raylib::GetFontDefault();
-  check(get_default_font().baseSize == builtin.baseSize &&
-            get_default_font().glyphCount == builtin.glyphCount,
-        "unset, the default is raylib's built-in font");
+  const raylib::Font unset = get_default_font();
+  check(unset.glyphCount > 0, "unset, the default font is loaded");
+  check(unset.glyphCount != builtin.glyphCount &&
+            unset.baseSize != builtin.baseSize,
+        "unset, the default is the bundled Roboto, not raylib's built-in "
+        "font");
+  check(get_unset_font().glyphCount == unset.glyphCount,
+        "the unset font is the default font");
 
   raylib::Font mono{};
   mono.baseSize = 42;
@@ -41,8 +48,8 @@ int main() {
         "a failed codepoint load hands back the set default");
 
   clear_default_font();
-  check(get_default_font().baseSize == builtin.baseSize,
-        "clear_default_font restores raylib's font");
+  check(get_default_font().glyphCount == unset.glyphCount,
+        "clear_default_font restores the bundled default");
 
   printf("default_font_test: %d/%d checks passed\n", checks_passed, checks_run);
   return checks_passed == checks_run ? 0 : 1;
