@@ -604,6 +604,8 @@ struct InstanceBatcher {
                std::span<const MatrixType>(g.transforms.data(),
                                            g.transforms.size()));
       g.transforms.clear();
+      g.tints.clear();
+      g.tinted = false;
     }
   }
 
