@@ -10,7 +10,7 @@
 namespace afterhours {
 
 namespace detail_3d {
-constexpr float PI = 3.14159265358979323846f;
+constexpr float PI = afterhours::PI;
 
 inline void set_color(const Color c) { sgl_c4b(c.r, c.g, c.b, c.a); }
 
