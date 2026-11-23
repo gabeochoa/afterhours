@@ -40,9 +40,9 @@ public:
     uint32_t font_size_bits = 0;
     uint32_t spacing_bits = 0;
     bool operator==(const Key &) const = default;
-    static Key make(std::string_view text_, std::string_view font_name_,
+    static Key make(std::string_view text, std::string_view font_name,
                     float font_size, float spacing) {
-      return {std::string(text_), std::string(font_name_),
+      return {std::string(text), std::string(font_name),
               std::bit_cast<uint32_t>(font_size),
               std::bit_cast<uint32_t>(spacing)};
     }
@@ -67,7 +67,7 @@ private:
 
   MeasureTextFn measure_fn_;
   LRUList lru_list_;
-  std::unordered_map<Key, LRUIter, KeyHash> lookup_;
+  std::unordered_map<Key, LRUIter, KeyHash> lookup;
 
   uint32_t current_generation_ = 0;
   uint32_t prune_interval_ = DEFAULT_PRUNE_INTERVAL;
@@ -102,8 +102,8 @@ public:
     if (!measure_fn_) {
       return {0.0f, 0.0f};
     }
-    auto it = lookup_.find(key);
-    if (it != lookup_.end()) {
+    auto it = lookup.find(key);
+    if (it != lookup.end()) {
       it->second->last_used_generation = current_generation_;
       lru_list_.splice(lru_list_.begin(), lru_list_, it->second);
       cache_hits_++;
@@ -116,12 +116,12 @@ public:
                     std::bit_cast<float>(key.font_size_bits),
                     std::bit_cast<float>(key.spacing_bits));
 
-    while (lookup_.size() >= max_entries_) {
+    while (lookup.size() >= max_entries_) {
       evict_lru();
     }
 
     lru_list_.push_front({key, size, current_generation_});
-    lookup_[lru_list_.front().key] = lru_list_.begin();
+    lookup[lru_list_.front().key] = lru_list_.begin();
     return size;
   }
 
@@ -148,12 +148,12 @@ public:
 
   void clear() {
     lru_list_.clear();
-    lookup_.clear();
+    lookup.clear();
     cache_hits_ = 0;
     cache_misses_ = 0;
   }
 
-  [[nodiscard]] size_t size() const { return lookup_.size(); }
+  [[nodiscard]] size_t size() const { return lookup.size(); }
   [[nodiscard]] uint64_t hits() const { return cache_hits_; }
   [[nodiscard]] uint64_t misses() const { return cache_misses_; }
   [[nodiscard]] uint32_t generation() const { return current_generation_; }
@@ -207,7 +207,7 @@ private:
     if (lru_list_.empty())
       return;
     auto &victim = lru_list_.back();
-    lookup_.erase(victim.key);
+    lookup.erase(victim.key);
     lru_list_.pop_back();
   }
 
@@ -220,7 +220,7 @@ private:
     while (it != lru_list_.begin()) {
       --it;
       if (it->last_used_generation < threshold) {
-        lookup_.erase(it->key);
+        lookup.erase(it->key);
         it = lru_list_.erase(it);
       }
     }
