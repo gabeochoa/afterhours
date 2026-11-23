@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <string>
 
+using namespace afterhours;
 using namespace afterhours::terrain_steer;
 
 static int checks = 0;
@@ -32,10 +33,10 @@ int main() {
   HeightSampler slope = [](float x, float) { return 0.5f * x; };
 
   {
-    Vec3 n = ground_normal(flat, 0.f, 0.f);
+    Vector3Type n = ground_normal(flat, 0.f, 0.f);
     check(near(n.x, 0.f) && near(n.y, 1.f) && near(n.z, 0.f),
           "flat normal is up");
-    Vec3 v = align_velocity(vec(3.f, 4.f, 5.f), n);
+    Vector3Type v = align_velocity(Vector3Type{3.f, 4.f, 5.f}, n);
     check(near(v.x, 3.f) && near(v.y, 0.f) && near(v.z, 5.f),
           "flat projection exact");
     check(near(slope_degrees(n), 0.f), "flat slope is 0");
@@ -43,38 +44,40 @@ int main() {
   }
 
   {
-    Vec3 n = ground_normal(slope, 2.f, 0.f);
+    Vector3Type n = ground_normal(slope, 2.f, 0.f);
     check(near(n.x, -0.4472136f, 1e-5f) && near(n.y, 0.8944272f, 1e-5f),
           "slope normal tilts into the hill");
     check(near(slope_degrees(n), 26.565051f, 1e-3f), "slope angle");
-    Vec3 v = align_velocity(vec(1.f, 0.f, 0.f), n);
+    Vector3Type v = align_velocity(Vector3Type{1.f, 0.f, 0.f}, n);
     check(near(v.x, 0.8f) && near(v.y, 0.4f) && near(v.z, 0.f),
           "slope projection");
-    check(near(dot(v, n), 0.f), "projected velocity is orthogonal to normal");
+    check(near(v.x * n.x + v.y * n.y + v.z * n.z, 0.f),
+          "projected velocity is orthogonal to normal");
     check(can_climb(n, 30.f), "26 deg climbs under a 30 deg limit");
     check(!can_climb(n, 20.f), "26 deg rejected under a 20 deg limit");
     check(!can_climb(n, 0.f), "slope rejected at limit 0");
 
-    Vec3 start = vec(2.f, 1.f, 0.f);
-    Vec3 next = move_and_snap(start, v, 1.f, slope, 1.f);
+    Vector3Type start{2.f, 1.f, 0.f};
+    Vector3Type next = move_and_snap(start, v, 1.f, slope, 1.f);
     check(near(next.x, 2.8f) && near(next.z, 0.f), "move follows desired x/z");
     check(near(next.y, 1.4f), "move snaps y onto the slope");
   }
 
   {
-    Vec3 p = vec(4.f, 1.5f, 0.f);
-    Vec3 snapped = snap_to_ground(p, slope, 1.f);
+    Vector3Type p{4.f, 1.5f, 0.f};
+    Vector3Type snapped = snap_to_ground(p, slope, 1.f);
     check(near(snapped.y, 2.f), "snap lands on the ground within max_step");
-    Vec3 clamped = snap_to_ground(p, slope, 0.25f);
+    Vector3Type clamped = snap_to_ground(p, slope, 0.25f);
     check(near(clamped.y, 1.75f), "snap clamps to max_step above the ground");
-    Vec3 below = snap_to_ground(vec(4.f, 3.f, 0.f), slope, 0.25f);
+    Vector3Type below = snap_to_ground(Vector3Type{4.f, 3.f, 0.f}, slope, 0.25f);
     check(near(below.y, 2.75f), "snap clamps to max_step below the ground");
-    Vec3 flat_snap = snap_to_ground(vec(1.f, -0.5f, 1.f), flat, 10.f);
+    Vector3Type flat_snap =
+        snap_to_ground(Vector3Type{1.f, -0.5f, 1.f}, flat, 10.f);
     check(near(flat_snap.y, 0.f), "snap onto flat ground");
 
     HeightSampler wall = [](float, float) { return 10.f; };
-    Vec3 moved = move_and_snap(vec(0.f, 0.f, 0.f), vec(0.f, 0.f, 0.f), 1.f,
-                               wall, 0.5f);
+    Vector3Type moved = move_and_snap(Vector3Type{0.f, 0.f, 0.f},
+                                      Vector3Type{0.f, 0.f, 0.f}, 1.f, wall, 0.5f);
     check(near(moved.y, 0.5f), "move_and_snap clamps a big ground jump");
   }
 
