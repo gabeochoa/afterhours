@@ -249,6 +249,12 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
     {
       const auto prev_pos = context.mouse.pos;
       context.mouse.pos = input::get_mouse_position();
+      // A backend with no cursor yet (pre-init sokol) can report NaN; pin
+      // it off-screen so every read below sees the pre-event position.
+      if (!std::isfinite(context.mouse.pos.x) ||
+          !std::isfinite(context.mouse.pos.y)) {
+        context.mouse.pos = input::MousePosition{-1.f, -1.f};
+      }
       context.mouse.moved_this_frame = context.mouse.moved_since(prev_pos);
       // No dead zone here, unlike moved_this_frame: a drag has to track every
       // pixel. Both ends must be finite or the subtraction yields NaN, which a
