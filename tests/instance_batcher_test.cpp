@@ -11,6 +11,8 @@
 #include <cstdio>
 #include <random>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace raylib {
 #include <raylib.h>
@@ -120,6 +122,56 @@ int main() {
     check(seen == "tree:0x1 tree:1x2 lantern:1x1 ",
           "on_group runs per group with its key and transforms: " + seen);
     check(keyed.copies() == 0, "a flush with on_group empties the groups");
+  }
+
+  {
+    auto fill = [&](InstanceBatcher &b) {
+      for (const Copy &c : scene)
+        b.add(*c.model, c.pos, c.yaw, {c.scale, c.scale, c.scale});
+      b.add(tree, {9, 9, 9}, 0.f, {1, 1, 1}, 7);
+    };
+    InstanceBatcher drained, flushed;
+    fill(drained);
+    fill(flushed);
+    auto collect = [&](InstanceBatcher &b, bool do_drain) {
+      std::string seen;
+      std::vector<raylib::Matrix> mats;
+      auto visit = [&](const ModelType &m, uint32_t key,
+                       std::span<const MatrixType> ts) {
+        seen += std::string(&m == &tree ? "tree" : "lantern") + ":" +
+                std::to_string(key) + "x" + std::to_string(ts.size()) + ":";
+        for (const MatrixType &t : ts) {
+          seen += std::to_string(t.m12) + "," + std::to_string(t.m14) + ";";
+          mats.push_back(t);
+        }
+      };
+      if (do_drain) {
+        b.drain(visit);
+      } else {
+        raylib::RenderTexture2D scratch = raylib::LoadRenderTexture(8, 8);
+        raylib::BeginTextureMode(scratch);
+        b.flush(shader, visit);
+        raylib::EndTextureMode();
+        raylib::UnloadRenderTexture(scratch);
+      }
+      return std::pair{seen, mats};
+    };
+    auto [drained_seen, drained_mats] = collect(drained, true);
+    auto [flushed_seen, flushed_mats] = collect(flushed, false);
+    check(drained_seen == flushed_seen,
+          "drain groups match what flush would draw: " + drained_seen);
+    check(drained_mats.size() == 6 && flushed_mats.size() == 6,
+          "drain count matches");
+    bool same = drained_mats.size() == flushed_mats.size();
+    for (size_t i = 0; same && i < drained_mats.size(); i++)
+      same = max_abs_diff(drained_mats[i], flushed_mats[i]) < 1e-6f;
+    check(same, "drained transforms match flush transforms");
+    check(drained.copies() == 0 && drained.group_count() == 0,
+          "batcher is empty after drain");
+    drained.add(tree, {0, 0, 0}, 0.f, {1, 1, 1});
+    check(drained.copies() == 1 && drained.group_count() == 1,
+          "batcher is reusable after drain");
+    drained.clear();
   }
 
   // Same frame two ways: batched, and one draw_model per copy.
@@ -294,6 +346,51 @@ int main() {
     printf("  owned shader: %d covered\n", owned_covered);
     check(owned_covered > 500, "owned default shader draws the scene");
     raylib::UnloadImage(img);
+  }
+
+  // Draining a tinted group must reset tint state like clear() does: an
+  // untinted copy added after the drain draws white, not the stale tint.
+  {
+    InstanceBatcher b;
+    b.add(tree, {0, 0, 0}, 0.f, {1, 1, 1}, 0, Color{255, 0, 0, 255});
+    b.add(tree, {2, 0, 0}, 0.f, {1, 1, 1}, 0, Color{0, 0, 255, 255});
+    b.drain([](const ModelType &, uint32_t,
+               std::span<const MatrixType>) {});
+    check(b.copies() == 0 && b.group_count() == 0,
+          "drain empties a tinted group");
+    b.add(tree, {0, 0, 0}, 0.f, {1, 1, 1});
+    auto render_after_drain = [&](bool batched_after) {
+      raylib::BeginTextureMode(rt);
+      raylib::ClearBackground({0, 0, 0, 0});
+      raylib::BeginMode3D(cam);
+      if (batched_after) {
+        b.flush(shader);
+      } else {
+        draw_model(tree, {0, 0, 0}, 0.f, {1, 1, 1});
+      }
+      raylib::EndMode3D();
+      raylib::EndTextureMode();
+      raylib::Image img = raylib::LoadImageFromTexture(rt.texture);
+      raylib::ImageFormat(&img, raylib::PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+      return img;
+    };
+    raylib::Image after_batched = render_after_drain(true);
+    raylib::Image after_direct = render_after_drain(false);
+    auto *pab = static_cast<raylib::Color *>(after_batched.data);
+    auto *pad = static_cast<raylib::Color *>(after_direct.data);
+    int after_covered = 0, after_differ = 0;
+    for (int i = 0; i < 256 * 256; i++) {
+      if (pab[i].a > 0 || pad[i].a > 0) after_covered++;
+      int d = std::abs(pab[i].r - pad[i].r) + std::abs(pab[i].g - pad[i].g) +
+              std::abs(pab[i].b - pad[i].b) + std::abs(pab[i].a - pad[i].a);
+      if (d > 6) after_differ++;
+    }
+    printf("  drain-tint: %d covered, %d differ\n", after_covered, after_differ);
+    check(after_covered > 500, "untinted copy after drain is on screen");
+    check(after_differ <= after_covered / 200,
+          "untinted copy after a tinted drain draws untinted");
+    raylib::UnloadImage(after_batched);
+    raylib::UnloadImage(after_direct);
   }
 
   raylib::UnloadRenderTexture(rt);
