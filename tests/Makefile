@@ -111,6 +111,7 @@ ALL_TESTS := \
 	wrappers_test \
 	window_state_test \
 	animation_presets_test \
+	shimmer_test \
 	particles_test \
 	trigger_volume_test \
 	ui_modifiers_test \
@@ -122,6 +123,7 @@ ALL_TESTS := \
 	text_unit_motion_test \
 	text_alignment_test \
 	sound_volume_test \
+	caption_test \
 	audio_plugin_test \
 	audio_stream_test \
 	synth_beep_test \
@@ -149,6 +151,7 @@ ALL_TESTS := \
 	charts_test \
 	system_profile_test \
 	allocation_counters_test \
+	system_groups_test \
 	profiling_test \
 	profiling_disabled_test \
 	profiling_collapsed_test \
@@ -156,7 +159,9 @@ ALL_TESTS := \
 	perf_provider_warn_test \
 	blend_mode_test \
 	rect_test \
+	math3d_test \
 	rounded_corners_test \
+	rounded_outline_mask_test \
 	viewport_test \
 	grid_test \
 	pathfinding_provider_test \
@@ -167,6 +172,7 @@ ALL_TESTS := \
 	crash_handler_web_sim_test \
 	crash_report_file_test \
 	setting_row_style_test \
+	settings_presets_test \
 	singleton_iteration_test \
 	get_unique_test \
 	singleton_add_test \
@@ -230,11 +236,13 @@ ALL_TESTS := \
 	grapheme_edit_test \
 	entity_mapping_test \
 	files_atomic_write_test \
+	files_confined_path_test \
 	files_resource_path_test \
 	files_cache_path_test \
 	files_documents_test \
 	capture_test \
 	capture_perf_test \
+	capture_async_test \
 	polyline_test \
 	measure_memo_test \
 	design_defaults_test \
@@ -322,6 +330,7 @@ ALL_TESTS := \
 	world_label_test \
 	image_test \
 	image_raylib_test \
+	per_draw_filter_test \
 	stepper_test \
 	styling_test \
 	system_tags_test \
@@ -344,6 +353,7 @@ ALL_TESTS := \
 	theme_io_test \
 	tree_view_test \
 	window_helpers_test \
+	skeletal_test \
 	translation_test \
 	layout_inspector_test \
 	letter_spacing_zero_test
@@ -359,6 +369,7 @@ ALL_TESTS += image_metal_test
 ALL_TESTS += sokol_blend_test
 ALL_TESTS += sokol_capture_test
 ALL_TESTS += sokol_geometry_test
+ALL_TESTS += sokol_rounded_outline_mask_test
 # Own process: the Metal backend cannot be re-initialised, so this cannot be a
 # section of sokol_blend_test.
 ALL_TESTS += sokol_hidpi_test
@@ -377,6 +388,8 @@ endif
 
 RAYLIB_TESTS := \
 	auto_text_color_test \
+	skeletal_test \
+	math3d_test \
 	value_types_test \
 	wrappers_test \
 	window_focus_test \
@@ -401,6 +414,7 @@ RAYLIB_TESTS := \
 	render_capture_test \
 	presented_frame_test \
 	triangle_winding_test \
+	rounded_outline_mask_test \
 	clipboard_test \
 	mk_cost_test \
 	capture_perf_test \
@@ -524,11 +538,14 @@ $(OUT)/graphics_concepts_pedantic_test: CXXFLAGS_T += -Wpedantic -Werror
 $(OUT)/graphics_concepts_pedantic_test: INCLUDES_T = -I$(INCLUDE_ROOT) -isystem $(AFTERHOURS_ROOT)/vendor -isystem $(BREW_PREFIX)/include
 $(OUT)/sound_volume_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(OUT)/sound_volume_test: INCLUDES_T = $(INCLUDES_RAYLIB)
+$(OUT)/caption_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
+$(OUT)/caption_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/audio_plugin_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(OUT)/audio_plugin_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/audio_stream_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(OUT)/audio_stream_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/files_atomic_write_test: ../src/plugins/files.cpp
+$(OUT)/files_confined_path_test: ../src/plugins/files.cpp
 $(OUT)/files_resource_path_test: ../src/plugins/files.cpp
 $(OUT)/files_test_roots_test: ../src/plugins/files.cpp
 $(OUT)/files_e2e_temp_roots_test: ../src/plugins/files.cpp
@@ -579,6 +596,10 @@ $(OUT)/web_metal_symbols_test: web_metal_symbols_test.cpp web_sim/web_probe.cpp 
 $(OUT)/sokol_blend_test: ../src/backends/sokol/drawing_helpers.h
 $(OUT)/sokol_capture_test: ../src/backends/sokol/drawing_helpers.h ../src/capture.h ../src/graphics_common.h
 $(OUT)/sokol_geometry_test: ../src/backends/sokol/drawing_helpers.h
+$(OUT)/sokol_rounded_outline_mask_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_rounded_outline_mask_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_rounded_outline_mask_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_rounded_outline_mask_test: ../src/backends/sokol/drawing_helpers.h ../src/plugins/ui/rounded_corners.h
 $(OUT)/sokol_hidpi_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_hidpi_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_hidpi_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
@@ -632,6 +653,9 @@ $(OUT)/image_metal_test: image_test.cpp ../examples/web/sokol_impl.cc
 	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) -DAFTER_HOURS_USE_SOKOL -x objective-c++ $(filter %.cpp %.cc,$^) $(SOKOL_FRAMEWORKS) -o $@
 
 $(OUT)/image_raylib_test: image_test.cpp
+	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $< $(LDFLAGS_RAYLIB) -o $@
+
+$(OUT)/per_draw_filter_test: per_draw_filter_test.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $< $(LDFLAGS_RAYLIB) -o $@
 
 # Windows/Vulkan cross-build (from macOS, via zig). The .exes link on the Mac
