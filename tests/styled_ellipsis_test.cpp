@@ -15,9 +15,9 @@ float measure_w(const std::string &s, FontWeight) {
   return static_cast<float>(s.size()) * CHAR_W;
 }
 
-const Color kWhite{255, 255, 255, 255};
-const Color kRed{255, 0, 0, 255};
-const Color kBlue{0, 0, 255, 255};
+const Color ELLIPSIS_WHITE{255, 255, 255, 255};
+const Color ELLIPSIS_RED{255, 0, 0, 255};
+const Color ELLIPSIS_BLUE{0, 0, 255, 255};
 
 std::string joined(const std::vector<TextSpan> &runs) {
   std::string out;
@@ -35,14 +35,14 @@ float drawn_width(const std::vector<TextSpan> &runs) {
 }
 
 TEST(fits_returned_unchanged) {
-  const std::vector<TextSpan> runs{{"hi ", kRed}, {"there", kWhite}};
+  const std::vector<TextSpan> runs{{"hi ", ELLIPSIS_RED}, {"there", ELLIPSIS_WHITE}};
   const auto out = afterhours::ui::detail::ellipsize_runs(runs, 1000.f, measure_w);
   CHECK(out == runs);
   CHECK(joined(out) == "hi there");
 }
 
 TEST(single_run_matches_plain_ellipsis) {
-  const std::vector<TextSpan> runs{{"hello world", kWhite}};
+  const std::vector<TextSpan> runs{{"hello world", ELLIPSIS_WHITE}};
   const auto out =
       afterhours::ui::detail::ellipsize_runs(runs, 70.f, measure_w);
   CHECK(joined(out) == "hell...");
@@ -54,7 +54,7 @@ TEST(single_run_matches_plain_ellipsis) {
 }
 
 TEST(cut_inside_second_run_keeps_styles) {
-  const std::vector<TextSpan> runs{{"AB ", kRed}, {"CDEFGH", kBlue}};
+  const std::vector<TextSpan> runs{{"AB ", ELLIPSIS_RED}, {"CDEFGH", ELLIPSIS_BLUE}};
   const auto out =
       afterhours::ui::detail::ellipsize_runs(runs, 70.f, measure_w);
   CHECK(out.size() == 2);
@@ -66,7 +66,7 @@ TEST(cut_inside_second_run_keeps_styles) {
 }
 
 TEST(cut_inside_first_run_drops_later_runs) {
-  const std::vector<TextSpan> runs{{"abcdefgh", kRed}, {"ij", kBlue}};
+  const std::vector<TextSpan> runs{{"abcdefgh", ELLIPSIS_RED}, {"ij", ELLIPSIS_BLUE}};
   const auto out =
       afterhours::ui::detail::ellipsize_runs(runs, 50.f, measure_w);
   CHECK(out.size() == 1);
@@ -80,7 +80,7 @@ TEST(ellipsis_charged_in_cut_run_weight) {
     return static_cast<float>(s.size()) *
            (w == FontWeight::Bold ? 20.f : 10.f);
   };
-  const std::vector<TextSpan> runs{{"abcdef", kWhite, FontWeight::Bold}};
+  const std::vector<TextSpan> runs{{"abcdef", ELLIPSIS_WHITE, FontWeight::Bold}};
   const auto out =
       afterhours::ui::detail::ellipsize_runs(runs, 110.f, bold_w);
   CHECK(joined(out) == "ab...");
@@ -88,7 +88,7 @@ TEST(ellipsis_charged_in_cut_run_weight) {
 }
 
 TEST(tiny_box_yields_ellipsis_only) {
-  const std::vector<TextSpan> runs{{"hello", kRed}, {" world", kBlue}};
+  const std::vector<TextSpan> runs{{"hello", ELLIPSIS_RED}, {" world", ELLIPSIS_BLUE}};
   const auto out =
       afterhours::ui::detail::ellipsize_runs(runs, 20.f, measure_w);
   CHECK(out.size() == 1);
