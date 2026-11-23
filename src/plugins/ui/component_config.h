@@ -11,6 +11,7 @@
 #include "../autolayout.h"
 #include "../color.h"
 #include "../texture_manager.h"
+#include "accessibility.h"
 #include "components.h"
 #include "extension.h"
 #include "overlay.h"
@@ -106,6 +107,7 @@ struct ComponentConfig {
   std::optional<TextureConfig> texture_config;
   std::optional<Color> image_tint;
   std::optional<texture_manager::HasTexture::Alignment> image_alignment;
+  std::optional<int> image_filter; // TODO: replace int filter values with a TextureFilter enum.
   std::optional<std::bitset<4>> rounded_corners;
   bool consumes_directional_input = false;
   std::optional<float> roundness;     // If unset, uses theme.roundness
@@ -148,6 +150,8 @@ struct ComponentConfig {
   Size translate_y = pixels(0.0f);
   // Trailing: (x,y) insets from far edges; explicit size grows inward.
   AbsoluteAnchor absolute_anchor = AbsoluteAnchor::LeadingTop;
+
+  AccessibleConfig accessible;
 
   // debugs
   std::string debug_name = "";
@@ -619,6 +623,29 @@ struct ComponentConfig {
     debug_name = name;
     return *this;
   }
+  ComponentConfig &with_accessible(AccessibleRole role,
+                                   const std::string &name) {
+    accessible.role = role;
+    accessible.name = name;
+    return *this;
+  }
+  ComponentConfig &with_accessible_name(const std::string &name) {
+    accessible.name = name;
+    return *this;
+  }
+  ComponentConfig &with_accessible_role(AccessibleRole role) {
+    accessible.role = role;
+    return *this;
+  }
+  ComponentConfig &with_accessible_value(const std::string &value) {
+    accessible.value = value;
+    return *this;
+  }
+  ComponentConfig &with_accessible_description(const std::string &desc) {
+    accessible.description = desc;
+    return *this;
+  }
+  bool has_accessible_override() const { return !accessible.empty(); }
   // Hover text. Placement flips at a screen edge the way a dropdown does.
   ComponentConfig &with_tooltip(const std::string &text, float delay = 0.5f) {
     tooltip_text = text;
@@ -1020,6 +1047,11 @@ struct ComponentConfig {
     return *this;
   }
 
+  ComponentConfig &with_image_filter(int filter) {
+    image_filter = filter;
+    return *this;
+  }
+
   // Shadow configuration methods
   ComponentConfig &with_shadow(const Shadow &shadow) {
     shadow_config = shadow;
@@ -1270,6 +1302,8 @@ struct ComponentConfig {
       merged.image_tint = overrides.image_tint;
     if (overrides.has_image_alignment())
       merged.image_alignment = overrides.image_alignment;
+    if (overrides.image_filter.has_value())
+      merged.image_filter = overrides.image_filter;
 
     if (overrides.is_absolute)
       merged.is_absolute = overrides.is_absolute;
@@ -1290,7 +1324,9 @@ struct ComponentConfig {
       merged.tooltip_gap = overrides.tooltip_gap;
     }
     if (!overrides.debug_name.empty())
-      if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.debug_name;
+if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.debug_name;
+    if (overrides.has_accessible_override())
+      merged.accessible = overrides.accessible;
 
     // Flexbox alignment properties
     if (overrides.justify_content != JustifyContent::FlexStart)
