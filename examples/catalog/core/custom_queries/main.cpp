@@ -42,7 +42,7 @@ struct EQ : public EntityQuery<EQ> {
             : position(pos), range(r) {}
         bool operator()(const Entity &entity) const override {
             vec2 pos = entity.get<Transform>().pos();
-            return distance_sq(position, pos) < (range * range);
+            return ::distance_sq(position, pos) < (range * range);
         }
     };
 
@@ -52,8 +52,8 @@ struct EQ : public EntityQuery<EQ> {
 
     EQ &orderByDist(const vec2 &position) {
         return orderByLambda([position](const Entity &a, const Entity &b) {
-            float a_dist = distance_sq(a.get<Transform>().pos(), position);
-            float b_dist = distance_sq(b.get<Transform>().pos(), position);
+            float a_dist = ::distance_sq(a.get<Transform>().pos(), position);
+            float b_dist = ::distance_sq(b.get<Transform>().pos(), position);
             return a_dist < b_dist;
         });
     }

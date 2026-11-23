@@ -50,6 +50,39 @@ misbuilt tests, not widget failures. The old request to add a test Makefile is r
 - Recheck historical text-area Cmd bindings, selection, clipboard, undo and pointer
   placement against current implementation. The old blanket missing-feature claim is stale.
 
+## Cartographer gaps (2026-11-23)
+
+Filed by cartographer while adopting 7e7fd4f, then rechecked against this main (12c17a82); items already here were dropped. Cartographer evidence (file:line) is in its `docs/engineering/afterhours_gaps.md`, section "Found adopting 7e7fd4f".
+
+- [cartographer] **Mouse press edge seen by one caller per frame.** `input::is_mouse_button_pressed` keeps `static bool prev[8]` inside the function (`plugins/input_system.h`, both branches), so a second caller in the same frame gets false and a caller that skips frames sees a stale press. Keep the previous-frame state in the collector, updated once at frame start.
+- [cartographer] **`measure_text` ignores the default font.** `draw_text` now uses the `set_default_font` face (#446), but the raylib backend's `measure_text` still calls `raylib::MeasureText` with raylib's font, so widths don't match drawn text. Measure with the same face and spacing `draw_text` uses.
+- [cartographer] **The mouse misses the injection fix keys got.**
+  - `graphics::is_mouse_button_*`, `get_mouse_position` and `get_mouse_wheel_move` call the platform directly, while the key functions go through `test_input`.
+  - In test mode, `input::get_mouse_delta` and `is_mouse_button_down` fall back to the real OS mouse whenever the injector is inactive, so touching the trackpad changes a test.
+  - `set_mouse_position` overwrites the delta instead of adding to it, and `consume_mouse_delta` clears it on the first read.
+  - Ask: in test mode the injector always answers (parked or last scripted position, no delta, buttons up), and the delta adds up until frame reset. Cartographer parks the mouse at (-10000, -10000) every frame and keeps its own delta to work around this.
+- [cartographer] **Headless `get_time()` is wall-clock.** The headless backend simulates dt, but `get_time` is `raylib::GetTime()`, so shader animation differs between screenshot runs. Return the sum of simulated dt (honouring `fixed_dt` and time scale).
+- [cartographer] **`right_down` / `right_up` e2e commands.** `test_input::set_right_button_down` exists, but no built-in command drives it, unlike `middle_down` / `middle_up`. Cartographer registers its own for right-drag camera look.
+- [cartographer] **The runner's current and next script.** Script paths are private and the reset callback takes no arguments. Expose `current_script()` (`{index, path, name}`) and pass the next script to the reset callback. Cartographer re-lists the test folder to read the next script's `# spawn:` header before reset.
+- [cartographer] **Cursor mode wrapper.** No cursor wrapper exists. Add `graphics::set_cursor_mode(Free | Hidden | Captured)` (no-op when unchanged) and `get_cursor_mode()`; on sokol, `sapp_lock_mouse` / `sapp_show_mouse`.
+- [cartographer] **Multi-click tracker.** The click counter lives only inside `text_input`. Add `input::MultiClick{max_interval, slop}` with `update(pressed, pos, now)` returning the count, like `input::Repeat`. Cartographer hand-rolls double-click for its map Hand tool.
+- [cartographer] **Music stream wrappers.** Sound aliases are wrapped now; music is not: `PauseMusicStream`, `ResumeMusicStream`, `SetMusicPitch`, `SetMusicPan`, `GetMusicTimePlayed`, `SeekMusicStream` in `audio_helpers.h`, with none-backend stubs.
+- [cartographer] **Cylinder between two points, and world to screen in content size.**
+  - Solid `draw_cylinder` takes only a base, while `draw_cylinder_wires` takes start and end points; add `draw_cylinder_ex(start, end, r0, r1, sides, color)`. Cartographer makes 16 raw `DrawCylinderEx` calls.
+  - `get_world_to_screen` uses the window size, which is wrong when drawing into the render texture; take `w, h`, defaulting to the content size.
+- [cartographer] **Texture update and unflipped readback.** Add `update_texture_rgba(tex, pixels, optional rect)` and `read_texture_rgba(tex, optional rect, flip = false)`. `capture_render_texture_rgba` always flips. Cartographer has 5 raw `UpdateTexture` and 19 `LoadImageFromTexture` calls, mostly map layers that must not flip.
+- [cartographer] **Cursor motion and typing for hand-drawn text fields.** `edit_command_from_keys()` covers edit commands only. Arrows, word jumps, Home/End, Shift selection and typed characters live inside the imm widget. Add `motion_from_keys(state)` / `insert_typed_chars(state)` or one `edit_line_from_keys(state)`. Cartographer copied them into a 115-line `text_field.h`.
+- [cartographer] **Default logger gaps.**
+  - `log_once_per` is an empty function in the default logger ("For now, once per logging is disabled"), so it silently does nothing.
+  - There is no runtime minimum level.
+  - raylib `TraceLog` output bypasses `log_sink_fn`.
+  - Ask: implement `log_once_per`, add `set_log_level`, and add a backend log route that writes through `log_*` and the sink. Cartographer replaces the whole logger to get these.
+- [cartographer] **Render scale fixed at init.** The raylib windowed backend sets the render scale and render texture once in `init`, so a window that grows or changes DPI keeps the start-up scale. Add `resize_render_target(logical_w, logical_h, scale)`, which reallocates the texture and updates both copies of the scale. Cartographer patches them by hand on Windows.
+- [cartographer] **Small helpers (lower priority).**
+  - stateless `random::hash01(x, y, salt)` and `value_noise` (particles has a private one; Cartographer has 6 copies);
+  - `smoothstep`, exponential `damp`, `wrap_angle` / `lerp_angle`;
+  - `process::relaunch_self(args)` for restart-to-apply.
+
 ## Resolved historical reports
 
 D1 alpha blending; D3 overlapping click priority; D4 NoWrap default; D5 missing-child

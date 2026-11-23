@@ -78,6 +78,14 @@ extern "C" void metal_install_live_resize_draw(void);
 // (SOKOL_GLES3) builds never reference Metal symbols.
 #if defined(SOKOL_METAL)
 extern "C" const void *metal_create_system_device(void);
+#ifdef SOKOL_METAL
+extern "C" void metal_install_first_frame_early_draw(void);
+extern "C" bool metal_should_draw_first_frame_early(bool has_view,
+                                                    bool already_drawn);
+extern "C" int metal_first_frame_early_draw_count(void);
+extern "C" int metal_first_frame_early_attempt_count(void);
+extern "C" void metal_reset_first_frame_early_draw(void);
+#endif
 extern "C" bool metal_capture_render_texture(uint32_t color_img_id, int width,
                                              int height, const char *path);
 #endif
@@ -914,12 +922,11 @@ struct MetalPlatformAPI {
   }
   static Vec2 get_screen_to_world_2d(const Vec2 &position,
                                      const Camera2D &camera) {
-    constexpr float kDegToRad = 3.14159265358979323846f / 180.0f;
     const float zoom = (camera.zoom == 0.0f) ? 1.0f : camera.zoom;
     const float x = (position.x - camera.offset.x) / zoom;
     const float y = (position.y - camera.offset.y) / zoom;
 
-    const float rot = -camera.rotation * kDegToRad;
+    const float rot = -camera.rotation * DEG2RAD;
     const float c = std::cos(rot);
     const float s = std::sin(rot);
 
@@ -927,12 +934,11 @@ struct MetalPlatformAPI {
   }
   static Vec2 get_world_to_screen_2d(const Vec2 &position,
                                      const Camera2D &camera) {
-    constexpr float kDegToRad = 3.14159265358979323846f / 180.0f;
     const float zoom = (camera.zoom == 0.0f) ? 1.0f : camera.zoom;
     const float x = position.x - camera.target.x;
     const float y = position.y - camera.target.y;
 
-    const float rot = camera.rotation * kDegToRad;
+    const float rot = camera.rotation * DEG2RAD;
     const float c = std::cos(rot);
     const float s = std::sin(rot);
 
@@ -1051,6 +1057,9 @@ struct MetalPlatformAPI {
       // sokol windows are resizable by default
     }
 
+#ifdef SOKOL_METAL
+    metal_install_first_frame_early_draw();
+#endif
     // sapp_run blocks until the application quits
     sapp_run(&desc);
   }
