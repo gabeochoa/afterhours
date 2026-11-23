@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <bit>
 #include <cmath>
+#include <format>
 #include <functional>
 
 namespace afterhours {
@@ -271,10 +272,9 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
                              1.f)
         .x;
   };
-  const uint64_t measure_key =
-      std::hash<std::string>{}(font_name) * 1099511628211ULL ^
-      static_cast<uint64_t>(std::bit_cast<uint32_t>(resolved_font_size)) ^
-      measure_memo::generation();
+  const uint64_t measure_key = TextMeasureCache::compute_hash(
+      std::format("{}", measure_memo::generation()), font_name,
+      resolved_font_size, 1.f);
   // The 6px horizontal padding each side is already out of viewport_width.
   const float wrap_width = (config.text_area_word_wrap &&
                             !config.text_area_single_line)
