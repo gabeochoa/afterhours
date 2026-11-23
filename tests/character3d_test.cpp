@@ -88,7 +88,7 @@ int main() {
       for (int i = 0; i < 50; i++) m.update(dt, {1.f, 0.f, 0.5f}, 2.f, hills);
       return m.position;
     };
-    Vec3 a = run(), b = run();
+    Vector3Type a = run(), b = run();
     check(a.x == b.x && a.y == b.y && a.z == b.z, "same steps, same path");
   }
 
