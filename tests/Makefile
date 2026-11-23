@@ -301,6 +301,7 @@ ALL_TESTS := \
 	render_order_test \
 	draw_over_test \
 	scroll_smoothing_test \
+	scrollbar_gutter_test \
 	setup_test \
 	slot_at_creation_test \
 	size_constraints_test \
