@@ -6,6 +6,7 @@
 #include <functional>
 #include <map>
 #include <optional>
+#include <set>
 #include <span>
 #include <string>
 #include <vector>
@@ -127,6 +128,12 @@ struct sound_system : developer::Plugin {
         [[nodiscard]] float get_bus_volume(const std::string &bus) const {
             auto it = bus_volumes.find(bus);
             return it == bus_volumes.end() ? 1.f : it->second;
+        }
+        [[nodiscard]] std::vector<std::string> known_buses() const {
+            std::set<std::string> out{"effects"};
+            for (const auto &kv : bus_volumes) out.insert(kv.first);
+            for (const auto &kv : bus_by_name) out.insert(kv.second);
+            return {out.begin(), out.end()};
         }
         [[nodiscard]] float effective_volume(const std::string &name) const {
             return current_volume * get_master_volume() *
@@ -437,6 +444,12 @@ struct sound_system : developer::Plugin {
             auto it = bus_volumes.find(bus);
             return it == bus_volumes.end() ? 1.f : it->second;
         }
+        [[nodiscard]] std::vector<std::string> known_buses() const {
+            std::set<std::string> out{"music"};
+            for (const auto &kv : bus_volumes) out.insert(kv.first);
+            for (const auto &kv : bus_by_name) out.insert(kv.second);
+            return {out.begin(), out.end()};
+        }
         [[nodiscard]] float effective_volume(const std::string &name) const {
             return current_volume * get_master_volume() *
                    get_bus_volume(bus_of(name));
@@ -724,6 +737,19 @@ struct sound_system : developer::Plugin {
     }
     [[nodiscard]] static float get_bus_volume(const std::string &bus) {
         return SoundLibrary::get().get_bus_volume(bus);
+    }
+    [[nodiscard]] static std::vector<std::string> known_buses() {
+        std::set<std::string> out{"effects", "music"};
+        for (const auto &bus : SoundLibrary::get().known_buses())
+            out.insert(bus);
+        for (const auto &bus : MusicLibrary::get().known_buses())
+            out.insert(bus);
+        return {out.begin(), out.end()};
+    }
+    [[nodiscard]] static bool has_bus(const std::string &bus) {
+        for (const auto &known : known_buses())
+            if (known == bus) return true;
+        return false;
     }
 
     static void set_recording(bool on) { recording_ = on; }
