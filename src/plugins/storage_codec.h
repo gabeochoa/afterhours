@@ -39,7 +39,7 @@ template <typename T> struct DecodeResult {
 };
 
 namespace detail {
-inline constexpr std::string_view kMagic = "afterhours-storage-codec/1";
+inline constexpr std::string_view MAGIC = "afterhours-storage-codec/1";
 
 inline std::optional<int> parse_version(std::string_view text) {
   if (text.empty()) return std::nullopt;
@@ -54,7 +54,7 @@ inline std::optional<int> parse_version(std::string_view text) {
 inline std::optional<int> peek_version(std::string_view text) {
   const auto first = text.find('\n');
   if (first == std::string_view::npos ||
-      text.substr(0, first) != detail::kMagic)
+      text.substr(0, first) != detail::MAGIC)
     return std::nullopt;
   const auto rest = text.substr(first + 1);
   const auto second = rest.find('\n');
@@ -70,11 +70,11 @@ public:
       std::function<std::optional<std::string>(std::string_view)>;
 
   Codec(int current_version, EncodeFn encode, DecodeFn decode)
-      : current_version_(current_version), encode_(std::move(encode)),
-        decode_(std::move(decode)) {
-    if (current_version_ < 1)
+      : version(current_version), encode_fn(std::move(encode)),
+        decode_fn(std::move(decode)) {
+    if (version < 1)
       throw std::invalid_argument("storage::Codec: version must be >= 1");
-    if (!encode_ || !decode_)
+    if (!encode_fn || !decode_fn)
       throw std::invalid_argument("storage::Codec: encode/decode required");
   }
 
@@ -86,35 +86,40 @@ public:
   }
 
   Codec &migration(int from_version, MigrationFn fn) {
-    if (from_version < 1 || from_version >= current_version_)
+    if (from_version < 1 || from_version >= version)
       throw std::invalid_argument(
           "storage::Codec: migration source must be in [1, current)");
     if (!fn)
       throw std::invalid_argument("storage::Codec: empty migration");
-    if (!migrations_.emplace(from_version, std::move(fn)).second)
+    if (!migration_map.emplace(from_version, std::move(fn)).second)
       throw std::invalid_argument(
           "storage::Codec: duplicate migration for a version");
     return *this;
   }
 
-  [[nodiscard]] int current_version() const { return current_version_; }
+  [[nodiscard]] int current_version() const { return version; }
 
   [[nodiscard]] std::string encode(const T &value) const {
-    std::string out(detail::kMagic);
+    const std::string body = encode_fn(value);
+    const std::string version_str = std::to_string(version);
+    std::string out;
+    out.reserve(detail::MAGIC.size() + 1 + version_str.size() + 1 +
+                body.size());
+    out.append(detail::MAGIC);
     out += '\n';
-    out += std::to_string(current_version_);
+    out += version_str;
     out += '\n';
-    out += encode_(value);
+    out += body;
     return out;
   }
 
   [[nodiscard]] DecodeResult<T> decode(std::string_view text) const {
     DecodeResult<T> result;
-    result.current_version = current_version_;
+    result.current_version = version;
 
     const auto first = text.find('\n');
     if (first == std::string_view::npos ||
-        text.substr(0, first) != detail::kMagic) {
+        text.substr(0, first) != detail::MAGIC) {
       result.message = "not a storage-codec envelope";
       return result;
     }
@@ -124,23 +129,23 @@ public:
       result.message = "envelope has no payload separator";
       return result;
     }
-    const auto version = detail::parse_version(rest.substr(0, second));
-    if (!version || *version < 1) {
+    const auto found_version = detail::parse_version(rest.substr(0, second));
+    if (!found_version || *found_version < 1) {
       result.message = "envelope has a malformed version";
       return result;
     }
-    result.found_version = *version;
+    result.found_version = *found_version;
     std::string payload(rest.substr(second + 1));
 
-    if (*version > current_version_) {
+    if (*found_version > version) {
       result.status = DecodeStatus::TooNew;
       result.message = "stored version is newer than this build";
       return result;
     }
 
-    for (int v = *version; v < current_version_; ++v) {
-      const auto it = migrations_.find(v);
-      if (it == migrations_.end()) {
+    for (int v = *found_version; v < version; ++v) {
+      const auto it = migration_map.find(v);
+      if (it == migration_map.end()) {
         result.message =
             "no migration registered from version " + std::to_string(v);
         return result;
@@ -154,22 +159,22 @@ public:
       payload = std::move(*migrated);
     }
 
-    auto value = decode_(payload);
+    auto value = decode_fn(payload);
     if (!value) {
       result.message = "payload rejected by the current decoder";
       return result;
     }
     result.value = std::move(*value);
-    result.status = *version == current_version_ ? DecodeStatus::Ok
+    result.status = *found_version == version ? DecodeStatus::Ok
                                                  : DecodeStatus::Migrated;
     return result;
   }
 
 private:
-  int current_version_;
-  EncodeFn encode_;
-  DecodeFn decode_;
-  std::map<int, MigrationFn> migrations_;
+  int version;
+  EncodeFn encode_fn;
+  DecodeFn decode_fn;
+  std::map<int, MigrationFn> migration_map;
 };
 
 inline Codec<std::string> make_string_codec(
