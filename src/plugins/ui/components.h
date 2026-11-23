@@ -314,6 +314,9 @@ struct HasImage : BaseComponent {
   std::optional<afterhours::texture_manager::Rectangle> source_rect;
   afterhours::texture_manager::HasTexture::Alignment alignment =
       afterhours::texture_manager::HasTexture::Alignment::Center;
+  // Per-draw filter override (graphics::TEXTURE_FILTER_*); nullopt = the
+  // texture's own filter, which is also how batching stays unchanged.
+  std::optional<int> filter;
 
   HasImage(
       afterhours::texture_manager::Texture tex,
