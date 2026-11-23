@@ -36,7 +36,7 @@ inline void draw_uniform_border(RectangleType rect, float roundness, int segment
     const int count = r > 0.f ? (cut ? 1 : steps) : 1;
     for (int step = 0; step <= count; ++step) {
       const float angle = (static_cast<float>(corner - 1) +
-                           static_cast<float>(step) / count) * 1.57079632679f;
+                           static_cast<float>(step) / count) * PI * 0.5f;
       const float x = std::cos(angle), y = std::sin(angle);
       const Vector2Type outer{center.x + r * x, center.y + r * y};
       const Vector2Type inner{inner_center.x + inner_radius * x,

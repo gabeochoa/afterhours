@@ -106,7 +106,7 @@ public:
   RoundedCorners &top_round() {
     corners.set(TOP_LEFT, ROUND);
     corners.set(TOP_RIGHT, ROUND);
-    corners.set(BOTTOM_RIGHT, ROUND);
+    corners.set(BOTTOM_RIGHT, SHARP);
     corners.set(BOTTOM_LEFT, SHARP);
     return *this;
   }

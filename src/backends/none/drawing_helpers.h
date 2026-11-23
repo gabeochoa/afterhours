@@ -303,7 +303,7 @@ inline void draw_texture_rec(TextureType, RectangleType, Vector2Type, Color) {
   log_error("@notimplemented draw_texture_rec");
 }
 inline void draw_texture_pro(TextureType, RectangleType, RectangleType,
-                             Vector2Type, float, Color) {
+                             Vector2Type, float, Color, int = -1) {
   log_error("@notimplemented draw_texture_pro");
 }
 

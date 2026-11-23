@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <optional>
 #include <filesystem>
+#include <unordered_map>
 #include <vector>
 
 #include "../../capture.h"
@@ -228,13 +229,7 @@ inline void draw_text_ex(const raylib::Font font, const char *content,
 inline void draw_text(const char *content, const float x, const float y,
                       const float font_size, const Color color) {
   if (!content) return;
-  if (!detail::default_font_override()) {
-    raylib::DrawText(content, static_cast<int>(x), static_cast<int>(y),
-                     static_cast<int>(font_size), color);
-    return;
-  }
-  raylib::DrawTextEx(*detail::default_font_override(), content, {x, y},
-                     font_size, 1.f, color);
+  draw_text_ex(get_default_font(), content, {x, y}, font_size, 1.f, color);
 }
 
 inline void draw_rectangle_outline(const RectangleType rect,
@@ -273,6 +268,7 @@ inline void draw_rectangle_rounded(
   const std::bitset<4> styled = corners | chamfer;
   const float ROUND = roundness;
   const float SHARP = 0.f;
+  // DrawRectangleCustom takes its roundness args bottom-right first.
   raylib::DrawRectangleCustom(rect,
                               styled.test(0) ? ROUND : SHARP,
                               styled.test(1) ? ROUND : SHARP,
@@ -298,10 +294,8 @@ inline void draw_rectangle_rounded_lines(
     return;
   }
 
-  if (chamfer.none()) {
-    raylib::DrawRectangleRoundedLines(rect, roundness, segments, color);
-    return;
-  }
+  // Partial mask: DrawRectangleRoundedLines rounds every corner, so walk
+  // the perimeter with a per-corner radius (0 = sharp), like the sokol path.
   const float x = rect.x, y = rect.y, w = rect.width, h = rect.height;
   const float r = (w < h ? w : h) * 0.5f * roundness;
   const std::bitset<4> styled = corners | chamfer;
@@ -310,9 +304,10 @@ inline void draw_rectangle_rounded_lines(
   const float rBL = styled.test(1) ? r : 0.f;
   const float rBR = styled.test(0) ? r : 0.f;
   const int segs = segments > 0 ? segments : 8;
-  const float PI_HALF = 3.14159265f * 0.5f;
+  const float PI_HALF = PI * 0.5f;
+
   Vector2Type prev{x + rTL, y};
-  bool has_prev = false;
+  bool has_prev = true;
   auto line_to = [&](Vector2Type p) {
     if (has_prev && (p.x != prev.x || p.y != prev.y))
       raylib::DrawLineEx(prev, p, 1.f, color);
@@ -333,7 +328,7 @@ inline void draw_rectangle_rounded_lines(
   line_to(Vector2Type{x + rBL, y + h});
   arc_to(x + rBL, y + h - rBL, rBL, PI_HALF, chamfer.test(1));
   line_to(Vector2Type{x, y + rTL});
-  arc_to(x + rTL, y + rTL, rTL, 3.14159265f, chamfer.test(3));
+  arc_to(x + rTL, y + rTL, rTL, PI, chamfer.test(3));
   line_to(Vector2Type{x + rTL, y});
 }
 
@@ -686,8 +681,29 @@ inline void draw_texture_rec(TextureType tex, RectangleType src,
   raylib::DrawTextureRec(tex, src, pos, tint);
 }
 
+inline std::unordered_map<unsigned int, int> &known_texture_filters() {
+  static std::unordered_map<unsigned int, int> m;
+  return m;
+}
+
+inline int known_texture_filter(TextureType tex) {
+  const auto &m = known_texture_filters();
+  const auto it = m.find(tex.id);
+  return it == m.end() ? raylib::TEXTURE_FILTER_POINT : it->second;
+}
+
 inline void draw_texture_pro(TextureType tex, RectangleType src, RectangleType dest,
-                             Vector2Type origin, float rotation, Color tint) {
+                             Vector2Type origin, float rotation, Color tint,
+                             int filter) {
+  const int saved = known_texture_filter(tex);
+  if (filter >= 0 && filter != saved) {
+    raylib::rlDrawRenderBatchActive();
+    raylib::SetTextureFilter(tex, filter);
+    raylib::DrawTexturePro(tex, src, dest, origin, rotation, tint);
+    raylib::rlDrawRenderBatchActive();
+    raylib::SetTextureFilter(tex, saved);
+    return;
+  }
   raylib::DrawTexturePro(tex, src, dest, origin, rotation, tint);
 }
 
@@ -791,6 +807,7 @@ inline TextureType load_texture_from_rgba(const std::uint8_t *rgba, int w,
     return texture;
   }
   raylib::SetTextureFilter(texture, filter);
+  known_texture_filters()[texture.id] = filter;
   return texture;
 }
 
@@ -810,6 +827,7 @@ inline void gen_texture_mipmaps(TextureType &texture) {
 inline void set_texture_filter(TextureType &texture, int filter) {
   if (texture.id != 0) {
     raylib::SetTextureFilter(texture, filter);
+    known_texture_filters()[texture.id] = filter;
   }
 }
 
@@ -834,6 +852,7 @@ load_texture_with_color_key(const char *path, const Color key,
   raylib::UnloadImage(img);
   if (texture.id != 0) {
     raylib::SetTextureFilter(texture, filter);
+    known_texture_filters()[texture.id] = filter;
   }
   return texture;
 }

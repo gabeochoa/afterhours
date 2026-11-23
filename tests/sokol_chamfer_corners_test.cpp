@@ -24,11 +24,11 @@ static void check(bool cond, const std::string &what) {
 }
 static constexpr int W = 200;
 static constexpr int H = 200;
-static const Color kBg{0, 0, 0, 255};
-static const Color kFg{255, 255, 255, 255};
+static const Color BG{0, 0, 0, 255};
+static const Color FG{255, 255, 255, 255};
 template <typename Draw> static std::vector<uint8_t> render(Draw draw) {
   g::begin_frame();
-  afterhours::draw_rectangle(RectangleType{0, 0, W, H}, kBg);
+  afterhours::draw_rectangle(RectangleType{0, 0, W, H}, BG);
   draw();
   g::end_frame();
   auto shot = afterhours::capture_render_texture_rgba(g::get_render_texture());
@@ -71,7 +71,7 @@ int main() {
   only_tl.set(3);
   {
     auto px = render([&] {
-      afterhours::draw_rectangle_rounded(rect, 1.0f, 8, kFg, std::bitset<4>(),
+      afterhours::draw_rectangle_rounded(rect, 1.0f, 8, FG, std::bitset<4>(),
                                          only_tl);
     });
     printf("fill only-TL-chamfered:\n");
@@ -94,7 +94,7 @@ int main() {
   }
   {
     auto px = render([&] {
-      afterhours::draw_rectangle_rounded(rect, 1.0f, 8, kFg, only_tl);
+      afterhours::draw_rectangle_rounded(rect, 1.0f, 8, FG, only_tl);
     });
     printf("fill only-TL-rounded:\n");
     probe("TL cut region (44,44)", px, 44, 44);
@@ -104,7 +104,7 @@ int main() {
   }
   {
     auto px = render([&] {
-      afterhours::draw_rectangle_rounded_lines(rect, 1.0f, 8, kFg,
+      afterhours::draw_rectangle_rounded_lines(rect, 1.0f, 8, FG,
                                                std::bitset<4>(), only_tl);
     });
     auto any_lit = [&](int x0, int y0, int x1, int y1) {
