@@ -27,6 +27,7 @@
 #include <cstdlib>
 #include <format>
 #include <functional>
+#include <map>
 #include <string_view>
 #include <magic_enum/magic_enum.hpp>
 
@@ -40,9 +41,9 @@ inline EntityQuery<> ui_query() {
 }
 
 // Helper: get the screen-space rect of a UI component, the same way render
-// and hit-test place it.
-inline RectangleType get_screen_rect(Entity &entity) {
-  auto &cmp = entity.get<ui::UIComponent>();
+// and hit-test place it. Read-only, so a const view of the entity is enough.
+inline RectangleType get_screen_rect(const Entity &entity) {
+  const auto &cmp = entity.get<ui::UIComponent>();
   RectangleType rect = cmp.rect();
   if (entity.has<ui::HasUIModifiers>()) {
     rect = entity.get<ui::HasUIModifiers>().apply_modifier(rect);
@@ -52,7 +53,7 @@ inline RectangleType get_screen_rect(Entity &entity) {
 
 // Centre of an element's visible (clipped) rect; nullopt when fully
 // clipped, so clicks land on a point the user could actually hit.
-inline std::optional<Position> visible_center(Entity &entity) {
+inline std::optional<Position> visible_center(const Entity &entity) {
   auto rect = ui::detail::hit_rect(entity, entity.get<ui::UIComponent>());
   if (rect.width <= 0.f || rect.height <= 0.f) return std::nullopt;
   return Position{rect.x + rect.width / 2, rect.y + rect.height / 2};
@@ -389,7 +390,7 @@ struct HandleExpectFocusedCommand : System<PendingE2ECommand> {
 };
 
 // Forward declarations: defined with the other scope helpers below.
-inline bool is_within_scope(Entity &entity, EntityID scope);
+inline bool is_within_scope(const Entity &entity, EntityID scope);
 inline bool is_partially_visible(const Entity &entity);
 
 // Handle 'expect_no_focus' - asserts nothing holds keyboard focus.
@@ -497,7 +498,7 @@ struct HandleClickLabelCommand : System<PendingE2ECommand> {
                      .whereLambda([&](const Entity &e) {
                        return e.get<ui::HasLabel>().label == text &&
                               e.get<ui::UIComponent>().was_rendered_to_screen &&
-                              (scope == -1 || is_within_scope(const_cast<Entity &>(e), scope));
+                              (scope == -1 || is_within_scope(e, scope));
                      });
     for (Entity &e : query.gen()) matches.push_back(&e);
     if (matches.empty()) {
@@ -796,6 +797,76 @@ struct HandleExpectCheckboxCommand : System<PendingE2ECommand> {
       }
     }
     cmd.retry_with(std::format("Checkbox not found: {}", cmd.arg(0)));
+  }
+};
+
+template <typename InputAction>
+struct HandleExpectAccessibleCommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("expect_accessible")) return;
+    if (!cmd.has_args(1)) {
+      cmd.fail("expect_accessible requires a name or name=<accessible name>");
+      return;
+    }
+    std::map<std::string, std::string> want;
+    size_t first_prop = 0;
+    std::string debug_name;
+    if (cmd.arg(0).find('=') == std::string::npos) {
+      debug_name = cmd.arg(0);
+      first_prop = 1;
+    }
+    for (size_t i = first_prop; i < cmd.args.size(); ++i) {
+      const std::string &raw = cmd.arg(i);
+      auto eq = raw.find('=');
+      if (eq == std::string::npos || eq == 0) {
+        cmd.fail(std::format("expect_accessible: expected prop=value, got '{}'",
+                             raw));
+        return;
+      }
+      want[raw.substr(0, eq)] = raw.substr(eq + 1);
+    }
+    if (!debug_name.empty() && want.empty()) want["name"] = debug_name;
+    auto query = ui_query()
+                     .whereHasComponent<ui::UIComponent>()
+                     .whereHasComponent<ui::HasAccessibility>()
+                     .whereLambda([&](const Entity &e) {
+                       if (!e.get<ui::UIComponent>().was_rendered_to_screen)
+                         return false;
+                       if (!debug_name.empty())
+                         return e.has<ui::UIComponentDebug>() &&
+                                e.get<ui::UIComponentDebug>().name() ==
+                                    debug_name;
+                       auto it = want.find("name");
+                       return it == want.end() ||
+                              e.get<ui::HasAccessibility>().name == it->second;
+                     })
+                     .first();
+    for (Entity &entity : query.gen()) {
+      auto &a = entity.get<ui::HasAccessibility>();
+      for (auto &[prop, expected] : want) {
+        std::string actual;
+        if (prop == "name") actual = a.name;
+        else if (prop == "role") actual = ui::accessible_role_name(a.role);
+        else if (prop == "value") actual = a.value;
+        else if (prop == "description") actual = a.description;
+        else {
+          cmd.fail(std::format("expect_accessible: unknown prop '{}'", prop));
+          return;
+        }
+        if (actual != expected) {
+          cmd.retry_with(std::format(
+              "expect_accessible {}={} but got {} (role={} name=\"{}\" "
+              "value=\"{}\")",
+              prop, expected, actual, ui::accessible_role_name(a.role),
+              a.name, a.value));
+          return;
+        }
+      }
+      cmd.consume();
+      return;
+    }
+    cmd.retry_with(std::format("expect_accessible: no element found for '{}'",
+                               debug_name.empty() ? want["name"] : debug_name));
   }
 };
 
@@ -1273,10 +1344,10 @@ inline std::string format_dim(float v) {
   return s;
 }
 
-inline void dump_ui_node(std::string &out, Entity &entity, int depth) {
+inline void dump_ui_node(std::string &out, const Entity &entity, int depth) {
   if (depth > 64) return;
 
-  auto &cmp = entity.get<ui::UIComponent>();
+  const auto &cmp = entity.get<ui::UIComponent>();
   if (!cmp.was_rendered_to_screen) return;
 
   std::string indent(depth * 2, ' ');
@@ -1285,7 +1356,7 @@ inline void dump_ui_node(std::string &out, Entity &entity, int depth) {
   out += indent + "<ui";
 
   if (entity.has<ui::UIComponentDebug>()) {
-    auto &dbg = entity.get<ui::UIComponentDebug>();
+    const auto &dbg = entity.get<ui::UIComponentDebug>();
     if (dbg.type == ui::UIComponentDebug::Type::custom)
       out += " name=\"" + xml_escape(dbg.name_value) + "\"";
   }
@@ -1297,6 +1368,18 @@ inline void dump_ui_node(std::string &out, Entity &entity, int depth) {
   if (entity.has<ui::HasLabel>())
     out += " text=\"" + xml_escape(truncate_text(entity.get<ui::HasLabel>().label)) + "\"";
 
+  if (entity.has<ui::HasAccessibility>()) {
+    const auto &a = entity.get<ui::HasAccessibility>();
+    if (a.role != ui::AccessibleRole::None)
+      out += std::format(" role=\"{}\"", ui::accessible_role_name(a.role));
+    if (!a.name.empty())
+      out += " accessible_name=\"" + xml_escape(truncate_text(a.name)) + "\"";
+    if (!a.value.empty())
+      out += " accessible_value=\"" + xml_escape(truncate_text(a.value)) + "\"";
+    if (!a.description.empty())
+      out += " accessible_description=\"" +
+             xml_escape(truncate_text(a.description)) + "\"";
+  }
   const auto sides = [&](const char *attr, const auto &v) {
     const float t = v[ui::Axis::top], r = v[ui::Axis::right],
                 b = v[ui::Axis::bottom], l = v[ui::Axis::left];
@@ -1309,7 +1392,7 @@ inline void dump_ui_node(std::string &out, Entity &entity, int depth) {
     out += std::format(" gap=\"{}\"", cmp.gap);
 
   if (entity.has<ui::HasScrollView>()) {
-    auto &sv = entity.get<ui::HasScrollView>();
+    const auto &sv = entity.get<ui::HasScrollView>();
     out += std::format(" scroll_x=\"{}\" scroll_y=\"{}\"",
                        format_dim(sv.scroll_offset.x),
                        format_dim(sv.scroll_offset.y));
@@ -1318,11 +1401,11 @@ inline void dump_ui_node(std::string &out, Entity &entity, int depth) {
   if (cmp.should_hide)
     out += " hidden=\"true\"";
 
-  std::vector<Entity *> valid_children;
+  std::vector<const Entity *> valid_children;
   for (EntityID child_id : cmp.children) {
     OptEntity opt = ui::UICollectionHolder::getEntityForID(child_id);
     if (!opt.valid()) continue;
-    Entity &child = opt.asE();
+    const Entity &child = opt.asE();
     if (!child.has<ui::UIComponent>()) continue;
     if (!child.get<ui::UIComponent>().was_rendered_to_screen) continue;
     valid_children.push_back(&child);
@@ -1332,7 +1415,7 @@ inline void dump_ui_node(std::string &out, Entity &entity, int depth) {
     out += "/>\n";
   } else {
     out += ">\n";
-    for (Entity *child : valid_children)
+    for (const Entity *child : valid_children)
       dump_ui_node(out, *child, depth + 1);
     out += indent + "</ui>\n";
   }
@@ -1359,7 +1442,7 @@ inline std::string format_hex_color(const Color &c) {
   return std::format("#{:02x}{:02x}{:02x}{:02x}", c.r, c.g, c.b, c.a);
 }
 
-inline bool is_within_scope(Entity &entity, EntityID scope) {
+inline bool is_within_scope(const Entity &entity, EntityID scope) {
   EntityID current = entity.id;
   for (int depth = 0; depth < 64 && current != -1; ++depth) {
     if (current == scope)
@@ -1410,9 +1493,10 @@ inline bool parse_prop_assertion(const std::string &arg, std::string &prop,
 
 // Check a single property assertion against an entity.
 // Returns empty string on match, error message on mismatch.
-inline std::string check_ui_property(Entity &entity, const std::string &prop,
+inline std::string check_ui_property(const Entity &entity,
+                                      const std::string &prop,
                                       const std::string &expected) {
-  auto &cmp = entity.get<ui::UIComponent>();
+  const auto &cmp = entity.get<ui::UIComponent>();
   RectangleType rect = get_screen_rect(entity);
 
   long actual_int = 0;
@@ -1433,9 +1517,24 @@ inline std::string check_ui_property(Entity &entity, const std::string &prop,
     is_int_prop = false;
     if (!entity.has<ui::HasLabel>())
       return std::format("text={} but element has no label", expected);
-    auto &label = entity.get<ui::HasLabel>().label;
+    const auto &label = entity.get<ui::HasLabel>().label;
     if (label != expected)
       return std::format("text=\"{}\" but got \"{}\"", expected, label);
+    return "";
+  }
+  else if (prop == "accessible_name" || prop == "role" ||
+           prop == "accessible_value" || prop == "accessible_description") {
+    is_int_prop = false;
+    if (!entity.has<ui::HasAccessibility>())
+      return std::format("{}={} but element has no accessibility semantics",
+                         prop, expected);
+    const auto &a = entity.get<ui::HasAccessibility>();
+    std::string actual = prop == "role" ? ui::accessible_role_name(a.role)
+                         : prop == "accessible_name" ? a.name
+                         : prop == "accessible_value" ? a.value
+                                                      : a.description;
+    if (actual != expected)
+      return std::format("{}=\"{}\" but got \"{}\"", prop, expected, actual);
     return "";
   }
   else if (prop == "scroll_x" || prop == "scroll_y") {
@@ -1642,7 +1741,7 @@ struct HandleAssertUITextCommand : System<PendingE2ECommand> {
           return e.get<ui::HasLabel>().label == text &&
                  e.get<ui::UIComponent>().was_rendered_to_screen &&
                  is_partially_visible(e) &&
-                 (scope == -1 || is_within_scope(const_cast<Entity &>(e), scope));
+                 (scope == -1 || is_within_scope(e, scope));
         });
     for (Entity &e : query.gen()) matches.push_back(&e);
 
@@ -1851,6 +1950,8 @@ void register_ui_commands(SystemManager &sm,
       std::make_unique<HandleExpectCheckboxCommand<InputAction>>());
   sm.register_update_system(
       std::make_unique<HandleExpectSliderCommand<InputAction>>());
+  sm.register_update_system(
+      std::make_unique<HandleExpectAccessibleCommand<InputAction>>());
   sm.register_update_system(
       std::make_unique<HandleExpectInputTextCommand<InputAction>>());
   sm.register_update_system(
