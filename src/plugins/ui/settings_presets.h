@@ -14,7 +14,7 @@ namespace ui {
 
 namespace imm {
 
-inline constexpr std::string_view kCustomPresetName = "Custom";
+inline constexpr std::string_view CUSTOM_PRESET_NAME = "Custom";
 
 template <typename Values>
 struct SettingsPreset {
@@ -39,7 +39,7 @@ active_preset_name(const Values &values,
                    const std::vector<SettingsPreset<Values>> &presets) {
   const size_t idx = active_preset_index(values, presets);
   return idx < presets.size() ? std::string_view(presets[idx].name)
-                              : kCustomPresetName;
+                              : CUSTOM_PRESET_NAME;
 }
 
 template <typename Values>
@@ -50,7 +50,7 @@ preset_option_names(const std::vector<SettingsPreset<Values>> &presets) {
   for (const auto &preset : presets) {
     names.push_back(preset.name);
   }
-  names.emplace_back(kCustomPresetName);
+  names.emplace_back(CUSTOM_PRESET_NAME);
   return names;
 }
 
