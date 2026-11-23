@@ -12,9 +12,11 @@ static void check(bool cond, const char *what) {
     ++failures;
   }
 }
+
 struct Px {
   int r, g, b, a;
 };
+
 static Px px(const RgbaCapture &img, int x, int y) {
   const auto i = static_cast<size_t>(y * img.width + x) * 4;
   return {img.pixels[i], img.pixels[i + 1], img.pixels[i + 2], img.pixels[i + 3]};
