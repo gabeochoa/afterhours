@@ -75,8 +75,8 @@ template <typename Passable>
   mask[grid.index(start)] = 1;
   for (std::size_t head = 0; head < queue.size(); head++) {
     Cell c = queue[head];
-    constexpr Cell kDirs[4] = {{0, -1}, {1, 0}, {0, 1}, {-1, 0}};
-    for (Cell d : kDirs) {
+    constexpr Cell DIRS[4] = {{0, -1}, {1, 0}, {0, 1}, {-1, 0}};
+    for (Cell d : DIRS) {
       Cell n{c.x + d.x, c.y + d.y};
       if (!grid.in_bounds(n) || mask[grid.index(n)] ||
           !passable(grid.at(n)))
