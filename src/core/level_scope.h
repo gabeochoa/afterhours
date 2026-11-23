@@ -47,7 +47,7 @@ inline void run_and_forget_cache_clears(LevelId id) {
 }
 
 inline void unload_level(LevelId id) {
-  if (id == kUnscopedLevel)
+  if (id == UNSCOPED_LEVEL)
     return;
   auto &coll = EntityHelper::get_default_collection();
   coll.merge_entity_arrays();
@@ -83,7 +83,7 @@ inline void reset_all_levels() {
   std::set<LevelId> levels;
   const auto collect = [&levels](const Entities &ents) {
     for (const auto &sp : ents) {
-      if (sp && sp->level_id != kUnscopedLevel)
+      if (sp && sp->level_id != UNSCOPED_LEVEL)
         levels.insert(sp->level_id);
     }
   };

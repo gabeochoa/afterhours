@@ -28,8 +28,8 @@ using ComponentArray =
 using EntityID = int;
 
 using LevelId = int;
-constexpr LevelId kUnscopedLevel = 0;
-inline thread_local LevelId current_level_tls = kUnscopedLevel;
+constexpr LevelId UNSCOPED_LEVEL = 0;
+inline thread_local LevelId current_level_tls = UNSCOPED_LEVEL;
 inline std::atomic_int ENTITY_ID_GEN = 0;
 
 inline std::atomic<std::size_t> COMPONENT_MUTATION_GEN = 0;
@@ -43,7 +43,7 @@ struct Entity {
   // App-owned word in the header cache line: the library never reads it, so
   // a per-frame stamp costs no componentArray/heap chase. Cleared on recycle.
   std::uint64_t user_data = 0;
-  LevelId level_id = kUnscopedLevel;
+  LevelId level_id = UNSCOPED_LEVEL;
 
   // Runtime-only metadata used by the handle-based store.
   // - INVALID_SLOT means this entity has not been assigned a stable slot yet
@@ -75,7 +75,7 @@ struct Entity {
     cleanup = false;
     entity_type = 0;
     user_data = 0;
-    level_id = kUnscopedLevel;
+    level_id = UNSCOPED_LEVEL;
     ah_slot_index = EntityHandle::INVALID_SLOT;
     id = new_id;
   }

@@ -97,7 +97,7 @@ TEST(nested_guards_restore) {
     Entity &e = EntityHelper::createEntity();
     CHECK(e.level_id == 1);
   }
-  CHECK(level_scope::current_level() == kUnscopedLevel);
+  CHECK(level_scope::current_level() == UNSCOPED_LEVEL);
   CHECK(inner->level_id == 2);
   CHECK(level_scope::count_in_level(2) == 1);
 }
@@ -141,7 +141,7 @@ TEST(recycled_entity_not_stamped_stale) {
   }
   coll.cleanup();
   Entity &e2 = EntityHelper::createEntity();
-  CHECK(e2.level_id == kUnscopedLevel);
+  CHECK(e2.level_id == UNSCOPED_LEVEL);
   CHECK(level_scope::count_in_level(1) == 0);
 }
 
