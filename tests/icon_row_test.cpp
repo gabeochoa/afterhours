@@ -6,7 +6,7 @@ using namespace afterhours::ui::imm;
 using ui_test::ImmTestHarness;
 
 namespace {
-const std::array<texture_manager::Rectangle, 4> kFrames{
+const std::array<texture_manager::Rectangle, 4> FRAMES{
     texture_manager::Rectangle{0, 0, 20, 20},
     texture_manager::Rectangle{20, 0, 20, 20},
     texture_manager::Rectangle{40, 0, 20, 20},
@@ -15,7 +15,7 @@ const std::array<texture_manager::Rectangle, 4> kFrames{
 texture_manager::Texture sheet() { return texture_manager::Texture{}; }
 
 void layout_row(ImmTestHarness &h, ComponentConfig config) {
-  icon_row(h.context(), mk(h.root(), 0), sheet(), kFrames, 1.f,
+  icon_row(h.context(), mk(h.root(), 0), sheet(), FRAMES, 1.f,
            std::move(config));
   h.layout_only();
 }
