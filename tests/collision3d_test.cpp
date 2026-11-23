@@ -13,7 +13,7 @@ static void check(bool c, const std::string &w) {
 }
 
 static bool near(float a, float b, float eps = 1e-3f) { return std::fabs(a - b) <= eps; }
-static bool near3(Vec3 a, Vec3 b, float eps = 1e-3f) {
+static bool near3(Vector3Type a, Vector3Type b, float eps = 1e-3f) {
   return near(a.x, b.x, eps) && near(a.y, b.y, eps) && near(a.z, b.z, eps);
 }
 
@@ -71,24 +71,24 @@ int main() {
   {
     World w;
     w.add(AABB{{0, 0, 0}, {2, 2, 2}, 1});
-    Vec3 c{2.2f, 1, 1};
-    Vec3 push = push_out_sphere(w, c, 0.5f);
-    Vec3 resolved = c + push;
+    Vector3Type c{2.2f, 1, 1};
+    Vector3Type push = push_out_sphere(w, c, 0.5f);
+    Vector3Type resolved{c.x + push.x, c.y + push.y, c.z + push.z};
     check(near(resolved.x, 2.5f), "push-out vs aabb lands on surface");
     check(near3(push_out_sphere(w, resolved, 0.5f), {0, 0, 0}), "resolved sphere no longer penetrates aabb");
-    Vec3 inside = push_out_sphere(w, {1.9f, 1, 1}, 0.5f);
-    check(near((Vec3{1.9f, 1, 1} + inside).x, 2.5f), "push-out from inside aabb exits nearest face");
+    Vector3Type inside = push_out_sphere(w, {1.9f, 1, 1}, 0.5f);
+    check(near(1.9f + inside.x, 2.5f), "push-out from inside aabb exits nearest face");
   }
   {
     World w;
     w.add(Sphere{{0, 0, 0}, 1.f, 1});
-    Vec3 push = push_out_sphere(w, {1.2f, 0, 0}, 0.5f);
+    Vector3Type push = push_out_sphere(w, {1.2f, 0, 0}, 0.5f);
     check(near(1.2f + push.x, 1.5f), "push-out vs sphere lands on surface");
   }
   {
     World w;
     w.add(Heightfield{[](float, float) { return 2.f; }, -10, 10, -10, 10, 1});
-    Vec3 push = push_out_sphere(w, {0, 1.8f, 0}, 0.5f);
+    Vector3Type push = push_out_sphere(w, {0, 1.8f, 0}, 0.5f);
     check(near3(push, {0, 0.7f, 0}), "push-out vs heightfield lifts sphere to ground+radius");
     check(near3(push_out_sphere(w, {0, 2.5f, 0}, 0.5f), {0, 0, 0}), "sphere resting on heightfield needs no push");
   }
