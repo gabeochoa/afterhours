@@ -34,13 +34,13 @@ public:
   static constexpr size_t DEFAULT_MAX_ENTRIES = 4096;
 
 private:
-  static constexpr size_t kEntryCost = sizeof(uint64_t) + sizeof(Vector2Type);
+  static constexpr size_t ENTRY_COST = sizeof(uint64_t) + sizeof(Vector2Type);
 
   MeasureTextFn measure_fn_;
-  ByteCache<uint64_t, Vector2Type> cache_{
-      DEFAULT_MAX_ENTRIES * kEntryCost,
-      [](const Vector2Type &) { return kEntryCost; }};
-  std::unordered_map<uint64_t, uint32_t> last_used_generation_;
+  ByteCache<uint64_t, Vector2Type> cache{
+      DEFAULT_MAX_ENTRIES * ENTRY_COST,
+      [](const Vector2Type &) { return ENTRY_COST; }};
+  std::unordered_map<uint64_t, uint32_t> last_used_generation;
 
   uint32_t current_generation_ = 0;
   uint32_t prune_interval_ = DEFAULT_PRUNE_INTERVAL;
@@ -65,13 +65,13 @@ public:
   void set_max_age(uint32_t frames) { max_age_ = frames; }
   void set_max_entries(size_t count) {
     max_entries_ = count;
-    cache_.set_budget((count == 0 ? 1 : count) * kEntryCost);
-    if (last_used_generation_.size() > cache_.size()) {
+    cache.set_budget((count == 0 ? 1 : count) * ENTRY_COST);
+    if (last_used_generation.size() > cache.size()) {
       std::unordered_map<uint64_t, uint32_t> kept;
-      for (const auto &[key, gen] : last_used_generation_)
-        if (cache_.contains(key))
+      for (const auto &[key, gen] : last_used_generation)
+        if (cache.contains(key))
           kept.emplace(key, gen);
-      last_used_generation_ = std::move(kept);
+      last_used_generation = std::move(kept);
     }
   }
 
@@ -83,16 +83,16 @@ public:
     }
 
     uint64_t key = compute_hash(text, font_name, font_size, spacing);
-    if (const Vector2Type *cached = cache_.get(key)) {
-      last_used_generation_[key] = current_generation_;
+    if (const Vector2Type *cached = cache.get(key)) {
+      last_used_generation[key] = current_generation_;
       cache_hits_++;
       return *cached;
     }
 
     cache_misses_++;
     Vector2Type size = measure_fn_(text, font_name, font_size, spacing);
-    if (cache_.put(key, size))
-      last_used_generation_[key] = current_generation_;
+    if (cache.put(key, size))
+      last_used_generation[key] = current_generation_;
     return size;
   }
 
@@ -118,18 +118,18 @@ public:
   void prune() { prune_stale_entries(); }
 
   void clear() {
-    cache_.clear();
-    last_used_generation_.clear();
+    cache.clear();
+    last_used_generation.clear();
     cache_hits_ = 0;
     cache_misses_ = 0;
   }
 
-  [[nodiscard]] size_t size() const { return cache_.size(); }
+  [[nodiscard]] size_t size() const { return cache.size(); }
   [[nodiscard]] size_t accounted_bytes() const {
-    return cache_.accounted_bytes();
+    return cache.accounted_bytes();
   }
   [[nodiscard]] ByteCache<uint64_t, Vector2Type>::Stats byte_stats() const {
-    return cache_.stats();
+    return cache.stats();
   }
   [[nodiscard]] uint64_t hits() const { return cache_hits_; }
   [[nodiscard]] uint64_t misses() const { return cache_misses_; }
@@ -185,11 +185,11 @@ private:
       return;
 
     uint32_t threshold = current_generation_ - max_age_;
-    for (auto it = last_used_generation_.begin();
-         it != last_used_generation_.end();) {
+    for (auto it = last_used_generation.begin();
+         it != last_used_generation.end();) {
       if (it->second < threshold) {
-        cache_.erase(it->first);
-        it = last_used_generation_.erase(it);
+        cache.erase(it->first);
+        it = last_used_generation.erase(it);
       } else {
         ++it;
       }
