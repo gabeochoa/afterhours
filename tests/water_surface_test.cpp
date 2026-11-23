@@ -107,6 +107,28 @@ int main() {
   check(near(pose_z.pitch, -std::atan(0.5f * PI_F / 2.f), 1e-4f), "pitch follows Z slope");
   check(near(pose_z.roll, 0.f), "roll stays 0 on Z slope");
 
+  // The floating helpers accept any height/normal sampler, not just the
+  // built-in sine WaterSurface: a tilted plane (not a sine sum) with a
+  // stateful gain, shaped like a game's own weather-driven sea.
+  struct TiltedSea {
+    float slope_x = 0.25f;
+    float slope_z = -0.5f;
+    [[nodiscard]] float sample_height(float x, float z, float) const {
+      return slope_x * x + slope_z * z + 1.f;
+    }
+    [[nodiscard]] Vector3Type sample_normal(float, float, float) const {
+      float inv = 1.f / std::sqrt(slope_x * slope_x + 1.f + slope_z * slope_z);
+      return {-slope_x * inv, inv, -slope_z * inv};
+    }
+  };
+  TiltedSea sea;
+  check(near(floating_height(sea, 2.f, 4.f, 0.f, {}), -0.5f),
+        "floating_height works on a non-WaterSurface sampler");
+  FloatingPose sea_pose = floating_pose(sea, {0.f, 0.f, 0.f}, 0.f, {});
+  check(near(sea_pose.pitch, std::atan2(0.5f, 1.f), 1e-3f) &&
+            near(sea_pose.roll, std::atan2(0.25f, 1.f), 1e-3f),
+        "floating_pose derives pitch/roll from a custom sampler");
+
   printf("water_surface: %d/%d checks passed\n", checks_passed, checks_run);
   return checks_passed == checks_run ? 0 : 1;
 }

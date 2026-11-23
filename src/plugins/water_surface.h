@@ -3,6 +3,7 @@
 // Water surface evaluation: pure math, no rendering or physics coupling.
 
 #include <cmath>
+#include <concepts>
 #include <cstddef>
 #include <span>
 
@@ -90,18 +91,39 @@ struct FloatingPose {
   float roll = 0.f;
 };
 
-[[nodiscard]] inline float floating_height(const WaterSurface &water, float cx,
-                                           float cz, float t,
-                                           std::span<const Vector3Type> offsets) {
+// A floating sampler is any surface with sample_height(x, z, t); floating_up
+// and floating_pose also need sample_normal(x, z, t). WaterSurface above is
+// the built-in sum-of-sines sampler, but a game with its own height source
+// (a weather-driven sea, a heightmap, bounded water bodies) can pass a small
+// adapter struct instead and reuse the floating
+// math without adopting the sine model.
+template <typename Surface>
+concept FloatingHeightSampler =
+    requires(const Surface &s, float x, float z, float t) {
+      { s.sample_height(x, z, t) } -> std::convertible_to<float>;
+    };
+
+template <typename Surface>
+concept FloatingNormalSampler =
+    FloatingHeightSampler<Surface> &&
+    requires(const Surface &s, float x, float z, float t) {
+      { s.sample_normal(x, z, t) } -> std::convertible_to<Vector3Type>;
+    };
+
+template <FloatingHeightSampler Surface>
+[[nodiscard]] float floating_height(const Surface &water, float cx, float cz,
+                                    float t,
+                                    std::span<const Vector3Type> offsets) {
   if (offsets.empty()) return water.sample_height(cx, cz, t);
   float sum = 0.f;
   for (Vector3Type o : offsets) sum += water.sample_height(cx + o.x, cz + o.z, t);
   return sum / static_cast<float>(offsets.size());
 }
 
-[[nodiscard]] inline Vector3Type floating_up(const WaterSurface &water, float cx,
-                                             float cz, float t,
-                                             std::span<const Vector3Type> offsets) {
+template <FloatingNormalSampler Surface>
+[[nodiscard]] Vector3Type floating_up(const Surface &water, float cx, float cz,
+                                      float t,
+                                      std::span<const Vector3Type> offsets) {
   if (offsets.empty()) return water.sample_normal(cx, cz, t);
   Vector3Type sum{0.f, 0.f, 0.f};
   for (Vector3Type o : offsets) {
@@ -114,9 +136,10 @@ struct FloatingPose {
   return {sum.x * inv, sum.y * inv, sum.z * inv};
 }
 
-[[nodiscard]] inline FloatingPose floating_pose(const WaterSurface &water,
-                                                Vector3Type center, float t,
-                                                std::span<const Vector3Type> offsets) {
+template <FloatingNormalSampler Surface>
+[[nodiscard]] FloatingPose floating_pose(const Surface &water,
+                                         Vector3Type center, float t,
+                                         std::span<const Vector3Type> offsets) {
   FloatingPose pose;
   pose.position = {center.x,
                    floating_height(water, center.x, center.z, t, offsets),
