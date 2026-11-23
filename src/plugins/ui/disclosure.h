@@ -18,7 +18,7 @@ namespace imm {
 struct HasDisclosureState : BaseComponent {
   bool expanded = false;
   bool changed_since = false;
-  HasDisclosureState(bool expanded_ = false) : expanded(expanded_) {}
+  HasDisclosureState(bool expand = false) : expanded(expand) {}
 };
 
 struct DisclosureConfig {
