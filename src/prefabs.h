@@ -25,7 +25,7 @@ struct Registry {
       impl.storage[name] = std::move(builder);
       return;
     }
-    order_.push_back(name);
+    order.push_back(name);
     impl.add(name.c_str(), builder);
   }
 
@@ -33,12 +33,12 @@ struct Registry {
     return impl.contains(std::string(name));
   }
 
-  [[nodiscard]] std::vector<std::string> names() const { return order_; }
+  [[nodiscard]] std::vector<std::string> names() const { return order; }
 
   void clear() {
     impl.unload_all();
     impl.storage.clear();
-    order_.clear();
+    order.clear();
   }
 
   // Unknown name returns empty OptEntity and creates nothing.
@@ -62,7 +62,7 @@ struct Registry {
     }
     void unload(ApplyFn) override {}
   } impl;
-  std::vector<std::string> order_;
+  std::vector<std::string> order;
 };
 
 inline Registry &registry() {
