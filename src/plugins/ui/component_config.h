@@ -107,7 +107,7 @@ struct ComponentConfig {
   std::optional<TextureConfig> texture_config;
   std::optional<Color> image_tint;
   std::optional<texture_manager::HasTexture::Alignment> image_alignment;
-  std::optional<int> image_filter; // Per-draw filter override for sprites
+  std::optional<int> image_filter; // TODO: replace int filter values with a TextureFilter enum.
   std::optional<std::bitset<4>> rounded_corners;
   bool consumes_directional_input = false;
   std::optional<float> roundness;     // If unset, uses theme.roundness
