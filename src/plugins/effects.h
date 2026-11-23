@@ -186,6 +186,11 @@ struct BlurPass {
     b = load_render_texture(w, h);
     graphics::set_render_texture_filter(a, graphics::TEXTURE_FILTER_BILINEAR);
     graphics::set_render_texture_filter(b, graphics::TEXTURE_FILTER_BILINEAR);
+#ifndef AFTER_HOURS_SOKOL
+    auto ta = texture_of(a), tb = texture_of(b);
+    set_texture_wrap(ta, TEXTURE_WRAP_CLAMP);
+    set_texture_wrap(tb, TEXTURE_WRAP_CLAMP);
+#endif
     ready = true;
   }
 
