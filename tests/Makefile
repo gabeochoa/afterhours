@@ -83,6 +83,7 @@ ALL_TESTS := \
 	terminal_ui_test \
 	font_atlas_measure_test \
 	font_prewarm_test \
+	font_display_size_test \
 	font_points_test \
 	window_focus_test \
 	glyph_placeholder_test \
@@ -220,6 +221,7 @@ ALL_TESTS := \
 	dialog_test \
 	escape_owner_test \
 	dump_ui_test \
+	accessibility_test \
 	scroll_anchor_test \
 	measure_config_test \
 	scroll_anchor_test \
@@ -310,6 +312,7 @@ ALL_TESTS := \
 	headless_fallback_test \
 	raylib_fallback_test \
 	models_test \
+	effects_uniform_cache_test \
 	house_of_cards_test \
 	frustum_test \
 	instance_batcher_test \
@@ -323,6 +326,7 @@ ALL_TESTS := \
 	styling_test \
 	system_tags_test \
 	should_run_overload_test \
+	system_deactivate_hook_test \
 	library_duplicate_test \
 	library_intern_test \
 	shared_handlers_test \
@@ -367,6 +371,7 @@ ALL_TESTS += sokol_include_order_test
 ALL_TESTS += sokol_wrappers_test
 ALL_TESTS += sokol_frame_dt_test
 ALL_TESTS += sokol_msaa_test
+ALL_TESTS += sokol_startup_order_test
 ALL_TESTS += staging_texture_leak_test
 endif
 
@@ -378,6 +383,7 @@ RAYLIB_TESTS := \
 	window_state_test \
 	edit_keys_test \
 	default_font_test \
+	font_display_size_test \
 	load_font_size_test \
 	border_width_test \
 	border_only_test \
@@ -401,6 +407,7 @@ RAYLIB_TESTS := \
 	headless_fallback_test \
 	raylib_fallback_test \
 	models_test \
+	effects_uniform_cache_test \
 	house_of_cards_test \
 	frustum_test \
 	instance_batcher_test \
@@ -605,6 +612,10 @@ $(OUT)/sokol_msaa_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_msaa_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_msaa_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_msaa_test: ../src/backends/sokol/drawing_helpers.h ../src/backends/sokol/backend.h
+$(OUT)/sokol_startup_order_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_startup_order_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_startup_order_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_startup_order_test: ../src/backends/sokol/backend.h ../src/backends/sokol/capture_impl.h
 
 $(OUT)/staging_texture_leak_test: ../examples/web/sokol_impl.cc
 $(OUT)/staging_texture_leak_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
@@ -705,6 +716,7 @@ $(OUT)/font_prewarm_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/f
 $(OUT)/font_points_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/glyph_placeholder_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/load_font_size_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
+$(OUT)/font_display_size_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/font_memory_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/headless_fallback_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/capture_perf_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
