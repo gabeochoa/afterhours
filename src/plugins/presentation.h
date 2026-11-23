@@ -33,7 +33,7 @@ struct presentation {
         bool exiting() const { return phase == Phase::Exiting; }
     };
 
-    static constexpr size_t kTrack = 900;
+    static constexpr size_t TRACK = 900;
 
     static bool in_tree(EntityID root_id, EntityID search_id) {
         for (int depth = 0; depth < 64 && search_id != -1; ++depth) {
@@ -51,7 +51,7 @@ struct presentation {
 
     static float presence_of(Entity &entity) {
         if (!entity.has<motion::HasTracks>()) return 1.f;
-        auto &track = entity.get<motion::HasTracks>().track<float>(kTrack);
+        auto &track = entity.get<motion::HasTracks>().track<float>(TRACK);
         return track.started() ? track.value() : 1.f;
     }
 
@@ -63,7 +63,7 @@ struct presentation {
         auto [entity, parent] = deref(ep_pair);
         Presentation &p = entity.template addComponentIfMissing<Presentation>();
         auto &presence = entity.template addComponentIfMissing<motion::HasTracks>()
-                             .template track<float>(kTrack);
+                             .template track<float>(TRACK);
 
         const auto finish_close = [&] {
             ctx.remove_input_gate(gate_name(entity.id));
