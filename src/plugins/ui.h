@@ -1,6 +1,7 @@
 #pragma once
 
 //  For backward compatibility, we include all the ui files here
+#include "ui/accessibility.h"
 #include "ui/components.h"
 #include "ui/context.h"
 #include "ui/immediate.h"
