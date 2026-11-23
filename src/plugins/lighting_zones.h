@@ -6,7 +6,7 @@
 #include <utility>
 #include <vector>
 
-#include "plugins/color.h"
+#include "color.h"
 
 namespace afterhours {
 

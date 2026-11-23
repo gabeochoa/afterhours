@@ -215,7 +215,6 @@ ALL_TESTS := \
 	tunable_test \
 	lighting_zones_test \
 	intro_sequence_test \
-
 	graphics_concepts_pedantic_test \
 	fixed_tick_rate_test \
 	sound_playback_test \

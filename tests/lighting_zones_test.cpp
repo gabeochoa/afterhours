@@ -1,4 +1,4 @@
-#include <afterhours/src/lighting_zones.h>
+#include <afterhours/src/plugins/lighting_zones.h>
 
 #include <cmath>
 #include <cstdio>
