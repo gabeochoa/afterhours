@@ -23,8 +23,8 @@ static void check(bool cond, const char *what) {
 
 using namespace afterhours;
 
-static RgbaCapture make_capture(int w, int h, bool noise = false) {
-  RgbaCapture c;
+static RGBACapture make_capture(int w, int h, bool noise = false) {
+  RGBACapture c;
   c.width = w;
   c.height = h;
   c.pixels.resize(static_cast<std::size_t>(w) * h * 4);
@@ -98,9 +98,9 @@ int main() {
   }
 
   {
-    RgbaCapture bad;
+    RGBACapture bad;
     bad.width = 4;
-    bad.height = 4; // pixels left empty: size mismatch
+    bad.height = 4;
     check(!capture_async::encode_png(bad), "encode_png rejects bad capture");
     const auto path = dir / "bad.png";
     std::filesystem::remove(path);

@@ -1659,7 +1659,7 @@ inline bool capture_render_texture(const graphics::RenderTextureType &rt,
 #endif
 }
 
-inline std::optional<RgbaCapture>
+inline std::optional<RGBACapture>
 capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
   if (rt.color_img_id == 0)
     return {};
@@ -1675,7 +1675,7 @@ capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
     free(data);
     return std::nullopt;
   }
-  RgbaCapture result{rt.width, rt.height, {data, data + size}};
+  RGBACapture result{rt.width, rt.height, {data, data + size}};
   free(data);
   return result;
 #elif defined(SOKOL_METAL)
@@ -1690,7 +1690,7 @@ capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
     free(data);
     return std::nullopt;
   }
-  RgbaCapture result{rt.width, rt.height, {data, data + size}};
+  RGBACapture result{rt.width, rt.height, {data, data + size}};
   free(data);
   return result;
 #else
@@ -1698,7 +1698,7 @@ capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
 #endif
 }
 
-inline std::optional<PngCapture>
+inline std::optional<PNGCapture>
 capture_render_texture_png(const graphics::RenderTextureType &rt) {
   if (rt.color_img_id == 0) return std::nullopt;
 #ifdef AFTER_HOURS_USE_VULKAN
@@ -1711,7 +1711,7 @@ capture_render_texture_png(const graphics::RenderTextureType &rt) {
     free(data);
     return std::nullopt;
   }
-  PngCapture result{{data, data + size}};
+  PNGCapture result{{data, data + size}};
   free(data);
   return result;
 #elif defined(SOKOL_METAL)
@@ -1724,7 +1724,7 @@ capture_render_texture_png(const graphics::RenderTextureType &rt) {
     free(data);
     return std::nullopt;
   }
-  PngCapture result{{data, data + size}};
+  PNGCapture result{{data, data + size}};
   free(data);
   return result;
 #else

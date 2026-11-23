@@ -11,8 +11,6 @@
 
 #include "render_capture.h"
 
-// stb_image_write is implementation-in-one-TU like stb_image (see image.h):
-// define AFTERHOURS_STB_IMAGE_WRITE_IMPLEMENTATION in exactly one TU.
 #if defined(AFTERHOURS_STB_IMAGE_WRITE_IMPLEMENTATION) && \
     !defined(STB_IMAGE_WRITE_IMPLEMENTATION)
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -22,14 +20,14 @@
 namespace afterhours::capture_async {
 
 
-inline std::optional<PngCapture> encode_png(const RgbaCapture &capture) {
+inline std::optional<PNGCapture> encode_png(const RGBACapture &capture) {
   if (capture.width <= 0 || capture.height <= 0)
     return std::nullopt;
   const auto expected = static_cast<std::size_t>(capture.width) *
                         static_cast<std::size_t>(capture.height) * 4;
   if (capture.pixels.size() != expected)
     return std::nullopt;
-  PngCapture out;
+  PNGCapture out;
   auto append = [](void *ctx, void *data, int size) {
     auto *bytes = static_cast<std::vector<std::uint8_t> *>(ctx);
     const auto *p = static_cast<const std::uint8_t *>(data);
@@ -44,7 +42,7 @@ inline std::optional<PngCapture> encode_png(const RgbaCapture &capture) {
   return out;
 }
 
-inline bool save_png(const RgbaCapture &capture,
+inline bool save_png(const RGBACapture &capture,
                      const std::filesystem::path &path) {
   auto png = encode_png(capture);
   if (!png || path.empty())
@@ -69,7 +67,7 @@ struct SaveJob {
   bool wait() { return future.valid() ? future.get() : false; }
 };
 
-inline SaveJob save_async(RgbaCapture capture, std::filesystem::path path) {
+inline SaveJob save_async(RGBACapture capture, std::filesystem::path path) {
   SaveJob job;
   job.future = std::async(std::launch::async,
                           [capture = std::move(capture),
@@ -79,8 +77,8 @@ inline SaveJob save_async(RgbaCapture capture, std::filesystem::path path) {
   return job;
 }
 
-inline std::future<std::optional<PngCapture>>
-encode_async(RgbaCapture capture) {
+inline std::future<std::optional<PNGCapture>>
+encode_async(RGBACapture capture) {
   return std::async(std::launch::async, [capture = std::move(capture)]() {
     return encode_png(capture);
   });

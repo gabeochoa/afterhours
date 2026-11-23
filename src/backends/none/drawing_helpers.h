@@ -316,14 +316,14 @@ capture_render_texture_to_memory(const graphics::RenderTextureType &) {
   return {};
 }
 
-inline std::optional<RgbaCapture>
+inline std::optional<RGBACapture>
 capture_render_texture_rgba(const graphics::RenderTextureType &) {
   warn_once(0, "@notimplemented capture_render_texture_rgba on the none "
                "backend");
   return std::nullopt;
 }
 
-inline std::optional<PngCapture>
+inline std::optional<PNGCapture>
 capture_render_texture_png(const graphics::RenderTextureType &) {
   warn_once(0, "@notimplemented capture_render_texture_png on the none "
                "backend");
