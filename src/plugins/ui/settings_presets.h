@@ -1,4 +1,5 @@
 #pragma once
+
 #include <string>
 #include <string_view>
 #include <vector>
@@ -6,15 +7,21 @@
 #include "element_result.h"
 #include "entity_management.h"
 #include "imm_value.h"
+
 namespace afterhours {
+
 namespace ui {
+
 namespace imm {
+
 inline constexpr std::string_view kCustomPresetName = "Custom";
+
 template <typename Values>
 struct SettingsPreset {
   std::string name;
   Values values;
 };
+
 template <typename Values>
 size_t active_preset_index(const Values &values,
                            const std::vector<SettingsPreset<Values>> &presets) {
@@ -72,6 +79,9 @@ settings_preset_stepper(HasUIContext auto &ctx, EntityParent ep_pair,
   }
   return {false, result.ent()};
 }
+
 }
+
 }
+
 }

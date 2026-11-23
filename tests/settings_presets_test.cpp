@@ -11,10 +11,12 @@ struct Quality {
   float fov = 70.f;
   bool operator==(const Quality &) const = default;
 };
+
 const std::vector<SettingsPreset<Quality>> kPresets = {
     {"Low", Quality{1, false, 70.f}},
     {"High", Quality{2, true, 90.f}},
 };
+
 std::string stepper_shown(ImmTestHarness &h) {
   std::string shown;
   for (const auto &e : h.coll.get_entities()) {
