@@ -11,8 +11,8 @@ struct Targets : BaseComponent {
     EntityHandle target{};
 };
 
-// DTO used for snapshots (copyable + pointer-free).
-struct TargetsDTO {
+// Serializable used for snapshots (copyable + pointer-free).
+struct TargetsSerializable {
     EntityHandle target{};
 };
 
@@ -32,9 +32,9 @@ int main() {
     auto entities = snapshot::take_entities();
     assert(entities.size() >= 2);
 
-    // Snapshot Targets into a pointer-free DTO.
-    auto targets = snapshot::take_components<Targets, TargetsDTO>(
-        [](const Targets &t) { return TargetsDTO{.target = t.target}; });
+    // Snapshot Targets into a pointer-free serializable.
+    auto targets = snapshot::take_components<Targets, TargetsSerializable>(
+        [](const Targets &t) { return TargetsSerializable{.target = t.target}; });
     assert(targets.size() == 1);
 
     // Validate captured handle matches.
