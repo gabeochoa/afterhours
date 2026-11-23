@@ -1,28 +1,18 @@
 #pragma once
 
-
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <utility>
 #include <vector>
+
+#include "plugins/color.h"
 
 namespace afterhours {
 
-struct Vec3f {
-  float x = 0.f;
-  float y = 0.f;
-  float z = 0.f;
-};
-
-struct Rgb {
-  float r = 0.f;
-  float g = 0.f;
-  float b = 0.f;
-};
-
 struct ZoneLighting {
-  Rgb ambient{};
-  Rgb fog{};
+  Color ambient{};
+  Color fog{};
   float fog_near = 0.f;
   float fog_far = 0.f;
   float exposure = 1.f;
@@ -30,8 +20,8 @@ struct ZoneLighting {
 
 struct LightingZone {
   std::string name;
-  Vec3f min{};
-  Vec3f max{};
+  Vector3Type min{};
+  Vector3Type max{};
   ZoneLighting lighting{};
   float blend_width = 2.f;
 };
@@ -39,11 +29,9 @@ struct LightingZone {
 [[nodiscard]] inline ZoneLighting lerp(const ZoneLighting &a,
                                        const ZoneLighting &b, float t) {
   auto c = [t](float x, float y) { return x + (y - x) * t; };
-  return {{c(a.ambient.r, b.ambient.r), c(a.ambient.g, b.ambient.g),
-           c(a.ambient.b, b.ambient.b)},
-          {c(a.fog.r, b.fog.r), c(a.fog.g, b.fog.g), c(a.fog.b, b.fog.b)},
-          c(a.fog_near, b.fog_near), c(a.fog_far, b.fog_far),
-          c(a.exposure, b.exposure)};
+  return {colors::lerp(a.ambient, b.ambient, t),
+          colors::lerp(a.fog, b.fog, t), c(a.fog_near, b.fog_near),
+          c(a.fog_far, b.fog_far), c(a.exposure, b.exposure)};
 }
 
 struct LightingZoneSet {
@@ -52,12 +40,13 @@ struct LightingZoneSet {
 
   void add_zone(LightingZone zone) { zones.push_back(std::move(zone)); }
 
-  [[nodiscard]] bool contains(const LightingZone &z, Vec3f p) const {
+  [[nodiscard]] bool contains(const LightingZone &z, Vector3Type p) const {
     return p.x >= z.min.x && p.x <= z.max.x && p.y >= z.min.y &&
            p.y <= z.max.y && p.z >= z.min.z && p.z <= z.max.z;
   }
 
-  [[nodiscard]] float signed_distance(const LightingZone &z, Vec3f p) const {
+  [[nodiscard]] float signed_distance(const LightingZone &z,
+                                      Vector3Type p) const {
     if (contains(z, p))
       return std::min({p.x - z.min.x, z.max.x - p.x, p.y - z.min.y,
                        z.max.y - p.y, p.z - z.min.z, z.max.z - p.z});
@@ -67,7 +56,7 @@ struct LightingZoneSet {
     return -std::sqrt(dx * dx + dy * dy + dz * dz);
   }
 
-  [[nodiscard]] ZoneLighting sample(Vec3f p) const {
+  [[nodiscard]] ZoneLighting sample(Vector3Type p) const {
     ZoneLighting sum{};
     float wsum = 0.f;
     for (const LightingZone &z : zones) {
@@ -83,4 +72,4 @@ struct LightingZoneSet {
   }
 };
 
-}
+} // namespace afterhours
