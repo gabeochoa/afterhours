@@ -285,6 +285,9 @@ struct HasImage : BaseComponent {
   std::optional<afterhours::texture_manager::Rectangle> source_rect;
   afterhours::texture_manager::HasTexture::Alignment alignment =
       afterhours::texture_manager::HasTexture::Alignment::Center;
+  // Per-draw filter override (graphics::TEXTURE_FILTER_*); nullopt = the
+  // texture's own filter, which is also how batching stays unchanged.
+  std::optional<int> filter;
 
   HasImage(
       afterhours::texture_manager::Texture tex,
@@ -358,6 +361,11 @@ struct HasUIModifiers : BaseComponent {
     }
     return rect;
   }
+};
+
+struct HasHitExpand : BaseComponent {
+  float pad_x = 0.f;
+  float pad_y = 0.f;
 };
 
 // Shadow styles for UI elements
@@ -693,6 +701,7 @@ struct HasScrollView : BaseComponent {
 
   // Off for a view that supplies its own bar, or where one would be noise.
   bool show_scrollbar = true;
+  bool scrollbar_gutter = false;
   // Set while the thumb is held. The drag owns scroll_offset until released.
   bool dragging_scrollbar = false;
   bool drag_is_vertical = true;

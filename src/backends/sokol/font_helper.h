@@ -17,6 +17,10 @@
 #include "../../developer.h"
 #include "metal_state.h"
 
+namespace afterhours::graphics::metal_detail {
+inline void ensure_sokol_gl_and_fonts();
+}
+
 namespace afterhours {
 
 // Font is an int (fontstash font ID). We wrap it so the type is distinct.
@@ -25,6 +29,17 @@ struct Font {
 };
 
 inline void mesh_font_fallbacks(FONScontext *ctx, int new_id);
+
+inline float font_display_scale() {
+  const float dpi = graphics::metal_detail::dpi_scale();
+  return dpi > 1.f ? dpi : 1.f;
+}
+
+inline int display_scaled_size(int nominal) {
+  const float scaled =
+      std::round(static_cast<float>(nominal) * font_display_scale());
+  return scaled >= 1.f ? static_cast<int>(scaled) : 1;
+}
 
 inline std::string fontstash_name(const char *name) {
   char key[24];
@@ -64,6 +79,9 @@ inline Font register_loaded_font(FONScontext *ctx, int id,
 
 inline Font load_font_from_memory(const unsigned char *data, int size,
                                   const char *name, int = 0) {
+#ifdef AFTERHOURS_FONT_HELPER_HAS_ENSURE
+  graphics::metal_detail::ensure_sokol_gl_and_fonts();
+#endif
   auto *ctx = graphics::metal_detail::g_fons_ctx;
   if (!ctx) {
     log_warn("fontstash context not ready yet (load_font_from_memory)");
@@ -95,6 +113,9 @@ inline Font load_font_from_memory(const unsigned char *data, int size,
 }
 
 inline Font load_font_from_file(const char *file, int = 0) {
+#ifdef AFTERHOURS_FONT_HELPER_HAS_ENSURE
+  graphics::metal_detail::ensure_sokol_gl_and_fonts();
+#endif
   auto *ctx = graphics::metal_detail::g_fons_ctx;
   if (!ctx) {
     log_warn("fontstash context not ready yet (load_font_from_file)");
@@ -208,8 +229,12 @@ inline std::size_t font_atlas_bytes() {
   return font_atlas_bytes(graphics::metal_detail::g_fons_ctx);
 }
 
+inline Font load_font_at_display_size(const char *file, int = 32) {
+  return load_font_from_file(file);
+}
+
 inline Font load_font_from_file_with_codepoints(const char *file, int *, int,
-                                                int = 32) {
+                                                int = 0) {
   // fontstash loads full TTF; codepoint filtering not needed
   return load_font_from_file(file);
 }

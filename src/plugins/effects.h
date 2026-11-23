@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -44,6 +45,13 @@ struct Effect {
   graphics::ShaderType shader{};
   bool loaded = false;
   std::unordered_map<std::string, int> locations;
+  struct PreviousValue {
+    int type = 0;
+    float v[4] = {};
+    bool valid = false;
+  };
+  std::unordered_map<std::string, PreviousValue> last_values;
+  int upload_count = 0;
 
   static Effect load(const std::string &name, const std::string &file = "") {
     Effect e;
@@ -75,6 +83,9 @@ struct Effect {
     shader = other.shader;
     loaded = other.loaded;
     locations = std::move(other.locations);
+    last_values = std::move(other.last_values);
+    upload_count = other.upload_count;
+    other.upload_count = 0;
     other.loaded = false;
     r.push_back(this);
     return *this;
@@ -84,6 +95,7 @@ struct Effect {
     if (loaded)
       graphics::unload_shader(shader);
     locations.clear();
+    last_values.clear();
     shader = graphics::load_shader(nullptr, path.c_str());
     loaded = shader.id != 0;
     if (!loaded)
@@ -101,14 +113,26 @@ struct Effect {
     return loc;
   }
 
+  void upload(const char *uniform, int type, const float *data, int n) {
+    PreviousValue &last = last_values[uniform];
+    if (last.valid && last.type == type &&
+        std::equal(data, data + n, last.v, [](float a, float b) { return a == b; }))
+      return;
+    graphics::set_shader_value(shader, location(uniform), data, type);
+    upload_count++;
+    std::copy(data, data + n, last.v);
+    last.type = type;
+    last.valid = true;
+  }
+
   void set(const char *uniform, float v) {
     if (loaded)
-      graphics::set_shader_value(shader, location(uniform), &v, graphics::SHADER_UNIFORM_FLOAT);
+      upload(uniform, graphics::SHADER_UNIFORM_FLOAT, &v, 1);
   }
   void set(const char *uniform, Vector2Type v) {
     const float arr[2] = {v.x, v.y};
     if (loaded)
-      graphics::set_shader_value(shader, location(uniform), arr, graphics::SHADER_UNIFORM_VEC2);
+      upload(uniform, graphics::SHADER_UNIFORM_VEC2, arr, 2);
   }
   void set(const char *uniform, Vector3Type v) {
     const float arr[3] = {v.x, v.y, v.z};
@@ -118,7 +142,7 @@ struct Effect {
   void set(const char *uniform, ColorType c) {
     const float arr[4] = {c.r / 255.f, c.g / 255.f, c.b / 255.f, c.a / 255.f};
     if (loaded)
-      graphics::set_shader_value(shader, location(uniform), arr, graphics::SHADER_UNIFORM_VEC4);
+      upload(uniform, graphics::SHADER_UNIFORM_VEC4, arr, 4);
   }
 
   struct Scope {
@@ -167,6 +191,11 @@ struct BlurPass {
     b = load_render_texture(w, h);
     graphics::set_render_texture_filter(a, graphics::TEXTURE_FILTER_BILINEAR);
     graphics::set_render_texture_filter(b, graphics::TEXTURE_FILTER_BILINEAR);
+#ifndef AFTER_HOURS_SOKOL
+    auto ta = texture_of(a), tb = texture_of(b);
+    set_texture_wrap(ta, TEXTURE_WRAP_CLAMP);
+    set_texture_wrap(tb, TEXTURE_WRAP_CLAMP);
+#endif
     ready = true;
   }
 
