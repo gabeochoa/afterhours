@@ -162,6 +162,14 @@ ElementResult divider(HasUIContext auto &ctx, EntityParent ep_pair, Axis axis,
 
   auto elem = div(ctx, ep_pair, config);
   Entity &entity = elem.ent();
+  const Size across = moves_in_x ? config.size.x_axis : config.size.y_axis;
+  const float min_hit = ctx.theme.divider_min_hit_thickness;
+  if (across.dim == Dim::Pixels && across.value < min_hit) {
+    const float pad = (min_hit - across.value) / 2.f;
+    HasHitExpand &expand = entity.addComponentIfMissing<HasHitExpand>();
+    expand.pad_x = moves_in_x ? pad : 0.f;
+    expand.pad_y = moves_in_x ? 0.f : pad;
+  }
   // The no-op callback is only there to make the element hit-testable; the
   // movement is read off `down` on the next build pass instead, so the caller
   // can act on it in normal control flow rather than inside a lambda.
