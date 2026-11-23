@@ -83,6 +83,7 @@ ALL_TESTS := \
 	terminal_ui_test \
 	font_atlas_measure_test \
 	font_prewarm_test \
+	font_display_size_test \
 	font_points_test \
 	window_focus_test \
 	glyph_placeholder_test \
@@ -378,6 +379,7 @@ RAYLIB_TESTS := \
 	window_state_test \
 	edit_keys_test \
 	default_font_test \
+	font_display_size_test \
 	load_font_size_test \
 	border_width_test \
 	border_only_test \
@@ -706,6 +708,7 @@ $(OUT)/font_prewarm_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/f
 $(OUT)/font_points_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/glyph_placeholder_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/load_font_size_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
+$(OUT)/font_display_size_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/font_memory_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/headless_fallback_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/capture_perf_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
