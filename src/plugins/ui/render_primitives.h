@@ -678,7 +678,7 @@ public:
 
     std::optional<std::array<int, 4>> active_clip;
     blend::Mode active_blend = blend::current();
-    graphics::ShaderType *active_shader = nullptr;
+    std::optional<graphics::ShaderType> active_shader;
     size_t i = 0;
     while (i < commands.size()) {
       const auto &cmd = commands[i];
@@ -781,11 +781,12 @@ public:
 
       case RenderPrimitiveType::ShaderStart: {
         auto *shader = cmd.data.shader.shader;
-        if (!shader || shader->id == 0 || active_shader == shader) {
+        if (!shader || shader->id == 0 ||
+            (active_shader && active_shader->id == shader->id)) {
           i++;
           break;
         }
-        active_shader = shader;
+        active_shader = *shader;
         ::afterhours::begin_shader_mode(*shader);
         stats_.shader_operations++;
         i++;
@@ -795,7 +796,8 @@ public:
       case RenderPrimitiveType::ShaderEnd:
         if (active_shader && i + 1 < commands.size() &&
             commands[i + 1].type == RenderPrimitiveType::ShaderStart &&
-            commands[i + 1].data.shader.shader == active_shader) {
+            commands[i + 1].data.shader.shader &&
+            commands[i + 1].data.shader.shader->id == active_shader->id) {
           i += 2;
           break;
         }
@@ -803,7 +805,7 @@ public:
           i++;
           break;
         }
-        active_shader = nullptr;
+        active_shader.reset();
         ::afterhours::end_shader_mode();
         stats_.shader_operations++;
         i++;
