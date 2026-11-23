@@ -14,10 +14,10 @@
 
 namespace afterhours {
 
-struct RngStream {
-  RngStream() : RngStream(std::random_device{}()) {}
-  explicit RngStream(std::uint32_t new_seed) { set_seed(new_seed); }
-  explicit RngStream(const std::string &new_seed) { set_seed(new_seed); }
+struct RNGStream {
+  RNGStream() : RNGStream(std::random_device{}()) {}
+  explicit RNGStream(std::uint32_t new_seed) { set_seed(new_seed); }
+  explicit RNGStream(const std::string &new_seed) { set_seed(new_seed); }
 
   // Seed from an arbitrary string (e.g. a level code). Same string -> same
   // sequence.
@@ -37,7 +37,7 @@ struct RngStream {
   // a valid single-value range.
   [[nodiscard]] int get_int(int a, int b) {
     if (a > b)
-      log_error("RngStream::get_int: inverted range [{}, {}] (a must be <= b)",
+      log_error("RNGStream::get_int: inverted range [{}, {}] (a must be <= b)",
                 a, b);
     return std::uniform_int_distribution<int>(a, b)(rng);
   }
@@ -46,7 +46,7 @@ struct RngStream {
   [[nodiscard]] float get_float(float a, float b) {
     if (a > b)
       log_error(
-          "RngStream::get_float: inverted range [{}, {}) (a must be <= b)", a,
+          "RNGStream::get_float: inverted range [{}, {}) (a must be <= b)", a,
           b);
     return std::uniform_real_distribution<float>(a, b)(rng);
   }
@@ -71,12 +71,12 @@ struct RngStream {
     return out.str();
   }
 
-  [[nodiscard]] static std::optional<RngStream> load(std::string_view text) {
+  [[nodiscard]] static std::optional<RNGStream> load(std::string_view text) {
     std::istringstream in{std::string(text)};
-    RngStream stream(0u);
+    RNGStream stream(0u);
     in >> stream.seed >> stream.rng;
     if (in.fail()) {
-      log_warn("RngStream::load: not a saved RngStream");
+      log_warn("RNGStream::load: not a saved RNGStream");
       return std::nullopt;
     }
     return stream;
@@ -107,10 +107,10 @@ struct RandomEngine {
     return rng.get_index(container);
   }
   [[nodiscard]] std::mt19937 &engine() { return rng.engine(); }
-  [[nodiscard]] RngStream &stream() { return rng; }
+  [[nodiscard]] RNGStream &stream() { return rng; }
 
 private:
-  RngStream rng;
+  RNGStream rng;
 };
 
 } // namespace afterhours

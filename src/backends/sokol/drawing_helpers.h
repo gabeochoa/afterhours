@@ -879,7 +879,8 @@ inline void draw_ellipse_lines(int centerX, int centerY, float radiusH,
 }
 
 inline void draw_texture_pro(TextureType tex, RectangleType src, RectangleType dest,
-                             Vector2Type origin, float rotation, Color tint);
+                             Vector2Type origin, float rotation, Color tint,
+                             int filter = -1);
 inline void draw_quad(const Vector2Type (&p)[4], Color color) {
   const float min_x = std::min({p[0].x, p[1].x, p[2].x, p[3].x}), max_x = std::max({p[0].x, p[1].x, p[2].x, p[3].x});
   const float min_y = std::min({p[0].y, p[1].y, p[2].y, p[3].y}), max_y = std::max({p[0].y, p[1].y, p[2].y, p[3].y});
@@ -1560,9 +1561,13 @@ inline void draw_render_texture(const graphics::RenderTextureType &rt, float x,
   }
 }
 
+namespace metal_texture_detail {
+inline sg_sampler make_sampler_for_filter(int filter, sg_wrap wrap);
+} // namespace metal_texture_detail
+
 inline void draw_texture_pro(TextureType tex, RectangleType src,
                              RectangleType dest, Vector2Type origin,
-                             float rotation, Color tint) {
+                             float rotation, Color tint, int filter) {
   if (tex.view_id == 0 || tex.width <= 0.0f || tex.height <= 0.0f)
     return;
 
@@ -1583,6 +1588,14 @@ inline void draw_texture_pro(TextureType tex, RectangleType src,
 
   sg_view tv = {tex.view_id};
   sg_sampler smp = {tex.sampler_id};
+  if (filter >= 0) {
+    static sg_sampler cache[3] = {};
+    const int slot = filter > 2 ? 2 : filter;
+    if (cache[slot].id == 0)
+      cache[slot] = metal_texture_detail::make_sampler_for_filter(
+          filter, SG_WRAP_CLAMP_TO_EDGE);
+    smp = cache[slot];
+  }
 
   push_rotation(dest.x, dest.y, rotation);
   sgl_enable_texture();
