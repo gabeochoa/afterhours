@@ -55,7 +55,7 @@ int main() {
     wire(pool, c);
     check(c.factory_calls == 2, "factory runs once per pool slot");
     check(pool.size() == 2 && pool.active_count() == 0, "starts all free");
-    check(pool.position_at(0) == nullptr, "free slot has no position");
+    check(!pool.position_at(0).has_value(), "free slot has no position");
 
     std::vector<Vector3Type> desired = {{100.f, 0.f, 0.f},
                                         {30.f, 0.f, 0.f},
@@ -85,21 +85,22 @@ int main() {
                                         {40.f, 0.f, 0.f}};
     pool.update({0.f, 0.f, 0.f}, desired);
     check(pool.active_count() == 3, "three nearest active");
-    Entity *e5 = nullptr;
+    OptEntity e5;
     for (size_t s = 0; s < pool.size(); ++s) {
-      auto *p = pool.position_at(s);
+      auto p = pool.position_at(s);
       if (p && at(*p, 5.f, 0.f, 0.f))
         e5 = pool.entity_at(s);
     }
-    check(e5 != nullptr, "entity on the nearest position exists");
+    check(e5.valid(), "entity on the nearest position exists");
     c.reset();
     pool.update({1.f, 0.f, 0.f}, desired);
     check(c.acquires == 0 && c.releases == 0,
           "unchanged nearest set churns nothing");
     bool kept = false;
     for (size_t s = 0; s < pool.size(); ++s) {
-      auto *p = pool.position_at(s);
-      if (p && at(*p, 5.f, 0.f, 0.f) && pool.entity_at(s) == e5)
+      auto p = pool.position_at(s);
+      if (p && at(*p, 5.f, 0.f, 0.f) &&
+          pool.entity_at(s).value() == e5.value())
         kept = true;
     }
     check(kept, "nearest position keeps its entity");
@@ -114,15 +115,15 @@ int main() {
                                         {100.f, 0.f, 0.f}};
     pool.update({0.f, 0.f, 0.f}, desired);
     check(pool.active_count() == 2, "two active over three desired");
-    Entity *e1 = nullptr, *e2 = nullptr;
+    OptEntity e1, e2;
     for (size_t s = 0; s < pool.size(); ++s) {
-      auto *p = pool.position_at(s);
+      auto p = pool.position_at(s);
       if (p && at(*p, 1.f, 0.f, 0.f))
         e1 = pool.entity_at(s);
       if (p && at(*p, 2.f, 0.f, 0.f))
         e2 = pool.entity_at(s);
     }
-    check(e1 && e2, "both near slots captured");
+    check(e1.valid() && e2.valid(), "both near slots captured");
     c.reset();
 
     pool.update({100.f, 0.f, 0.f}, desired);
@@ -130,15 +131,15 @@ int main() {
           "one recycle: one release, one acquire");
     bool still_kept = false, new_near = false, far_recycled = false;
     for (size_t s = 0; s < pool.size(); ++s) {
-      auto *p = pool.position_at(s);
+      auto p = pool.position_at(s);
       if (!p)
         continue;
       if (at(*p, 100.f, 0.f, 0.f)) {
         new_near = true;
-        if (pool.entity_at(s) == e1)
+        if (pool.entity_at(s).value() == e1.value())
           far_recycled = true;
       }
-      if (at(*p, 2.f, 0.f, 0.f) && pool.entity_at(s) == e2)
+      if (at(*p, 2.f, 0.f, 0.f) && pool.entity_at(s).value() == e2.value())
         still_kept = true;
     }
     check(still_kept, "still-nearest position keeps its entity");
@@ -164,11 +165,11 @@ int main() {
     check(c.releases == 3 && c.acquires == 0, "three releases, no acquires");
     bool only_nearest = false;
     for (size_t s = 0; s < pool.size(); ++s) {
-      auto *q = pool.position_at(s);
+      auto q = pool.position_at(s);
       if (q && at(*q, 1.f, 0.f, 0.f))
         only_nearest = true;
     }
-    check(only_nearest && pool.position_at(1) == nullptr,
+    check(only_nearest && !pool.position_at(1).has_value(),
           "sole survivor sits on the nearest position");
     c.reset();
 
@@ -176,7 +177,7 @@ int main() {
     pool.update({0.f, 0.f, 0.f}, none);
     check(pool.active_count() == 0 && c.releases == 1,
           "empty demand releases the last slot");
-    check(pool.entity_at(99) == nullptr && pool.position_at(99) == nullptr,
+    check(!pool.entity_at(99).valid() && !pool.position_at(99).has_value(),
           "out-of-range slots read empty");
   }
   {
@@ -192,7 +193,7 @@ int main() {
           "capacity caps the active set");
     bool ok = true;
     for (size_t s = 0; s < pool.size(); ++s) {
-      auto *p = pool.position_at(s);
+      auto p = pool.position_at(s);
       if (!p || !(p->x < 3.f))
         ok = false;
     }

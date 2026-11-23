@@ -231,6 +231,10 @@ namespace afterhours {
 constexpr float distance_sq(const Vector2Type a, const Vector2Type b) {
   return (a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y);
 }
+constexpr float distance_sq(const Vector3Type a, const Vector3Type b) {
+  return (a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y) +
+         (a.z - b.z) * (a.z - b.z);
+}
 } // namespace afterhours
 using afterhours::distance_sq;
 
