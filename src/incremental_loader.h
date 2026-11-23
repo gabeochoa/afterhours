@@ -10,49 +10,49 @@ struct IncrementalLoader {
   using Step = std::function<void()>;
   using ClockFn = std::function<double()>;
 
-  void add(Step step) { steps_.push_back(std::move(step)); }
-  void clear() { steps_.clear(); done_ = 0; cancelled_ = false; }
+  void add(Step step) { steps.push_back(std::move(step)); }
+  void clear() { steps.clear(); done_count = 0; is_cancelled = false; }
 
-  void cancel() { steps_.clear(); cancelled_ = true; }
-  [[nodiscard]] bool cancelled() const { return cancelled_; }
+  void cancel() { steps.clear(); is_cancelled = true; }
+  [[nodiscard]] bool cancelled() const { return is_cancelled; }
 
-  [[nodiscard]] size_t total() const { return done_ + steps_.size(); }
-  [[nodiscard]] size_t completed() const { return done_; }
-  [[nodiscard]] size_t remaining() const { return steps_.size(); }
-  [[nodiscard]] bool done() const { return steps_.empty(); }
+  [[nodiscard]] size_t total() const { return done_count + steps.size(); }
+  [[nodiscard]] size_t completed() const { return done_count; }
+  [[nodiscard]] size_t remaining() const { return steps.size(); }
+  [[nodiscard]] bool done() const { return steps.empty(); }
   [[nodiscard]] float progress() const {
     return total() == 0 ? 1.f
-                        : static_cast<float>(done_) / static_cast<float>(total());
+                        : static_cast<float>(done_count) / static_cast<float>(total());
   }
 
   size_t pump_items(size_t max_items) {
     size_t ran = 0;
-    while (ran < max_items && !steps_.empty()) run_one(), ++ran;
+    while (ran < max_items && !steps.empty()) run_one(), ++ran;
     return ran;
   }
 
   size_t pump_time(double budget_ms, const ClockFn &now_ms) {
-    if (steps_.empty() || !now_ms) return 0;
+    if (steps.empty() || !now_ms) return 0;
     const double start = now_ms();
     size_t ran = 0;
     do {
       run_one();
       ++ran;
-    } while (!steps_.empty() && now_ms() - start < budget_ms);
+    } while (!steps.empty() && now_ms() - start < budget_ms);
     return ran;
   }
 
  private:
   void run_one() {
-    Step step = std::move(steps_.front());
-    steps_.pop_front();
-    ++done_;
+    Step step = std::move(steps.front());
+    steps.pop_front();
+    ++done_count;
     if (step) step();
   }
 
-  std::deque<Step> steps_;
-  size_t done_ = 0;
-  bool cancelled_ = false;
+  std::deque<Step> steps;
+  size_t done_count = 0;
+  bool is_cancelled = false;
 };
 
 }
