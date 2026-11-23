@@ -1,80 +1,23 @@
 #pragma once
 
-
-#include <cstdint>
+#include <cstddef>
+#include <format>
 #include <functional>
-#include <map>
-#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
-#include <variant>
 #include <vector>
+
+#include <nlohmann/json.hpp>
 
 #include "../core/entity_collection.h"
 #include "../logging.h"
 
 namespace afterhours::level {
 
-using Value = std::variant<std::int64_t, double, bool, std::string>;
+using Json = nlohmann::json;
 
-struct Record {
-  std::string type;
-  std::map<std::string, Value> fields;
-
-  void set(const std::string &name, std::int64_t v) { fields[name] = v; }
-  void set(const std::string &name, int v) { fields[name] = std::int64_t{v}; }
-  void set(const std::string &name, double v) { fields[name] = v; }
-  void set(const std::string &name, float v) { fields[name] = double{v}; }
-  void set(const std::string &name, bool v) { fields[name] = v; }
-  void set(const std::string &name, const std::string &v) { fields[name] = v; }
-  void set(const std::string &name, const char *v) { fields[name] = std::string{v}; }
-
-  [[nodiscard]] std::optional<std::int64_t> get_int(const std::string &n) const {
-    auto it = fields.find(n);
-    if (it == fields.end()) return std::nullopt;
-    if (auto *p = std::get_if<std::int64_t>(&it->second)) return *p;
-    return std::nullopt;
-  }
-
-  [[nodiscard]] std::optional<double> get_double(const std::string &n) const {
-    auto it = fields.find(n);
-    if (it == fields.end()) return std::nullopt;
-    if (auto *p = std::get_if<double>(&it->second)) return *p;
-    if (auto *p = std::get_if<std::int64_t>(&it->second)) return double(*p);
-    return std::nullopt;
-  }
-
-  [[nodiscard]] std::optional<bool> get_bool(const std::string &n) const {
-    auto it = fields.find(n);
-    if (it == fields.end()) return std::nullopt;
-    if (auto *p = std::get_if<bool>(&it->second)) return *p;
-    return std::nullopt;
-  }
-
-  [[nodiscard]] std::optional<std::string> get_string(const std::string &n) const {
-    auto it = fields.find(n);
-    if (it == fields.end()) return std::nullopt;
-    if (auto *p = std::get_if<std::string>(&it->second)) return *p;
-    return std::nullopt;
-  }
-
-  [[nodiscard]] std::int64_t get_int(const std::string &n, std::int64_t fb) const {
-    return get_int(n).value_or(fb);
-  }
-  [[nodiscard]] float get_float(const std::string &n, float fb) const {
-    auto v = get_double(n);
-    return v ? float(*v) : fb;
-  }
-  [[nodiscard]] bool get_bool(const std::string &n, bool fb) const {
-    return get_bool(n).value_or(fb);
-  }
-  [[nodiscard]] std::string get_string(const std::string &n, std::string fb) const {
-    return get_string(n).value_or(std::move(fb));
-  }
-};
-
-enum class ErrorKind { UnknownType, DuplicateType, EmptyTypeName, NoWriter };
+enum class ErrorKind { UnknownType, MalformedRecord, InvalidField, NoWriter };
 
 struct Error {
   ErrorKind kind = ErrorKind::UnknownType;
@@ -88,55 +31,84 @@ struct LoadedLevel {
     Entity *entity = nullptr;
     std::string type;
   };
+
   std::vector<Entry> entries;
+
   [[nodiscard]] std::size_t size() const { return entries.size(); }
+
   [[nodiscard]] bool empty() const { return entries.empty(); }
 };
 
 struct LoadResult {
   LoadedLevel level;
   std::vector<Error> errors;
+
   [[nodiscard]] bool ok() const { return errors.empty(); }
 };
 
 struct WriteResult {
-  std::vector<Record> records;
+  Json records = Json::array();
   std::vector<Error> errors;
+
   [[nodiscard]] bool ok() const { return errors.empty(); }
 };
 
 class Registry {
 public:
-  using Construct = std::function<void(Entity &, const Record &)>;
-  using Write = std::function<void(const Entity &, Record &)>;
+  using Construct = std::function<void(Entity &, const Json &)>;
+  using Write = std::function<void(const Entity &, Json &)>;
 
   bool register_type(std::string name, Construct construct, Write write) {
     if (name.empty() || !construct) return false;
-    if (types_.contains(name)) return false;
-    types_.emplace(std::move(name), Type{std::move(construct), std::move(write)});
+    if (types.contains(name)) return false;
+    types.emplace(std::move(name), Type{std::move(construct), std::move(write)});
     return true;
   }
 
-  [[nodiscard]] bool has(const std::string &name) const { return types_.contains(name); }
-  [[nodiscard]] std::size_t size() const { return types_.size(); }
-  void clear() { types_.clear(); }
+  [[nodiscard]] bool has(const std::string &name) const { return types.contains(name); }
 
-  [[nodiscard]] LoadResult load(EntityCollection &collection,
-                                const std::vector<Record> &records) const {
+  [[nodiscard]] std::size_t size() const { return types.size(); }
+
+  void clear() { types.clear(); }
+
+  [[nodiscard]] LoadResult load(EntityCollection &collection, const Json &records) const {
     LoadResult out;
+    if (!records.is_array()) {
+      fail(out.errors, ErrorKind::MalformedRecord, "", 0,
+           std::format("level records must be a JSON array, got {}", records.type_name()));
+      return out;
+    }
     out.level.entries.reserve(records.size());
     for (std::size_t i = 0; i < records.size(); ++i) {
-      const Record &rec = records[i];
-      auto it = types_.find(rec.type);
-      if (it == types_.end()) {
-        out.errors.push_back({ErrorKind::UnknownType, rec.type, i,
-                              "unregistered level entity type: " + rec.type});
-        log_error("level: {}", out.errors.back().message);
+      const Json &rec = records[i];
+      if (!rec.is_object()) {
+        fail(out.errors, ErrorKind::MalformedRecord, "", i,
+             std::format("level record {} must be a JSON object, got {}", i, rec.type_name()));
         continue;
       }
-      Entity &e = collection.createEntity();
-      it->second.construct(e, rec);
-      out.level.entries.push_back({&e, rec.type});
+      const auto type_it = rec.find("type");
+      if (type_it == rec.end() || !type_it->is_string()) {
+        fail(out.errors, ErrorKind::MalformedRecord, "", i,
+             std::format("level record {} has no string \"type\" field", i));
+        continue;
+      }
+      const std::string type = type_it->get<std::string>();
+      const auto it = types.find(type);
+      if (it == types.end()) {
+        fail(out.errors, ErrorKind::UnknownType, type, i,
+             std::format("unregistered level entity type: {}", type));
+        continue;
+      }
+      Entity &entity = collection.createEntity();
+      try {
+        it->second.construct(entity, rec);
+      } catch (const Json::exception &e) {
+        collection.markIDForCleanup(entity.id);
+        fail(out.errors, ErrorKind::InvalidField, type, i,
+             std::format("level record {} ({}): {}", i, type, e.what()));
+        continue;
+      }
+      out.level.entries.push_back({&entity, type});
     }
     return out;
   }
@@ -146,20 +118,26 @@ public:
     for (std::size_t i = 0; i < loaded.entries.size(); ++i) {
       const auto &entry = loaded.entries[i];
       if (!entry.entity || entry.entity->cleanup) continue;
-      auto it = types_.find(entry.type);
-      if (it == types_.end()) {
-        out.errors.push_back({ErrorKind::UnknownType, entry.type, i,
-                              "unregistered level entity type: " + entry.type});
+      const auto it = types.find(entry.type);
+      if (it == types.end()) {
+        fail(out.errors, ErrorKind::UnknownType, entry.type, i,
+             std::format("unregistered level entity type: {}", entry.type));
         continue;
       }
       if (!it->second.write) {
-        out.errors.push_back({ErrorKind::NoWriter, entry.type, i,
-                              "no write-back for level entity type: " + entry.type});
+        fail(out.errors, ErrorKind::NoWriter, entry.type, i,
+             std::format("no write-back for level entity type: {}", entry.type));
         continue;
       }
-      Record rec;
-      rec.type = entry.type;
-      it->second.write(*entry.entity, rec);
+      Json rec = Json::object();
+      rec["type"] = entry.type;
+      try {
+        it->second.write(*entry.entity, rec);
+      } catch (const Json::exception &e) {
+        fail(out.errors, ErrorKind::InvalidField, entry.type, i,
+             std::format("level entity {} ({}): {}", i, entry.type, e.what()));
+        continue;
+      }
       out.records.push_back(std::move(rec));
     }
     return out;
@@ -176,7 +154,14 @@ private:
     Construct construct;
     Write write;
   };
-  std::unordered_map<std::string, Type> types_;
+
+  static void fail(std::vector<Error> &errors, ErrorKind kind, std::string type,
+                   std::size_t index, std::string message) {
+    errors.push_back({kind, std::move(type), index, std::move(message)});
+    log_error("level: {}", errors.back().message);
+  }
+
+  std::unordered_map<std::string, Type> types;
 };
 
-}
+} // namespace afterhours::level
