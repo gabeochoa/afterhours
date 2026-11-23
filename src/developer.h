@@ -128,9 +128,6 @@ struct MyVec2 {
   }
 };
 using Vector2Type = MyVec2;
-constexpr float distance_sq(const Vector2Type a, const Vector2Type b) {
-  return (a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y);
-}
 #endif
 
 #ifndef Vector3Type
@@ -226,6 +223,13 @@ using afterhours::Vector3Type;
 using afterhours::Vector4Type;
 using afterhours::MatrixType;
 #endif // AFTER_HOURS_USE_RAYLIB
+
+namespace afterhours {
+constexpr float distance_sq(const Vector2Type a, const Vector2Type b) {
+  return (a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y);
+}
+} // namespace afterhours
+using afterhours::distance_sq;
 
 namespace afterhours {
 
