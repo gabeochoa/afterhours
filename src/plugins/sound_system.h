@@ -79,6 +79,8 @@ struct sound_system : developer::Plugin {
         return out;
     }
 
+    struct FadeUpdateSystem;
+
     SINGLETON_CLASS_FWD(SoundLibrary)
     struct SoundLibrary {
         SINGLETON(SoundLibrary)
@@ -329,26 +331,6 @@ struct sound_system : developer::Plugin {
         [[nodiscard]] float fade_level(const std::string &name) const {
             return fade_gain(name);
         }
-        void update_fades(float dt) {
-            if (dt <= 0.f) return;
-            std::vector<std::string> finished;
-            for (auto &[name, fade] : fades) {
-                if (!fade.active) continue;
-                fade.elapsed += dt;
-                const float t = fade.duration <= 0.f
-                                    ? 1.f
-                                    : std::clamp(fade.elapsed / fade.duration,
-                                                 0.f, 1.f);
-                fade.level = fade.from + (fade.to - fade.from) * t;
-                apply_volume(name);
-                if (t >= 1.f) {
-                    fade.active = false;
-                    if (fade.stop_at_end && fade.to <= 0.f)
-                        finished.push_back(name);
-                }
-            }
-            for (const auto &name : finished) stop(name);
-        }
 
         void play_random_match(const std::string &prefix) {
             auto matches = impl.lookup(prefix);
@@ -415,6 +397,8 @@ struct sound_system : developer::Plugin {
         [[nodiscard]] float get_volume() const { return current_volume; }
 
        private:
+        friend struct FadeUpdateSystem;
+
         struct Fade {
             float level = 1.f;
             float from = 1.f;
@@ -424,6 +408,29 @@ struct sound_system : developer::Plugin {
             bool active = false;
             bool stop_at_end = false;
         };
+
+        // Fade state only; advancement is FadeUpdateSystem's job (it calls
+        // this once per frame when registered). No host should pump this.
+        void advance_fades(float dt) {
+            if (dt <= 0.f) return;
+            std::vector<std::string> finished;
+            for (auto &[name, fade] : fades) {
+                if (!fade.active) continue;
+                fade.elapsed += dt;
+                const float t = fade.duration <= 0.f
+                                    ? 1.f
+                                    : std::clamp(fade.elapsed / fade.duration,
+                                                 0.f, 1.f);
+                fade.level = fade.from + (fade.to - fade.from) * t;
+                apply_volume(name);
+                if (t >= 1.f) {
+                    fade.active = false;
+                    if (fade.stop_at_end && fade.to <= 0.f)
+                        finished.push_back(name);
+                }
+            }
+            for (const auto &name : finished) stop(name);
+        }
 
         [[nodiscard]] float fade_gain(const std::string &name) const {
             auto it = fades.find(name);
@@ -620,7 +627,47 @@ struct sound_system : developer::Plugin {
         [[nodiscard]] float fade_level(const std::string &name) const {
             return fade_gain(name);
         }
-        void update_fades(float dt) {
+
+        void update_volume(const float new_v) {
+            current_volume = new_v;
+            for (const auto &kv : impl.storage) apply_volume(kv.first);
+        }
+
+        void unload_all() {
+            impl.unload_all();
+            bus_by_name.clear();
+            fades.clear();
+        }
+
+        [[nodiscard]] float get_volume() const { return current_volume; }
+
+        // Stream pumping only. Fade advancement is FadeUpdateSystem's job,
+        // not this method's (it used to take a dt just to tick fades).
+        void update() {
+            for (const auto &kv : impl.storage) {
+#ifdef AFTER_HOURS_USE_RAYLIB
+                ::afterhours::UpdateMusicStream(kv.second);
+#else
+                (void)kv;
+#endif
+            }
+        }
+
+       private:
+        friend struct FadeUpdateSystem;
+
+        struct Fade {
+            float level = 1.f;
+            float from = 1.f;
+            float to = 1.f;
+            float duration = 0.f;
+            float elapsed = 0.f;
+            bool active = false;
+            bool stop_at_end = false;
+        };
+
+        // Fade state only; advancement is FadeUpdateSystem's job.
+        void advance_fades(float dt) {
             if (dt <= 0.f) return;
             std::vector<std::string> finished;
             for (auto &[name, fade] : fades) {
@@ -640,41 +687,6 @@ struct sound_system : developer::Plugin {
             }
             for (const auto &name : finished) stop(name);
         }
-
-        void update_volume(const float new_v) {
-            current_volume = new_v;
-            for (const auto &kv : impl.storage) apply_volume(kv.first);
-        }
-
-        void unload_all() {
-            impl.unload_all();
-            bus_by_name.clear();
-            fades.clear();
-        }
-
-        [[nodiscard]] float get_volume() const { return current_volume; }
-
-        void update(float dt = 0.f) {
-            for (const auto &kv : impl.storage) {
-#ifdef AFTER_HOURS_USE_RAYLIB
-                ::afterhours::UpdateMusicStream(kv.second);
-#else
-                (void)kv;
-#endif
-            }
-            update_fades(dt);
-        }
-
-       private:
-        struct Fade {
-            float level = 1.f;
-            float from = 1.f;
-            float to = 1.f;
-            float duration = 0.f;
-            float elapsed = 0.f;
-            bool active = false;
-            bool stop_at_end = false;
-        };
 
         [[nodiscard]] float fade_gain(const std::string &name) const {
             auto it = fades.find(name);
@@ -850,11 +862,24 @@ struct sound_system : developer::Plugin {
         }
     };
 
-    struct MusicUpdateSystem : System<> {
-        virtual void for_each_with(Entity &, float dt) override {
-            SoundLibrary::get().update_fades(dt);
-            MusicLibrary::get().update(dt);
+    // Advances every in-flight fade on both libraries once per frame.
+    // Libraries hold fade state + gain application only; this system is
+    // the tick. Hosts get fades by registering update systems (below),
+    // never by pumping a library update method by hand.
+    struct FadeUpdateSystem : System<> {
+        bool should_iterate() const override { return false; }
+        void once(float dt) override {
+            SoundLibrary::get().advance_fades(dt);
+            MusicLibrary::get().advance_fades(dt);
         }
+    };
+
+    // Pumps music streams once per frame. Fade advancement used to ride
+    // along here (and inside MusicLibrary::update(dt)); it now lives in
+    // FadeUpdateSystem so this system's one job is stream upkeep.
+    struct MusicUpdateSystem : System<> {
+        bool should_iterate() const override { return false; }
+        void once(float) override { MusicLibrary::get().update(); }
     };
 
     static void add_singleton_components(Entity &entity) {
@@ -869,6 +894,7 @@ struct sound_system : developer::Plugin {
 
     static void register_update_systems(SystemManager &sm) {
         sm.register_update_system(std::make_unique<SoundPlaybackSystem>());
+        sm.register_update_system(std::make_unique<FadeUpdateSystem>());
         sm.register_update_system(std::make_unique<MusicUpdateSystem>());
     }
 

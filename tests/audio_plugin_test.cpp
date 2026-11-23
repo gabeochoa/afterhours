@@ -247,6 +247,11 @@ int main() {
     Audio::set_bus_volume("music", 1.f);
     sounds.load_on_bus("loop.wav", "amb_loop", "ambience");
     music.load_on_bus("loop.ogg", "amb_song", "music");
+    // Fades advance only through the registered systems, like a real host:
+    // no hand-pumped library update in this section.
+    afterhours::SystemManager fade_systems;
+    Audio::register_update_systems(fade_systems);
+    auto tick_fades = [&](float dt) { fade_systems.run(dt); };
     const unsigned int amb_id = sounds.get("amb_loop").frameCount;
     const unsigned int song_id = music.get("amb_song").frameCount;
 
@@ -255,18 +260,18 @@ int main() {
     sounds.set_fade_level("amb_loop", 0.f);
     check_near(sound_gains.at(amb_id), 0.f, "set_fade_level 0 silences the loop");
     sounds.fade_to("amb_loop", 1.f, 2.f);
-    sounds.update_fades(1.f);
+    tick_fades(1.f);
     check_near(sounds.fade_level("amb_loop"), 0.5f, "fade up mid-value (level)");
     check_near(sound_gains.at(amb_id), 0.5f, "fade up mid-value (gain)");
-    sounds.update_fades(1.f);
+    tick_fades(1.f);
     check_near(sounds.fade_level("amb_loop"), 1.f, "fade up completes");
     check_near(sound_gains.at(amb_id), 1.f, "fade up gain reaches bus volume");
 
     sounds.fade_to("amb_loop", 0.25f, 1.f);
-    sounds.update_fades(0.5f);
+    tick_fades(0.5f);
     check_near(sounds.fade_level("amb_loop"), 0.625f, "fade down mid-value");
     check_near(sound_gains.at(amb_id), 0.625f, "fade down gain tracks level");
-    sounds.update_fades(0.5f);
+    tick_fades(0.5f);
     check_near(sounds.fade_level("amb_loop"), 0.25f, "fade down completes");
 
     sounds.fade_to("amb_loop", 0.75f, 0.f);
@@ -278,17 +283,17 @@ int main() {
     check_near(sound_gains.at(amb_id), 0.375f,
                "bus change re-applies under the fade gain");
     sounds.fade_to("amb_loop", 0.5f, 1.f);
-    sounds.update_fades(1.f);
+    tick_fades(1.f);
     check_near(sound_gains.at(amb_id), 0.25f,
                "fade completes under bus gain (0.5 bus x 0.5 fade)");
     Audio::set_bus_volume("ambience", 1.f);
     check_near(sound_gains.at(amb_id), 0.5f, "bus restore keeps the fade gain");
 
     sounds.stop_with_fade("amb_loop", 1.f);
-    sounds.update_fades(0.5f);
+    tick_fades(0.5f);
     check(sounds.is_playing("amb_loop"), "voice keeps playing mid stop-fade");
     check_near(sounds.fade_level("amb_loop"), 0.25f, "stop-fade mid-value");
-    sounds.update_fades(0.5f);
+    tick_fades(0.5f);
     check(!sounds.is_playing("amb_loop"), "stop_with_fade stops the voice at 0");
     check_near(sounds.fade_level("amb_loop"), 1.f, "fade resets after stop");
 
@@ -303,7 +308,7 @@ int main() {
 
     sounds.play("amb_loop");
     Audio::fade_to("amb_loop", 0.5f, 1.f);
-    sounds.update_fades(1.f);
+    tick_fades(1.f);
     check_near(Audio::fade_level("amb_loop"), 0.5f,
                "sound_system::fade_to routes to the sound library");
     Audio::stop_with_fade("amb_loop", 0.f);
@@ -314,15 +319,15 @@ int main() {
     music.set_fade_level("amb_song", 0.f);
     check_near(music_gains.at(song_id), 0.f, "music set_fade_level 0 silences");
     music.fade_to("amb_song", 1.f, 2.f);
-    music.update(1.f);
+    tick_fades(1.f);
     check_near(music.fade_level("amb_song"), 0.5f,
                "music fade up mid-value (level)");
     check_near(music_gains.at(song_id), 0.5f, "music fade up mid-value (gain)");
-    music.update(1.f);
+    tick_fades(1.f);
     check_near(music_gains.at(song_id), 1.f, "music fade up completes");
     Audio::set_bus_volume("music", 0.5f);
     music.fade_to("amb_song", 0.5f, 1.f);
-    music.update(1.f);
+    tick_fades(1.f);
     check_near(music_gains.at(song_id), 0.25f,
                "music fade composes with bus gain");
     Audio::set_bus_volume("music", 1.f);
@@ -330,7 +335,7 @@ int main() {
     check_near(Audio::fade_level("amb_song"), 1.f,
                "sound_system::fade_to routes to the music library");
     Audio::stop_with_fade("amb_song", 1.f);
-    music.update(1.f);
+    tick_fades(1.f);
     check(!music.is_playing("amb_song"), "music stop_with_fade stops the stream");
     check_near(music.fade_level("amb_song"), 1.f, "music fade resets after stop");
 
