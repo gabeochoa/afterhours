@@ -157,6 +157,7 @@ ALL_TESTS := \
 	blend_mode_test \
 	rect_test \
 	rounded_corners_test \
+	rounded_outline_mask_test \
 	viewport_test \
 	grid_test \
 	pathfinding_provider_test \
@@ -359,6 +360,7 @@ ALL_TESTS += image_metal_test
 ALL_TESTS += sokol_blend_test
 ALL_TESTS += sokol_capture_test
 ALL_TESTS += sokol_geometry_test
+ALL_TESTS += sokol_rounded_outline_mask_test
 # Own process: the Metal backend cannot be re-initialised, so this cannot be a
 # section of sokol_blend_test.
 ALL_TESTS += sokol_hidpi_test
@@ -401,6 +403,7 @@ RAYLIB_TESTS := \
 	render_capture_test \
 	presented_frame_test \
 	triangle_winding_test \
+	rounded_outline_mask_test \
 	clipboard_test \
 	mk_cost_test \
 	capture_perf_test \
@@ -579,6 +582,10 @@ $(OUT)/web_metal_symbols_test: web_metal_symbols_test.cpp web_sim/web_probe.cpp 
 $(OUT)/sokol_blend_test: ../src/backends/sokol/drawing_helpers.h
 $(OUT)/sokol_capture_test: ../src/backends/sokol/drawing_helpers.h ../src/capture.h ../src/graphics_common.h
 $(OUT)/sokol_geometry_test: ../src/backends/sokol/drawing_helpers.h
+$(OUT)/sokol_rounded_outline_mask_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_rounded_outline_mask_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_rounded_outline_mask_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_rounded_outline_mask_test: ../src/backends/sokol/drawing_helpers.h ../src/plugins/ui/rounded_corners.h
 $(OUT)/sokol_hidpi_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_hidpi_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_hidpi_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
