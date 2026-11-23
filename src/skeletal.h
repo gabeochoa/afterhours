@@ -15,6 +15,10 @@ using Quat = ::afterhours::Quat;
 using Mat4 = ::afterhours::Mat4;
 using TRS = ::afterhours::TRS;
 using ::afterhours::lerp;
+using ::afterhours::mat4_identity;
+using ::afterhours::multiply;
+using ::afterhours::quat_axis_angle;
+using ::afterhours::quat_identity;
 using ::afterhours::rotate;
 using ::afterhours::slerp;
 using ::afterhours::to_mat4;
@@ -34,21 +38,22 @@ inline Pose bind_pose(std::size_t joints) {
 
 inline void compute_world(const Skeleton &sk, const Pose &pose,
                           std::vector<Mat4> &out) {
-  out.assign(sk.parent.size(), Mat4::identity());
+  out.assign(sk.parent.size(), mat4_identity());
   for (std::size_t i = 0; i < sk.parent.size(); i++) {
-    Mat4 local = i < pose.local.size() ? to_mat4(pose.local[i]) : Mat4::identity();
+    Mat4 local = i < pose.local.size() ? to_mat4(pose.local[i]) : mat4_identity();
     int p = sk.parent[i];
-    out[i] = (p >= 0 && static_cast<std::size_t>(p) < i) ? out[p] * local : local;
+    out[i] = (p >= 0 && static_cast<std::size_t>(p) < i) ? multiply(out[p], local) : local;
   }
 }
 
 inline void compute_skinning(const Skeleton &sk,
                              const std::vector<Mat4> &world,
                              std::vector<Mat4> &out) {
-  out.assign(world.size(), Mat4::identity());
+  out.assign(world.size(), mat4_identity());
   for (std::size_t i = 0; i < world.size(); i++)
-    out[i] = world[i] * (i < sk.inverse_bind.size() ? sk.inverse_bind[i]
-                                                    : Mat4::identity());
+    out[i] = multiply(world[i], i < sk.inverse_bind.size()
+                                    ? sk.inverse_bind[i]
+                                    : mat4_identity());
 }
 
 struct Vec3Track { std::vector<float> times; std::vector<Vec3> values; };
