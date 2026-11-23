@@ -6,6 +6,7 @@
 #include <vector>
 
 using namespace afterhours::impostor_atlas;
+using afterhours::Vector3Type;
 
 static int checks = 0, failures = 0;
 static void check(bool cond, const std::string &what) {
@@ -16,8 +17,8 @@ static void check(bool cond, const std::string &what) {
   }
 }
 
-static float dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
-static float len(Vec3 a) { return std::sqrt(dot(a, a)); }
+static float dot(Vector3Type a, Vector3Type b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+static float len(Vector3Type a) { return std::sqrt(dot(a, a)); }
 static bool near(float a, float b, float eps = 1e-4f) {
   return std::fabs(a - b) <= eps;
 }
@@ -89,15 +90,15 @@ int main() {
           "basis orthonormal");
     check(b.half_size > 2.f && near(b.half_size, 2.f * 10.f / std::sqrt(96.f)),
           "half size covers bounding sphere");
-    Vec3 corner = quad_point({0, 0, 0}, b, 1.f, 1.f);
+    Vector3Type corner = quad_point({0, 0, 0}, b, 1.f, 1.f);
     check(near(len(corner), b.half_size * std::sqrt(2.f), 1e-3f) &&
               near(corner.z, 0.f),
           "quad corner in the facing plane");
   }
   {
-    Vec3 eye{3.f, 4.f, 5.f};
+    Vector3Type eye{3.f, 4.f, 5.f};
     BillboardBasis b = billboard_basis({1, 1, 1}, eye, 1.f);
-    Vec3 to{eye.x - 1, eye.y - 1, eye.z - 1};
+    Vector3Type to{eye.x - 1, eye.y - 1, eye.z - 1};
     check(near(dot(b.forward, to) / len(to), 1.f, 1e-5f),
           "forward at eye (diagonal)");
     check(near(dot(b.right, b.up), 0.f) && near(len(b.up), 1.f),

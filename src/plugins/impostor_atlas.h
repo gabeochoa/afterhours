@@ -7,11 +7,9 @@
 #include <string>
 #include <vector>
 
-namespace afterhours::impostor_atlas {
+#include "../developer.h"
 
-struct Vec3 {
-  float x = 0.f, y = 0.f, z = 0.f;
-};
+namespace afterhours::impostor_atlas {
 
 struct AtlasItem {
   std::string name;
@@ -26,7 +24,7 @@ struct AtlasPlacement {
   struct UV {
     float u0 = 0.f, v0 = 0.f, u1 = 0.f, v1 = 0.f;
   };
-  // v grows downward with y, matching image/texture upload order.
+
   [[nodiscard]] UV uv(int atlas_width, int atlas_height) const {
     if (atlas_width <= 0 || atlas_height <= 0) return {};
     float w = static_cast<float>(atlas_width);
@@ -87,52 +85,46 @@ inline std::optional<AtlasLayout> pack(const std::vector<AtlasItem> &items,
 }
 
 struct BillboardBasis {
-  Vec3 right{}, up{}, forward{};
+  Vector3Type right{}, up{}, forward{};
   float half_size = 0.f;
 };
 
-namespace detail {
-inline Vec3 sub(Vec3 a, Vec3 b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }
-inline Vec3 mul(Vec3 a, float s) { return {a.x * s, a.y * s, a.z * s}; }
-inline Vec3 cross(Vec3 a, Vec3 b) {
-  return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z,
-          a.x * b.y - a.y * b.x};
-}
-
-inline float length(Vec3 a) {
-  return std::sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
-}
-
-inline Vec3 normalize(Vec3 a) {
-  float len = length(a);
-  return len > 0.f ? mul(a, 1.f / len) : Vec3{};
-}
-}
-
-inline BillboardBasis billboard_basis(Vec3 center, Vec3 eye, float radius) {
-  using namespace detail;
-  Vec3 to = sub(eye, center);
-  float dist = length(to);
+inline BillboardBasis billboard_basis(Vector3Type center, Vector3Type eye,
+                                      float radius) {
+  Vector3Type to{eye.x - center.x, eye.y - center.y, eye.z - center.z};
+  float dist = std::sqrt(to.x * to.x + to.y * to.y + to.z * to.z);
   if (dist < 1e-6f || radius <= 0.f)
     return {{1.f, 0.f, 0.f}, {0.f, 1.f, 0.f}, {0.f, 0.f, 1.f}, radius};
-  Vec3 forward = mul(to, 1.f / dist);
-  Vec3 up_hint =
-      std::fabs(forward.y) > 0.999f ? Vec3{0.f, 0.f, 1.f} : Vec3{0.f, 1.f, 0.f};
-  Vec3 right = normalize(cross(up_hint, forward));
-  Vec3 up = cross(forward, right);
+  float inv_dist = 1.f / dist;
+  Vector3Type forward{to.x * inv_dist, to.y * inv_dist, to.z * inv_dist};
+  Vector3Type up_hint = std::fabs(forward.y) > 0.999f
+                            ? Vector3Type{0.f, 0.f, 1.f}
+                            : Vector3Type{0.f, 1.f, 0.f};
+  Vector3Type raw_right{up_hint.y * forward.z - up_hint.z * forward.y,
+                        up_hint.z * forward.x - up_hint.x * forward.z,
+                        up_hint.x * forward.y - up_hint.y * forward.x};
+  float right_len = std::sqrt(raw_right.x * raw_right.x +
+                              raw_right.y * raw_right.y +
+                              raw_right.z * raw_right.z);
+  Vector3Type right{};
+  if (right_len > 0.f) {
+    float inv_right_len = 1.f / right_len;
+    right = {raw_right.x * inv_right_len, raw_right.y * inv_right_len,
+             raw_right.z * inv_right_len};
+  }
+  Vector3Type up{forward.y * right.z - forward.z * right.y,
+                 forward.z * right.x - forward.x * right.z,
+                 forward.x * right.y - forward.y * right.x};
   float grow = dist * dist - radius * radius;
   float half = radius * dist / std::sqrt(std::max(grow, 0.01f * radius * radius));
   return {right, up, forward, half};
 }
 
-inline Vec3 quad_point(Vec3 center, const BillboardBasis &basis, float x,
-                       float z) {
-  using namespace detail;
-  Vec3 p = mul(basis.right, x);
-  Vec3 q = mul(basis.up, -z);
-  return {center.x + (p.x + q.x) * basis.half_size,
-          center.y + (p.y + q.y) * basis.half_size,
-          center.z + (p.z + q.z) * basis.half_size};
+inline Vector3Type quad_point(Vector3Type center, const BillboardBasis &basis,
+                              float x, float z) {
+  return {center.x + (basis.right.x * x + basis.up.x * -z) * basis.half_size,
+          center.y + (basis.right.y * x + basis.up.y * -z) * basis.half_size,
+          center.z + (basis.right.z * x + basis.up.z * -z) * basis.half_size};
 }
 
 }
