@@ -61,7 +61,6 @@ inline std::set<std::pair<int, int>> g_font_fallback_pairs;
 inline std::map<int, std::vector<std::pair<uint32_t, uint32_t>>>
     g_font_coverage;
 
-inline bool g_start_hidden = false;
 inline bool g_initialized = false;
 
 inline bool g_in_texture_mode = false;

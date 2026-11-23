@@ -291,8 +291,6 @@ extern "C" int metal_capture_render_texture_png_to_memory(
 // to sg_setup via sg_desc.environment.metal.device. Never released: the device
 // lives for the whole (short-lived) headless process. Returns nullptr if Metal
 // is unavailable (no GPU).
-#include "window_visibility_macos.h"
-
 extern "C" const void *metal_create_system_device(void) {
   id<MTLDevice> dev = MTLCreateSystemDefaultDevice();
   if (!dev)
