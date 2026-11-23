@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <optional>
 #include <filesystem>
+#include <unordered_map>
 #include <vector>
 
 #include "../../capture.h"
@@ -670,8 +671,29 @@ inline void draw_texture_rec(TextureType tex, RectangleType src,
   raylib::DrawTextureRec(tex, src, pos, tint);
 }
 
+inline std::unordered_map<unsigned int, int> &known_texture_filters() {
+  static std::unordered_map<unsigned int, int> m;
+  return m;
+}
+
+inline int known_texture_filter(TextureType tex) {
+  const auto &m = known_texture_filters();
+  const auto it = m.find(tex.id);
+  return it == m.end() ? raylib::TEXTURE_FILTER_POINT : it->second;
+}
+
 inline void draw_texture_pro(TextureType tex, RectangleType src, RectangleType dest,
-                             Vector2Type origin, float rotation, Color tint) {
+                             Vector2Type origin, float rotation, Color tint,
+                             int filter) {
+  const int saved = known_texture_filter(tex);
+  if (filter >= 0 && filter != saved) {
+    raylib::rlDrawRenderBatchActive();
+    raylib::SetTextureFilter(tex, filter);
+    raylib::DrawTexturePro(tex, src, dest, origin, rotation, tint);
+    raylib::rlDrawRenderBatchActive();
+    raylib::SetTextureFilter(tex, saved);
+    return;
+  }
   raylib::DrawTexturePro(tex, src, dest, origin, rotation, tint);
 }
 
@@ -775,6 +797,7 @@ inline TextureType load_texture_from_rgba(const std::uint8_t *rgba, int w,
     return texture;
   }
   raylib::SetTextureFilter(texture, filter);
+  known_texture_filters()[texture.id] = filter;
   return texture;
 }
 
@@ -794,6 +817,7 @@ inline void gen_texture_mipmaps(TextureType &texture) {
 inline void set_texture_filter(TextureType &texture, int filter) {
   if (texture.id != 0) {
     raylib::SetTextureFilter(texture, filter);
+    known_texture_filters()[texture.id] = filter;
   }
 }
 
@@ -818,6 +842,7 @@ load_texture_with_color_key(const char *path, const Color key,
   raylib::UnloadImage(img);
   if (texture.id != 0) {
     raylib::SetTextureFilter(texture, filter);
+    known_texture_filters()[texture.id] = filter;
   }
   return texture;
 }
