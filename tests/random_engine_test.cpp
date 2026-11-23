@@ -131,25 +131,25 @@ void test_gen_random_reproducible() {
 }
 
 void test_stream_save_restores_mid_sequence() {
-  RngStream live(std::uint32_t{2024});
+  RNGStream live(std::uint32_t{2024});
   for (int i = 0; i < 37; i++) (void)live.get_int(0, 1000);
   const std::string saved = live.save();
   std::vector<int> expected;
   for (int i = 0; i < 20; i++) expected.push_back(live.get_int(0, 1000000));
 
-  auto restored = RngStream::load(saved);
+  auto restored = RNGStream::load(saved);
   CHECK(restored.has_value());
   if (!restored) return;
   CHECK(restored->get_seed() == 2024u);
   std::vector<int> got;
   for (int i = 0; i < 20; i++) got.push_back(restored->get_int(0, 1000000));
   CHECK(got == expected);
-  CHECK(!RngStream::load("not a stream").has_value());
+  CHECK(!RNGStream::load("not a stream").has_value());
 }
 
 void test_streams_are_independent() {
-  RngStream shop(std::uint32_t{7}), battle(std::uint32_t{7});
-  RngStream battle_alone(std::uint32_t{7});
+  RNGStream shop(std::uint32_t{7}), battle(std::uint32_t{7});
+  RNGStream battle_alone(std::uint32_t{7});
   for (int i = 0; i < 50; i++) (void)shop.get_int(0, 100);
   bool same = true;
   for (int i = 0; i < 20; i++)
@@ -163,7 +163,7 @@ void test_gen_random_takes_a_stream() {
   for (int i = 0; i < 10; i++)
     EntityHelper::createEntity().addComponent<Pick>();
   EntityHelper::merge_entity_arrays();
-  RngStream a(std::uint32_t{99}), b(std::uint32_t{99});
+  RNGStream a(std::uint32_t{99}), b(std::uint32_t{99});
   auto first = EntityQuery().whereHasComponent<Pick>().gen_random(a);
   auto second = EntityQuery().whereHasComponent<Pick>().gen_random(b);
   CHECK(first.has_value() && second.has_value() && first->id == second->id);
