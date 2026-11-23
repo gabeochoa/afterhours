@@ -14,8 +14,9 @@ int main() {
   BatchedRenderer renderer;
   FontManager fonts;
   renderer.render(buffer, fonts);
-  // Stats still count locally, but nothing reaches a collector.
-  if (renderer.stats().draws != 1) return 1;
+  // Counting is compiled out with profiling off: local stats stay zero and
+  // nothing reaches a collector.
+  if (renderer.stats().draws != 0) return 1;
   if (renderer.stats().creates != 0) return 1;
   if (!profiling::default_collector().snapshot().counters.empty()) return 1;
   return 0;

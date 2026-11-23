@@ -848,6 +848,7 @@ public:
         break;
       }
     }
+#if AFTERHOURS_ENABLE_PROFILING
     stats_.creates =
         static_cast<size_t>(render_counters::take_creates());
     auto &collector = profiling::default_collector();
@@ -857,6 +858,7 @@ public:
                                static_cast<double>(stats_.binds));
     AFTERHOURS_PROFILE_COUNTER(collector, "render.creates", "count",
                                static_cast<double>(stats_.creates));
+#endif
   }
 
   [[nodiscard]] const Stats &stats() const { return stats_; }
@@ -865,9 +867,15 @@ private:
   Stats stats_;
 
   // A bind is the texture a draw samples; text draws bind the font texture.
+  // Compiled out when profiling is off (same pattern as
+  // render_counters::note_create), so disabled builds pay nothing per draw.
   void note_draw(bool binds_texture = false) {
+#if AFTERHOURS_ENABLE_PROFILING
     ++stats_.draws;
     if (binds_texture) ++stats_.binds;
+#else
+    (void)binds_texture;
+#endif
   }
 
   // Find the end of a batch of commands with same type and layer
