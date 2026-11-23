@@ -14,9 +14,9 @@ struct SimulationDriver {
     SystemManager systems;
     float speed = 1.f;
 
-    State state() const { return state_; }
-    bool running() const { return state_ == State::Running; }
-    bool finished() const { return state_ == State::Finished; }
+    State state() const { return sim_state; }
+    bool running() const { return sim_state == State::Running; }
+    bool finished() const { return sim_state == State::Finished; }
     uint64_t tick_count() const { return tick_count_; }
     float fixed_step() const { return systems.fixed_tick_rate; }
     float elapsed() const { return static_cast<float>(tick_count_) * systems.fixed_tick_rate; }
@@ -24,21 +24,21 @@ struct SimulationDriver {
     void set_fixed_step(float dt) { systems.fixed_tick_rate = dt; }
 
     void begin() {
-        if (state_ == State::Idle) state_ = State::Running;
+        if (sim_state == State::Idle) sim_state = State::Running;
     }
     void pause() {
-        if (state_ == State::Running) state_ = State::Paused;
+        if (sim_state == State::Running) sim_state = State::Paused;
     }
     void resume() {
-        if (state_ == State::Paused) state_ = State::Running;
+        if (sim_state == State::Paused) sim_state = State::Running;
     }
     void finish() {
-        if (state_ == State::Running || state_ == State::Paused) state_ = State::Finished;
+        if (sim_state == State::Running || sim_state == State::Paused) sim_state = State::Finished;
     }
     void reset() {
-        state_ = State::Idle;
+        sim_state = State::Idle;
         tick_count_ = 0;
-        carry_ = 0.f;
+        carry = 0.f;
         systems.accumulator = 0.f;
     }
 
@@ -59,10 +59,10 @@ struct SimulationDriver {
     int advance(float dt) {
         if (!running() || dt <= 0.f || speed <= 0.f) return 0;
         VALIDATE(systems.fixed_tick_rate > 0.f, "fixed_tick_rate must be positive");
-        carry_ += dt * speed;
-        const int n = static_cast<int>(carry_ / systems.fixed_tick_rate);
+        carry += dt * speed;
+        const int n = static_cast<int>(carry / systems.fixed_tick_rate);
         if (n <= 0) return 0;
-        carry_ -= static_cast<float>(n) * systems.fixed_tick_rate;
+        carry -= static_cast<float>(n) * systems.fixed_tick_rate;
         return step(n);
     }
 
@@ -83,9 +83,9 @@ struct SimulationDriver {
     }
 
    private:
-    State state_ = State::Idle;
+    State sim_state = State::Idle;
     uint64_t tick_count_ = 0;
-    float carry_ = 0.f;
+    float carry = 0.f;
 };
 
 }
