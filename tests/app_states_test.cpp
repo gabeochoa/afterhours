@@ -3,7 +3,7 @@
 #include <fmt/format.h>
 
 #include <afterhours/ah.h>
-#include <afterhours/src/app_states.h>
+#include <afterhours/src/plugins/app_states.h>
 
 #include <cstdio>
 #include <memory>
@@ -26,13 +26,13 @@ static void check(bool cond, const char *expr, int line) {
 enum class App { Menu, Game, Pause };
 
 struct GatedSystem : System<> {
-  const State<App> *state;
+  const app_states::State<App> *state;
   App wanted;
   int *runs;
-  GatedSystem(const State<App> &s, App w, int &r)
+  GatedSystem(const app_states::State<App> &s, App w, int &r)
       : state(&s), wanted(w), runs(&r) {}
   bool should_run(const float dt) const override {
-    return run_if(in_state(*state, wanted), dt);
+    return app_states::run_if(app_states::in_state(*state, wanted), dt);
   }
   void once(const float) override { ++*runs; }
 };
@@ -45,7 +45,7 @@ struct UngatedSystem : System<> {
 
 int main() {
   {
-    State<App> state{App::Menu};
+    app_states::State<App> state{App::Menu};
     CHECK(state.current() == App::Menu);
     CHECK(state.is(App::Menu));
     CHECK(!state.is(App::Game));
@@ -73,20 +73,20 @@ int main() {
   }
 
   {
-    State<App> state{App::Menu};
-    CHECK(run_if(in_state(state, App::Menu)));
-    CHECK(run_if(in_state(state, App::Menu), 0.016f));
-    CHECK(!run_if(in_state(state, App::Game)));
-    CHECK(!run_if(in_state(state, App::Game), 0.016f));
-    CHECK(run_if([] { return true; }));
-    CHECK(!run_if([](float dt) { return dt > 1.f; }, 0.016f));
+    app_states::State<App> state{App::Menu};
+    CHECK(app_states::run_if(app_states::in_state(state, App::Menu)));
+    CHECK(app_states::run_if(app_states::in_state(state, App::Menu), 0.016f));
+    CHECK(!app_states::run_if(app_states::in_state(state, App::Game)));
+    CHECK(!app_states::run_if(app_states::in_state(state, App::Game), 0.016f));
+    CHECK(app_states::run_if([] { return true; }));
+    CHECK(!app_states::run_if([](float dt) { return dt > 1.f; }, 0.016f));
     state.set(App::Game);
-    CHECK(!run_if(in_state(state, App::Menu)));
-    CHECK(run_if(in_state(state, App::Game)));
+    CHECK(!app_states::run_if(app_states::in_state(state, App::Menu)));
+    CHECK(app_states::run_if(app_states::in_state(state, App::Game)));
   }
 
   {
-    State<App> state{App::Menu};
+    app_states::State<App> state{App::Menu};
     int menu_runs = 0, game_runs = 0, always_runs = 0;
     SystemManager sm;
     sm.register_update_system(
@@ -112,6 +112,44 @@ int main() {
     CHECK(menu_runs == 2);
     CHECK(game_runs == 1);
     CHECK(always_runs == 4);
+  }
+
+  {
+    enum class Act { Start, TogglePause };
+
+    Entity &state_entity = EntityHelper::createPermanentEntity();
+    app_states::add_singleton_components<App>(state_entity, App::Menu);
+    auto *has_state = EntityHelper::get_singleton_cmp<app_states::HasState<App>>();
+    CHECK(has_state != nullptr);
+    CHECK(has_state->state.is(App::Menu));
+
+    Entity &input_entity = EntityHelper::createPermanentEntity();
+    auto &collector = input_entity.addComponent<input::InputCollector>();
+    EntityHelper::registerSingleton<input::InputCollector>(input_entity);
+
+    SystemManager plugin_sm;
+    app_states::register_update_systems<App, Act>(
+        plugin_sm, {{App::Menu, Act::Start, App::Game},
+                    {App::Game, Act::TogglePause, App::Pause},
+                    {App::Pause, Act::TogglePause, App::Game}});
+
+    auto press = [&](Act action) {
+      collector.inputs_pressed.clear();
+      collector.inputs_pressed.push_back(input::ActionDone(
+          input::DeviceMedium::Keyboard, 0, static_cast<int>(action), 1.f, 0.f));
+      plugin_sm.run(1.f / 60.f);
+    };
+
+    press(Act::TogglePause);
+    CHECK(has_state->state.is(App::Menu));
+    press(Act::Start);
+    CHECK(has_state->state.is(App::Game));
+    press(Act::Start);
+    CHECK(has_state->state.is(App::Game));
+    press(Act::TogglePause);
+    CHECK(has_state->state.is(App::Pause));
+    press(Act::TogglePause);
+    CHECK(has_state->state.is(App::Game));
   }
 
   std::printf("app_states_test: %d/%d checks passed\n", checks - failures,
