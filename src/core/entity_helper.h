@@ -57,16 +57,16 @@ struct EntityHelper {
   // singleton's default collection for the scope.
   struct ScopedCollection {
     explicit ScopedCollection(EntityCollection *collection)
-        : previous_(std::exchange(get_thread_default_collection_ptr(),
+        : previous(std::exchange(get_thread_default_collection_ptr(),
                                   collection)) {}
-    ~ScopedCollection() { set_default_collection(previous_); }
+    ~ScopedCollection() { set_default_collection(previous); }
     ScopedCollection(const ScopedCollection &) = delete;
     ScopedCollection &operator=(const ScopedCollection &) = delete;
     ScopedCollection(ScopedCollection &&) = delete;
     ScopedCollection &operator=(ScopedCollection &&) = delete;
 
    private:
-    EntityCollection *previous_;
+    EntityCollection *previous;
   };
 
   // Get the default collection for the current thread
