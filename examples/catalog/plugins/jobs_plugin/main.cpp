@@ -11,9 +11,9 @@
 using namespace afterhours;
 using namespace std::chrono_literals;
 
-struct LevelInfo : BaseComponent {
-    std::string name;
-    int thumbnails = 0;
+struct LevelPreview : BaseComponent {
+    std::string level_name;
+    int thumbnail_count = 0;
 };
 
 struct DrainJobs : System<> {
@@ -27,19 +27,19 @@ int main(int, char **) {
     SystemManager systems;
     systems.register_update_system(std::make_unique<DrainJobs>(pool));
 
-    auto &level = EntityHelper::createPermanentEntity();
-    level.addComponent<LevelInfo>();
-    const EntityID level_id = level.id;
+    auto &preview = EntityHelper::createPermanentEntity();
+    preview.addComponent<LevelPreview>();
+    const EntityID preview_id = preview.id;
 
     pool.submit(
         [](std::stop_token) {
             std::this_thread::sleep_for(20ms);
             return std::string("harbor_night");
         },
-        [level_id](std::string name) {
-            EntityHelper::getEntityForIDEnforce(level_id)
-                .get<LevelInfo>()
-                .name = name;
+        [preview_id](std::string name) {
+            EntityHelper::getEntityForIDEnforce(preview_id)
+                .get<LevelPreview>()
+                .level_name = name;
             std::cout << "loaded level " << name << std::endl;
         });
 
@@ -48,10 +48,10 @@ int main(int, char **) {
             std::this_thread::sleep_for(40ms);
             return 12;
         },
-        [level_id](int count) {
-            EntityHelper::getEntityForIDEnforce(level_id)
-                .get<LevelInfo>()
-                .thumbnails = count;
+        [preview_id](int count) {
+            EntityHelper::getEntityForIDEnforce(preview_id)
+                .get<LevelPreview>()
+                .thumbnail_count = count;
             std::cout << "built " << count << " thumbnails" << std::endl;
         },
         jobs::Priority::Background);
@@ -67,16 +67,20 @@ int main(int, char **) {
     pool.cancel(*search);
     std::cout << "cancelled search job " << *search << std::endl;
 
-    const auto &info = level.get<LevelInfo>();
+    const auto &preview_data = preview.get<LevelPreview>();
     int frame = 0;
-    for (; frame < 600 && (info.name.empty() || info.thumbnails == 0);
+    for (; frame < 600 &&
+           (preview_data.level_name.empty() || preview_data.thumbnail_count == 0);
          frame++) {
         systems.run(1.f / 60.f);
         std::this_thread::sleep_for(1ms);
     }
 
     pool.shutdown();
-    std::cout << "level " << info.name << " has " << info.thumbnails
-              << " thumbnails after " << frame << " frames" << std::endl;
-    return info.name.empty() || info.thumbnails == 0 ? 1 : 0;
+    std::cout << "level " << preview_data.level_name << " has "
+              << preview_data.thumbnail_count << " thumbnails after " << frame
+              << " frames" << std::endl;
+    return preview_data.level_name.empty() || preview_data.thumbnail_count == 0
+               ? 1
+               : 0;
 }

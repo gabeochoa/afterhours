@@ -22,21 +22,25 @@ namespace afterhours::jobs {
 
 enum class Priority { Foreground, Background };
 
-using JobId = uint64_t;
+using JobId = uint32_t;
 
 class Pool {
   struct Job {
+    using RunFn = std::function<std::function<void()>(std::stop_token)>;
+
     JobId id;
     std::stop_source stop;
-    std::function<std::function<void()>(std::stop_token)> run;
+    RunFn run;
   };
   struct Running {
     JobId id;
     std::stop_source stop;
   };
   struct Done {
+    using Fn = std::function<void()>;
+
     JobId id;
-    std::function<void()> deliver;
+    Fn deliver;
   };
 
   std::mutex mutex;
@@ -68,7 +72,7 @@ class Pool {
       if (is_background) background_active++;
       running[slot] = Running{job.id, job.stop};
       lock.unlock();
-      std::function<void()> deliver = job.run(job.stop.get_token());
+      Done::Fn deliver = job.run(job.stop.get_token());
       lock.lock();
       running[slot].reset();
       if (is_background) background_active--;
@@ -109,8 +113,8 @@ public:
                               Priority priority = Priority::Foreground) {
     using T = std::invoke_result_t<Work &, std::stop_token>;
     static_assert(!std::is_void_v<T>, "a job must return its result");
-    auto run = [work = std::move(work), deliver = std::move(deliver)](
-                   std::stop_token stop) mutable -> std::function<void()> {
+    Job::RunFn run = [work = std::move(work), deliver = std::move(deliver)](
+                         std::stop_token stop) mutable -> Done::Fn {
       auto value = std::make_shared<T>(work(stop));
       return [value, deliver = std::move(deliver)]() mutable {
         deliver(std::move(*value));
@@ -147,7 +151,7 @@ public:
     }
     size_t delivered = 0;
     for (; delivered < pending; delivered++) {
-      std::function<void()> deliver;
+      Done::Fn deliver;
       {
         std::lock_guard lock(mutex);
         if (mailbox.empty()) break;
