@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include "../core/base_component.h"
 #include "../ecs.h"
 #include "../core/system.h"
@@ -82,6 +84,25 @@ struct timer : developer::Plugin {
 
     void reset_timer() { current = 0.0f; }
   };
+
+  // Earliest pending deadline across registered timers, in seconds (the same
+  // units update() advances). Paused and already-ready timers never become
+  // due on their own, so they do not count; none pending -> nullopt.
+  [[nodiscard]] static inline std::optional<float> next_deadline(
+      EntityCollection &ec) {
+    std::optional<float> best;
+    EntityQuery(ec).whereHasComponent<HasTimer>().for_each([&](Entity &e) {
+      const auto &t = e.get<HasTimer>();
+      const float r = t.paused ? -1.f : t.get_remaining();
+      if (r > 0.f && (!best || r < *best)) best = r;
+    });
+    EntityQuery(ec).whereHasComponent<TriggerOnDt>().for_each([&](Entity &e) {
+      const auto &t = e.get<TriggerOnDt>();
+      const float r = t.reset - t.current;
+      if (r > 0.f && (!best || r < *best)) best = r;
+    });
+    return best;
+  }
 
   // System to update all timers
   struct TimerUpdateSystem : System<HasTimer> {
