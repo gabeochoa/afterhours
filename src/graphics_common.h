@@ -254,6 +254,7 @@ struct RunConfig {
 
   bool audio = false;
 
+  bool enable_file_drop = false;
   bool macos_forward_cmd_chords = false;
 
   float fixed_dt = 0.f;

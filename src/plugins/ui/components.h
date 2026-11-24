@@ -370,6 +370,10 @@ struct HasUIModifiers : BaseComponent {
   float origin_x = 0.5f;
   float origin_y = 0.5f;
 
+  Vector2Type rotation_center(RectangleType rect) const {
+    return {rect.x + rect.width * origin_x, rect.y + rect.height * origin_y};
+  }
+
   RectangleType apply_modifier(RectangleType rect) const {
     // Apply scale first
     float s = scale;
@@ -659,6 +663,14 @@ struct HasScrollView : BaseComponent {
   void scroll_to_left() {
     scroll_offset.x = scroll_target.x = last_eased_offset.x = 0.f;
   }
+
+  // Jump to a content offset in one call, on both axes at once. Clamped to
+  // the measured extents; an unmeasured view takes the raw value and clamps
+  // on its first measure (same sentinel rule as the ends).
+  void scroll_to(Vector2Type offset) {
+    scroll_offset = scroll_target = last_eased_offset = offset;
+    clamp_scroll();
+  }
   void scroll_to_right() {
     scroll_offset.x = scroll_target.x = last_eased_offset.x = right_offset();
   }
@@ -753,7 +765,8 @@ struct HasScrollView : BaseComponent {
 // text). Rows are in the caller's unscaled units.
 struct HasVirtualListIndex : BaseComponent {
   std::vector<float> heights;
-  std::vector<float> prefix; // prefix[i] = height of rows [0, i)
+  // double: a float32 prefix sum drifts by hundreds of px at 100k rows
+  std::vector<double> prefix; // prefix[i] = height of rows [0, i)
   // The pending re-measure range [dirty_from, dirty_to). Its empty value is
   // the union identity [kDirtyEmpty, 0), so invalidate is an unconditional
   // min/max with no empty case to branch on.
@@ -838,6 +851,7 @@ struct HasClipChildren : BaseComponent {};
 
 // Tag IDs for UI overlay input exclusivity.
 enum class UITag : TagId {
+  DrawOnly = 41,
   InputExclusivity =
       40, // Entity's tree receives exclusive input, blocking all
           // other entities. Used by overlay components (dropdowns,

@@ -68,6 +68,7 @@ struct ComponentConfig {
 
   Padding padding;
   bool padding_is_default = false;
+  bool padding_explicitly_set = false;
   Margin margin;
   std::string label;
   bool is_absolute = false;
@@ -97,6 +98,7 @@ struct ComponentConfig {
   std::optional<Color> custom_color;
   std::optional<Color> hover_color; // Per-component hover background override
   std::optional<bool> skip_hover_override;
+  std::optional<Vector2Type> bg_inset;
   // Text color settings (explicit override)
   Theme::Usage text_color_usage = Theme::Usage::Default;
   std::optional<Color> custom_text_color;
@@ -133,6 +135,7 @@ struct ComponentConfig {
   std::optional<float> focus_ring_thickness;
   bool ignore_pointer_events = false; // invisible to hit-testing
   bool inert = false;
+  bool draw_only = false;
   bool takes_focus = true;
   bool hoverable = false;
   // User data, not localizable copy: the pseudo-locale stress leaves this
@@ -177,6 +180,8 @@ struct ComponentConfig {
   RenderPrimitive::CustomDrawFn on_draw_bg;
   RenderPrimitive::CustomDrawFn on_draw_fg;
   RenderPrimitive::CustomDrawFn on_draw_over;
+  using OnSubmitFn = std::function<void(std::string_view)>;
+  OnSubmitFn on_submit;
 
   std::string font_name = UIComponent::UNSET_FONT;
   colors::FontWeight font_weight = colors::FontWeight::Regular;
@@ -218,8 +223,14 @@ struct ComponentConfig {
   bool text_cut_disabled = false;
   bool text_paste_disabled = false;
 
+  // Text input: Escape blurs the field. Off lets the app use Escape for
+  // its own overlay (slash menu, autocomplete) without losing the caret.
+  bool text_escape_blurs = true;
+
   // Text input: hint shown while the bound string is empty.
   std::string placeholder;
+  // Hint ink override; unset keeps theme.font_muted on both text widgets.
+  std::optional<Color> placeholder_color;
 
   std::optional<std::string> checkbox_checked_indicator;
   std::optional<std::string> checkbox_unchecked_indicator;
@@ -254,6 +265,7 @@ struct ComponentConfig {
   std::optional<texture_manager::Texture> icon_texture;
   std::optional<texture_manager::Rectangle> icon_source_rect;
   IconPosition icon_position = IconPosition::Left;
+  std::optional<ComponentSize> icon_size;
 
   // Nine-slice border configuration
   std::optional<NineSliceBorder> nine_slice_config;
@@ -309,6 +321,7 @@ struct ComponentConfig {
   ComponentConfig &with_padding(const Padding &padding_) {
     padding = padding_;
     padding_is_default = false;
+    padding_explicitly_set = true;
     return *this;
   }
   ComponentConfig &with_margin(const Margin &margin_) {
@@ -325,6 +338,7 @@ struct ComponentConfig {
   }
   ComponentConfig &with_padding(Spacing spacing) {
     padding_is_default = false;
+    padding_explicitly_set = true;
     auto gap_size = spacing_to_size(spacing);
     padding = Padding{.top = gap_size,
                       .left = gap_size,
@@ -409,6 +423,10 @@ struct ComponentConfig {
     icon_position = pos;
     return *this;
   }
+  ComponentConfig &with_icon_size(ComponentSize sz) {
+    icon_size = sz;
+    return *this;
+  }
 
   // NEW: Explicit background color APIs
   ComponentConfig &with_background(Theme::Usage usage) {
@@ -430,6 +448,13 @@ struct ComponentConfig {
   ComponentConfig &with_skip_hover_override(bool skip = true) {
     skip_hover_override = skip;
     return *this;
+  }
+  ComponentConfig &with_background_inset(float h, float v) {
+    bg_inset = Vector2Type{h, v};
+    return *this;
+  }
+  ComponentConfig &with_background_inset(float both) {
+    return with_background_inset(both, both);
   }
 
   // Backwards-compatible aliases kept intentionally while call sites migrate.
@@ -480,6 +505,11 @@ struct ComponentConfig {
   }
   ComponentConfig &with_slider_style(const SliderStyle &style) {
     slider_style = style;
+    return *this;
+  }
+
+  ComponentConfig &with_escape_blurs(bool blur = true) {
+    text_escape_blurs = blur;
     return *this;
   }
   ComponentConfig &with_toggle_indicators(const std::string &on,
@@ -695,6 +725,11 @@ struct ComponentConfig {
     on_draw_over = std::move(fn);
     return *this;
   }
+
+  ComponentConfig &with_on_submit(OnSubmitFn fn) {
+    on_submit = std::move(fn);
+    return *this;
+  }
   ComponentConfig &with_disabled(bool dis) {
     disabled = dis;
     return *this;
@@ -733,6 +768,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_inert(bool on = true) {
     inert = on;
+    return *this;
+  }
+  ComponentConfig &with_draw_only(bool on = true) {
+    draw_only = on;
     return *this;
   }
   ComponentConfig &with_takes_focus(bool takes = true) {
@@ -842,6 +881,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_placeholder(std::string hint) {
     placeholder = std::move(hint);
+    return *this;
+  }
+  ComponentConfig &with_placeholder_color(Color color) {
+    placeholder_color = color;
     return *this;
   }
   /// Flex wrap: lets CHILDREN flow onto a new row/column. NOT text wrapping --
@@ -1227,7 +1270,7 @@ struct ComponentConfig {
   }
 
   ComponentConfig &apply_automatic_defaults() {
-    if (!has_padding()) {
+    if (!has_padding() && !padding_explicitly_set) {
       padding = Padding{.top = DefaultSpacing::medium(),
                         .left = DefaultSpacing::medium(),
                         .bottom = DefaultSpacing::medium(),
@@ -1248,9 +1291,10 @@ struct ComponentConfig {
   ComponentConfig &apply_overrides_from(const ComponentConfig &overrides) {
     ComponentConfig &merged = *this;
 
-    if (overrides.has_padding()) {
+    if (overrides.has_padding() || overrides.padding_explicitly_set) {
       merged.padding = overrides.padding;
       merged.padding_is_default = overrides.padding_is_default;
+      merged.padding_explicitly_set = overrides.padding_explicitly_set;
     }
     if (overrides.has_margin())
       merged.margin = overrides.margin;
@@ -1297,6 +1341,8 @@ struct ComponentConfig {
       merged.ignore_pointer_events = true;
     if (overrides.inert)
       merged.inert = true;
+    if (overrides.draw_only)
+      merged.draw_only = true;
     if (!overrides.takes_focus)
       merged.takes_focus = false;
     if (overrides.hoverable)
@@ -1391,6 +1437,8 @@ if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.deb
       merged.on_draw_fg = overrides.on_draw_fg;
     if (overrides.on_draw_over)
       merged.on_draw_over = overrides.on_draw_over;
+    if (overrides.on_submit)
+      merged.on_submit = overrides.on_submit;
 
     // Size constraints
     if (overrides.min_width.dim != Dim::None)
@@ -1421,6 +1469,8 @@ if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.deb
       merged.hover_color = overrides.hover_color;
     if (overrides.skip_hover_override.has_value())
       merged.skip_hover_override = overrides.skip_hover_override;
+    if (overrides.bg_inset.has_value())
+      merged.bg_inset = overrides.bg_inset;
     // Defaults true, so only a caller turning it off can be detected.
     if (!overrides.auto_text_color)
       merged.auto_text_color = false;
@@ -1468,8 +1518,12 @@ if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.deb
       merged.text_cut_disabled = true;
     if (overrides.text_paste_disabled)
       merged.text_paste_disabled = true;
+    if (!overrides.text_escape_blurs)
+      merged.text_escape_blurs = false;
     if (!overrides.placeholder.empty())
       if (merged.placeholder != overrides.placeholder) merged.placeholder = overrides.placeholder;
+    if (overrides.placeholder_color.has_value())
+      merged.placeholder_color = overrides.placeholder_color;
     if (overrides.text_area_line_height.has_value())
       merged.text_area_line_height = overrides.text_area_line_height;
     // Defaults true; see auto_text_color.
@@ -1512,6 +1566,8 @@ if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.deb
       merged.icon_source_rect = overrides.icon_source_rect;
     if (overrides.icon_position != IconPosition::Left)
       merged.icon_position = overrides.icon_position;
+    if (overrides.icon_size.has_value())
+      merged.icon_size = overrides.icon_size;
 
     if (!overrides.extensions.empty())
       merged.extensions = overrides.extensions;
@@ -1576,6 +1632,8 @@ if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.deb
       custom_text_color = parent.custom_text_color;
       auto_text_color = parent.auto_text_color;
     }
+    if (parent.placeholder_color.has_value())
+      placeholder_color = parent.placeholder_color;
     // Same rule: a composite dropped the caller's edge and corner silently.
     if (parent.roundness.has_value())
       roundness = parent.roundness;

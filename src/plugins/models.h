@@ -23,6 +23,7 @@
 #include "../graphics_common.h"
 #include "../library.h"
 #include "../logging.h"
+#include "../render_counters.h"
 #include "../warn_once.h"
 #include "../singleton.h"
 #include "color.h"
@@ -287,6 +288,7 @@ inline void draw_model_instanced_tinted(const ModelType &model, ShaderType shade
     material.shader = shader;
     unsigned int color_buffer = raylib::rlLoadVertexBuffer(
         tints, static_cast<int>(count * sizeof(Color)), true);
+    if (color_buffer != 0) render_counters::note_create();
     if (raylib::rlEnableVertexArray(model.meshes[i].vaoId)) {
       raylib::rlEnableVertexAttribute(static_cast<unsigned int>(tint_loc));
       raylib::rlSetVertexAttribute(static_cast<unsigned int>(tint_loc), 4,
@@ -746,6 +748,7 @@ private:
       to_float16(g.transforms, flat.data());
       g.instance_vbo = raylib::rlLoadVertexBuffer(
           flat.data(), static_cast<int>(cap * sizeof(raylib::float16)), true);
+      if (g.instance_vbo != 0) render_counters::note_create();
       g.instance_capacity = cap;
       g.uploaded = g.transforms;
       g.buffer_creates++;
@@ -774,6 +777,7 @@ private:
       std::copy(g.tints.begin(), g.tints.end(), buf.begin());
       g.tint_vbo = raylib::rlLoadVertexBuffer(
           buf.data(), static_cast<int>(cap * sizeof(Color)), true);
+      if (g.tint_vbo != 0) render_counters::note_create();
       g.tint_capacity = cap;
       g.uploaded_tints = g.tints;
       return;
