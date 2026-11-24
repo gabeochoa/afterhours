@@ -573,6 +573,10 @@ inline bool operator==(const TextSpan &a, const TextSpan &b) {
          a.color.a == b.color.a && a.weight == b.weight;
 }
 
+struct HasThemeSnapshot : BaseComponent {
+  Theme theme;
+};
+
 struct HasCheckboxMark : BaseComponent {};
 
 struct HasLabel : BaseComponent {

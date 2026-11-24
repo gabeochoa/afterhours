@@ -727,6 +727,7 @@ Entity &parent, const ComponentConfig &config,
     mods.origin_x = config.origin_x;
     mods.origin_y = config.origin_y;
   }
+  entity.addComponentIfMissing<HasThemeSnapshot>().theme = ctx.theme;
   apply_label(ctx, entity, config);
   apply_accessibility(entity, config,
                       default_accessible_role(component_type));
