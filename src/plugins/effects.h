@@ -302,6 +302,79 @@ struct BlurPass {
   }
 };
 
+inline constexpr const char *SCENE_LIGHTS_GLSL = R"(
+uniform vec3 ahSunDirection;
+uniform vec3 ahSunColor;
+uniform vec3 ahAmbientColor;
+uniform vec3 ahFogColor;
+uniform float ahFogNear;
+uniform float ahFogFar;
+uniform vec3 ahCameraPos;
+uniform vec3 ahPointPos[4];
+uniform vec3 ahPointColor[4];
+uniform float ahPointRange[4];
+uniform float ahPointCount;
+vec3 ah_apply_scene_lights(vec3 albedo, vec3 world_pos, vec3 world_normal) {
+  vec3 n = normalize(world_normal);
+  vec3 lit = albedo * (ahAmbientColor + ahSunColor * max(dot(n, -normalize(ahSunDirection)), 0.0));
+  for (int i = 0; i < 4; i++) {
+    if (float(i) >= ahPointCount) break;
+    vec3 to_light = ahPointPos[i] - world_pos;
+    float d = length(to_light);
+    float falloff = clamp(1.0 - d / max(ahPointRange[i], 0.001), 0.0, 1.0);
+    lit += albedo * ahPointColor[i] * falloff * max(dot(n, to_light / max(d, 0.001)), 0.0);
+  }
+  if (ahFogFar <= ahFogNear) return lit;
+  float f = clamp((distance(world_pos, ahCameraPos) - ahFogNear) / (ahFogFar - ahFogNear), 0.0, 1.0);
+  return mix(lit, ahFogColor, f);
+}
+)";
+
+struct SceneLights {
+  struct Point {
+    Vector3Type position{};
+    ColorType color{255, 255, 255, 255};
+    float range = 10.f;
+  };
+  Vector3Type sun_direction{-0.4f, -1.f, -0.3f};
+  ColorType sun{255, 245, 230, 255};
+  ColorType ambient{110, 120, 140, 255};
+  ColorType fog{135, 190, 230, 255};
+  float fog_near = 0.f;
+  float fog_far = 0.f;
+  Vector3Type camera_pos{};
+  Point points[4]{};
+  int point_count = 0;
+
+  void apply_to(Effect &e) const {
+    auto rgb = [](ColorType c) { return Vector3Type{c.r / 255.f, c.g / 255.f, c.b / 255.f}; };
+    e.set("ahSunDirection", sun_direction);
+    e.set("ahSunColor", rgb(sun));
+    e.set("ahAmbientColor", rgb(ambient));
+    e.set("ahFogColor", rgb(fog));
+    e.set("ahFogNear", fog_near);
+    e.set("ahFogFar", fog_far);
+    e.set("ahCameraPos", camera_pos);
+    e.set("ahPointCount", static_cast<float>(std::clamp(point_count, 0, 4)));
+    for (int i = 0; i < 4; i++) {
+      const std::string base = "ahPoint";
+      e.set((base + "Pos[" + std::to_string(i) + "]").c_str(), points[i].position);
+      e.set((base + "Color[" + std::to_string(i) + "]").c_str(), rgb(points[i].color));
+      e.set((base + "Range[" + std::to_string(i) + "]").c_str(), points[i].range);
+    }
+  }
+};
+
+inline int apply_scene_lights(const SceneLights &lights) {
+  int count = 0;
+  for (Effect *e : Effect::registry())
+    if (e && e->ok()) {
+      lights.apply_to(*e);
+      count++;
+    }
+  return count;
+}
+
 inline int reload_all() {
   int count = 0;
   for (Effect *e : Effect::registry()) {

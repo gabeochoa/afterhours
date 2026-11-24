@@ -537,6 +537,14 @@ struct InstanceBatcher {
            Vector3Type scale, uint32_t key = 0) {
     add(model, model_transform(pos, yaw_deg, scale), key);
   }
+  // Draws from a caller-owned buffer in place, no copy. The buffer must
+  // outlive flush()/drain()/clear(); it is never freed. Borrowed segments
+  // carry no tints: in a tinted group they draw white.
+  void borrow(const ModelType &model, std::span<const MatrixType> ts,
+              uint32_t key = 0) {
+    if (ts.empty()) return;
+    group_for(model, key).borrowed.push_back(ts);
+  }
 
   void add(const ModelType &model, const MatrixType &transform, uint32_t key,
            Color tint) {
@@ -577,40 +585,66 @@ struct InstanceBatcher {
   // group's uniforms, or draw a shadow pass from the same transforms.
   template <typename OnGroup> void flush(ShaderType shader, OnGroup &&on_group) {
     for (Group &g : groups) {
-      if (g.transforms.empty()) continue;
-      on_group(*g.model, g.key,
-               std::span<const MatrixType>(g.transforms.data(),
-                                           g.transforms.size()));
-      sync_instance_buffer(g);
-      sync_tint_buffer(g);
-      // Draw through raylib's DrawMeshInstanced path (via the tint-aware
-      // helpers): the custom persistent draw diverges pixel-wise from
-      // draw_model in this build, while these match it exactly. The
-      // persistent buffers above still back the buffer_creates/uploads
-      // accounting and are kept in sync for the group.
-      if (g.tinted)
-        draw_model_instanced_tinted(*g.model, shader, g.transforms.data(),
-                                    g.tints.data(),
-                                    static_cast<int>(g.transforms.size()));
-      else
-        draw_model_instanced(*g.model, shader, g.transforms.data(),
-                             static_cast<int>(g.transforms.size()));
-      g.transforms.clear();
-      g.tints.clear();
-      g.tinted = false;
+      if (g.size() == 0) continue;
+      // Capture before the owned segment clears it: borrowed segments in a
+      // tinted group draw through the tinted path too, with white tints
+      // (borrow carries no tint data of its own).
+      const bool tinted = g.tinted;
+      if (!g.transforms.empty()) {
+        on_group(*g.model, g.key,
+                 std::span<const MatrixType>(g.transforms.data(),
+                                             g.transforms.size()));
+        sync_instance_buffer(g);
+        sync_tint_buffer(g);
+        // Draw through raylib's DrawMeshInstanced path (via the tint-aware
+        // helpers): the custom persistent draw diverges pixel-wise from
+        // draw_model in this build, while these match it exactly. The
+        // persistent buffers above still back the buffer_creates/uploads
+        // accounting and are kept in sync for the group.
+        if (tinted)
+          draw_model_instanced_tinted(*g.model, shader, g.transforms.data(),
+                                      g.tints.data(),
+                                      static_cast<int>(g.transforms.size()));
+        else
+          draw_model_instanced(*g.model, shader, g.transforms.data(),
+                               static_cast<int>(g.transforms.size()));
+        g.transforms.clear();
+        g.tints.clear();
+        g.tinted = false;
+      }
+      for (std::span<const MatrixType> ts : g.borrowed) {
+        on_group(*g.model, g.key, ts);
+        if (tinted) {
+          std::vector<Color> white(ts.size(), Color{255, 255, 255, 255});
+          draw_model_instanced_tinted(*g.model, shader, ts.data(),
+                                      white.data(),
+                                      static_cast<int>(ts.size()));
+        } else {
+          draw_model_instanced(*g.model, shader, ts.data(),
+                               static_cast<int>(ts.size()));
+        }
+      }
+      g.borrowed.clear();
     }
   }
 
   // Hands each non-empty group to on_group(model, key, transforms) without
-  // drawing anything, then empties the batcher. The span is valid only
+  // drawing anything, then empties the batcher. Owned copies are handed
+  // over as one span, then each borrowed span as-is (the caller's own
+  // pointer); borrowed spans are never freed. The span is valid only
   // during the call: copy or move out what you need.
   template <typename OnGroup> void drain(OnGroup &&on_group) {
     for (Group &g : groups) {
-      if (g.transforms.empty()) continue;
-      on_group(*g.model, g.key,
-               std::span<const MatrixType>(g.transforms.data(),
-                                           g.transforms.size()));
+      if (!g.transforms.empty()) {
+        on_group(*g.model, g.key,
+                 std::span<const MatrixType>(g.transforms.data(),
+                                             g.transforms.size()));
+      }
+      for (std::span<const MatrixType> ts : g.borrowed) {
+        on_group(*g.model, g.key, ts);
+      }
       g.transforms.clear();
+      g.borrowed.clear();
       g.tints.clear();
       g.tinted = false;
     }
@@ -619,6 +653,7 @@ struct InstanceBatcher {
   void clear() {
     for (Group &g : groups) {
       g.transforms.clear();
+      g.borrowed.clear();
       g.tints.clear();
       g.tinted = false;
     }
@@ -638,14 +673,14 @@ struct InstanceBatcher {
 
   [[nodiscard]] size_t copies() const {
     size_t n = 0;
-    for (const Group &g : groups) n += g.transforms.size();
+    for (const Group &g : groups) n += g.size();
     return n;
   }
   // Groups with at least one copy waiting: the draw calls flush() will make
   // per mesh.
   [[nodiscard]] size_t group_count() const {
     size_t n = 0;
-    for (const Group &g : groups) n += g.transforms.empty() ? 0 : 1;
+    for (const Group &g : groups) n += g.size() == 0 ? 0 : 1;
     return n;
   }
 
@@ -664,6 +699,13 @@ private:
     unsigned int tint_vbo = 0;
     size_t tint_capacity = 0;
     std::vector<Color> uploaded_tints;
+    // Caller-owned spans, never freed; drained/flushed as-is.
+    std::vector<std::span<const MatrixType>> borrowed;
+    [[nodiscard]] size_t size() const {
+      size_t n = transforms.size();
+      for (std::span<const MatrixType> ts : borrowed) n += ts.size();
+      return n;
+    }
   };
   ShaderType default_shader{};
   bool has_default_shader = false;
@@ -846,6 +888,7 @@ struct InstanceBatcher {
   void unload_default_instancing_shader() {}
   template <typename M> void add(const ModelType &, const M &, uint32_t = 0) {}
   template <typename V> void add(const ModelType &, V, float, V, uint32_t = 0) {}
+  void borrow(const ModelType &, std::span<const MatrixType>, uint32_t = 0) {}
   template <typename M>
   void add(const ModelType &, const M &, uint32_t, Color) {}
   template <typename V>
