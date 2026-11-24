@@ -1168,7 +1168,7 @@ struct SnapshotablePosition : BaseComponent {
     float x = 0.f, y = 0.f;
 };
 
-struct PositionDTO {
+struct PositionSerializable {
     float x = 0.f, y = 0.f;
 };
 
@@ -1187,9 +1187,9 @@ TEST_CASE("Snapshot: take_components captures component data",
     EntityHelper::merge_entity_arrays();
 
     auto records =
-        snapshot::take_components<SnapshotablePosition, PositionDTO>(
+        snapshot::take_components<SnapshotablePosition, PositionSerializable>(
             [](const SnapshotablePosition &p) {
-                return PositionDTO{.x = p.x, .y = p.y};
+                return PositionSerializable{.x = p.x, .y = p.y};
             });
     REQUIRE(records.size() == 1);
     REQUIRE(records[0].entity.valid());

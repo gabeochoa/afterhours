@@ -6,11 +6,13 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 #include "../../warn_once.h"
 #include "../autolayout.h"
 #include "../color.h"
 #include "../texture_manager.h"
+#include "accessibility.h"
 #include "components.h"
 #include "extension.h"
 #include "overlay.h"
@@ -88,6 +90,7 @@ struct ComponentConfig {
   // + scroll)
   Overflow overflow_x = Overflow::Visible;
   Overflow overflow_y = Overflow::Visible;
+  bool scrollbar_gutter = false;
 
   // Background color settings
   Theme::Usage color_usage = Theme::Usage::Default;
@@ -106,6 +109,7 @@ struct ComponentConfig {
   std::optional<TextureConfig> texture_config;
   std::optional<Color> image_tint;
   std::optional<texture_manager::HasTexture::Alignment> image_alignment;
+  std::optional<int> image_filter; // TODO: replace int filter values with a TextureFilter enum.
   std::optional<std::bitset<4>> rounded_corners;
   bool consumes_directional_input = false;
   std::optional<float> roundness;     // If unset, uses theme.roundness
@@ -149,6 +153,8 @@ struct ComponentConfig {
   // Trailing: (x,y) insets from far edges; explicit size grows inward.
   AbsoluteAnchor absolute_anchor = AbsoluteAnchor::LeadingTop;
 
+  AccessibleConfig accessible;
+
   // debugs
   std::string debug_name = "";
   int render_layer = 0;
@@ -156,7 +162,12 @@ struct ComponentConfig {
   // is known. An absolute number cannot say "above whatever contains me".
   int render_layer_offset = 0;
 
-  // Custom-draw callbacks (see HasOnDraw), receiving the final rect.
+  // Custom-draw callbacks (see HasOnDraw): bg draws behind the widget's fill,
+  // fg on top of all its primitives, both receiving the widget's final rect.
+  // Focus-scoped shortcuts (see ui::HasShortcuts): handlers that fire when
+  // this element or a descendant holds focus and the bound action is
+  // pressed. Copied onto the entity by apply_flags each frame.
+  std::vector<ShortcutBinding> shortcuts;
   std::string tooltip_text;
   float tooltip_delay = 0.5f;
   overlay::Placement tooltip_placement = overlay::Placement::Below;
@@ -628,6 +639,29 @@ struct ComponentConfig {
     debug_name = name;
     return *this;
   }
+  ComponentConfig &with_accessible(AccessibleRole role,
+                                   const std::string &name) {
+    accessible.role = role;
+    accessible.name = name;
+    return *this;
+  }
+  ComponentConfig &with_accessible_name(const std::string &name) {
+    accessible.name = name;
+    return *this;
+  }
+  ComponentConfig &with_accessible_role(AccessibleRole role) {
+    accessible.role = role;
+    return *this;
+  }
+  ComponentConfig &with_accessible_value(const std::string &value) {
+    accessible.value = value;
+    return *this;
+  }
+  ComponentConfig &with_accessible_description(const std::string &desc) {
+    accessible.description = desc;
+    return *this;
+  }
+  bool has_accessible_override() const { return !accessible.empty(); }
   // Hover text. Placement flips at a screen edge the way a dropdown does.
   ComponentConfig &with_tooltip(const std::string &text, float delay = 0.5f) {
     tooltip_text = text;
@@ -717,6 +751,18 @@ struct ComponentConfig {
   ComponentConfig &with_hoverable(bool on = true) {
     hoverable = on;
     return *this;
+  }
+
+  ComponentConfig &with_shortcut(int action,
+                                 std::function<bool(Entity &)> handler) {
+    shortcuts.push_back(ShortcutBinding{action, std::move(handler)});
+    return *this;
+  }
+  template <typename Action>
+    requires std::is_enum_v<Action>
+  ComponentConfig &with_shortcut(Action action,
+                                 std::function<bool(Entity &)> handler) {
+    return with_shortcut(static_cast<int>(action), std::move(handler));
   }
   ComponentConfig &with_pseudo_locale_exempt(bool exempt = true) {
     pseudo_locale_exempt = exempt;
@@ -847,6 +893,11 @@ struct ComponentConfig {
   ComponentConfig &with_overflow(Overflow overflow) {
     overflow_x = overflow;
     overflow_y = overflow;
+    return *this;
+  }
+
+  ComponentConfig &with_scrollbar_gutter(bool enabled = true) {
+    scrollbar_gutter = enabled;
     return *this;
   }
 
@@ -1026,6 +1077,11 @@ struct ComponentConfig {
 
   ComponentConfig &with_image_tint(Color tint) {
     image_tint = tint;
+    return *this;
+  }
+
+  ComponentConfig &with_image_filter(int filter) {
+    image_filter = filter;
     return *this;
   }
 
@@ -1258,6 +1314,8 @@ struct ComponentConfig {
       merged.pseudo_locale_exempt = true;
     if (overrides.selects_on_focus())
       merged.select_on_focus = overrides.select_on_focus;
+    if (!overrides.shortcuts.empty())
+      merged.shortcuts = overrides.shortcuts;
     if (overrides.has_click_activation_override())
       merged.click_activation = overrides.click_activation;
 
@@ -1279,6 +1337,8 @@ struct ComponentConfig {
       merged.image_tint = overrides.image_tint;
     if (overrides.has_image_alignment())
       merged.image_alignment = overrides.image_alignment;
+    if (overrides.image_filter.has_value())
+      merged.image_filter = overrides.image_filter;
 
     if (overrides.is_absolute)
       merged.is_absolute = overrides.is_absolute;
@@ -1299,7 +1359,9 @@ struct ComponentConfig {
       merged.tooltip_gap = overrides.tooltip_gap;
     }
     if (!overrides.debug_name.empty())
-      if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.debug_name;
+if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.debug_name;
+    if (overrides.has_accessible_override())
+      merged.accessible = overrides.accessible;
 
     // Flexbox alignment properties
     if (overrides.justify_content != JustifyContent::FlexStart)
@@ -1360,6 +1422,8 @@ struct ComponentConfig {
       merged.overflow_x = overrides.overflow_x;
     if (overrides.overflow_y != Overflow::Visible)
       merged.overflow_y = overrides.overflow_y;
+    if (overrides.scrollbar_gutter)
+      merged.scrollbar_gutter = true;
 
     // Colour and corner detail
     if (overrides.hover_color.has_value())
