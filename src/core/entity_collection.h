@@ -200,42 +200,54 @@ struct EntityCollection {
     };
   }
 
+  struct MembershipStamp {
+    std::size_t version = static_cast<std::size_t>(-1);
+    std::size_t global_gen = static_cast<std::size_t>(-1);
+    std::size_t component_gen = static_cast<std::size_t>(-1);
+    std::size_t entity_size = static_cast<std::size_t>(-1);
+  };
   mutable std::vector<Entities> membership_lists_;
-  mutable std::size_t membership_version_ = static_cast<std::size_t>(-1);
-  mutable std::size_t membership_mutation_ = static_cast<std::size_t>(-1);
-  mutable std::size_t membership_size_ = static_cast<std::size_t>(-1);
+  mutable std::vector<MembershipStamp> membership_stamps_;
 
-  bool membership_is_fresh() const {
-    return membership_version_ == version &&
-           membership_mutation_ ==
+  bool membership_is_fresh(ComponentID id) const {
+    if (id >= membership_stamps_.size())
+      return false;
+    const MembershipStamp &s = membership_stamps_[id];
+    return s.version == version &&
+           s.global_gen ==
                COMPONENT_MUTATION_GEN.load(std::memory_order_relaxed) &&
-           membership_size_ == entities_DO_NOT_USE.size();
+           s.component_gen == component_mutation_gen(id) &&
+           s.entity_size == entities_DO_NOT_USE.size();
   }
 
-  void ensure_membership_fresh() const {
-    if (membership_is_fresh())
+  void ensure_membership_fresh(ComponentID id) const {
+    if (id >= max_num_components)
       return;
-    if (membership_lists_.size() != max_num_components)
+    if (membership_lists_.size() != max_num_components) {
       membership_lists_.assign(max_num_components, Entities{});
-    for (auto &list : membership_lists_)
-      list.clear();
+      membership_stamps_.assign(max_num_components, MembershipStamp{});
+    }
+    if (membership_is_fresh(id))
+      return;
+    Entities &list = membership_lists_[id];
+    list.clear();
     ++stats().membership_rebuilds;
     for (const auto &sp : entities_DO_NOT_USE) {
-      if (!sp)
-        continue;
-      for (std::size_t c = sp->componentSet.next_set(0);
-           c < max_num_components; c = sp->componentSet.next_set(c + 1))
-        membership_lists_[c].push_back(sp);
+      if (sp && sp->componentSet.test(id))
+        list.push_back(sp);
     }
-    membership_version_ = version;
-    membership_mutation_ =
-        COMPONENT_MUTATION_GEN.load(std::memory_order_relaxed);
-    membership_size_ = entities_DO_NOT_USE.size();
+    membership_stamps_[id] = {version,
+                              COMPONENT_MUTATION_GEN.load(
+                                  std::memory_order_relaxed),
+                              component_mutation_gen(id),
+                              entities_DO_NOT_USE.size()};
   }
 
   const Entities &membership_for(ComponentID id) const {
     static const Entities none;
-    ensure_membership_fresh();
+    if (id >= max_num_components)
+      return none;
+    ensure_membership_fresh(id);
     if (id >= membership_lists_.size())
       return none;
     return membership_lists_[id];
@@ -246,7 +258,11 @@ struct EntityCollection {
     Entities out;
     if (ids.empty())
       return out;
-    ensure_membership_fresh();
+    for (const ComponentID id : ids) {
+      if (id >= max_num_components)
+        return out;
+      ensure_membership_fresh(id);
+    }
     const Entities *smallest = nullptr;
     for (const ComponentID id : ids) {
       if (id >= membership_lists_.size())
