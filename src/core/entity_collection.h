@@ -506,7 +506,8 @@ struct EntityCollection {
 
   template <typename Component> RefEntity get_singleton() const {
     const ComponentID id = components::get_type_id<Component>();
-    if (!singletonMap.contains(id)) {
+    const auto it = singletonMap.find(id);
+    if (it == singletonMap.end()) {
       // Warn once per component id, not every frame — a missing singleton is
       // queried per-frame and would otherwise flood the log.
       static std::unordered_set<ComponentID> warned;
@@ -520,7 +521,7 @@ struct EntityCollection {
       static Entity dummy_entity;
       return dummy_entity;
     }
-    auto *entity_ptr = singletonMap.at(id);
+    auto *entity_ptr = it->second;
     if (!entity_ptr) {
       log_error("Singleton map contains null pointer for component {} ({})", id,
                 type_name<Component>());
@@ -560,12 +561,13 @@ struct EntityCollection {
 
   template <typename Component> Component &get_singleton_cmp_enforce() const {
     const ComponentID id = components::get_type_id<Component>();
-    if (!singletonMap.contains(id)) {
+    const auto it = singletonMap.find(id);
+    if (it == singletonMap.end()) {
       log_error("get_singleton_cmp_enforce: Missing required singleton {} ({})",
                 id, type_name<Component>());
       std::abort();
     }
-    Entity &ent = *singletonMap.at(id);
+    Entity &ent = *it->second;
     return ent.get<Component>();
   }
 
