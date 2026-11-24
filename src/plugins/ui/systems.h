@@ -918,7 +918,8 @@ private:
                    Hoverable>())
       return false;
     // Opted out of hit-testing entirely: the element behind it wins instead.
-    if (e.has<IgnorePointerEvents>() || detail::in_inert_subtree(e))
+    if (e.has<IgnorePointerEvents>() || e.hasTag(UITag::DrawOnly) ||
+        detail::in_inert_subtree(e))
       return false;
     if (!cmp.was_rendered_to_screen)
       return false;
@@ -1150,7 +1151,7 @@ struct CloseDropdownOnClickOutside : System<HasDropdownState, UIComponent> {
 // not ShouldHide, was rendered this frame, and input is allowed.
 template <typename InputAction>
 bool can_be_focused(UIContext<InputAction> &ctx, const Entity &e) {
-  return ctx.is_tab_focusable(e);
+  return !e.hasTag(UITag::DrawOnly) && ctx.is_tab_focusable(e);
 }
 
 template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
