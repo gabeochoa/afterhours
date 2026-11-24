@@ -96,8 +96,12 @@ ALL_TESTS := \
 	ui_update_lifecycle_single_test \
 	drag_preview_test \
 	drag_scroll_hit_test \
+	parent_gesture_test \
 	label_clip_test \
 	label_test \
+	tooltip_truncated_test \
+	batched_text_overflow_test \
+	scroll_clip_decoration_test \
 	animation_test \
 	sprite_animation_test \
 	reveal_test \
@@ -107,6 +111,7 @@ ALL_TESTS := \
 	appearance_test \
 	frame_loop_test \
 	headless_cadence_test \
+	timer_test \
 	jobs_test \
 	frame_phases_test \
 	color_value_test \
@@ -158,6 +163,7 @@ ALL_TESTS := \
 	triangle_winding_test \
 	bug_note_test \
 	charts_test \
+	chart_options_test \
 	system_profile_test \
 	allocation_counters_test \
 	system_groups_test \
@@ -184,6 +190,7 @@ ALL_TESTS := \
 	crash_handler_web_sim_test \
 	crash_report_file_test \
 	setting_row_style_test \
+	icon_sizing_test \
 	settings_presets_test \
 	singleton_iteration_test \
 	get_unique_test \
@@ -196,6 +203,7 @@ ALL_TESTS := \
 	e2e_key_command_test \
 	e2e_type_command_test \
 	overlay_layer_test \
+	popup_overlay_layer_test \
 	unhandled_command_test \
 	e2e_retry_test \
 	e2e_resize_steps_test \
@@ -216,6 +224,7 @@ ALL_TESTS := \
 	e2e_script_headers_test \
 	point_in_element_test \
 	e2e_ui_gestures_test \
+	e2e_name_lookup_test \
 	mouse_axis_action_test \
 	card_and_type_scale_test \
 	fixed_timestep_test \
@@ -247,9 +256,11 @@ lighting_zones_test \
 	trailing_anchor_test \
 	dialog_test \
 	escape_owner_test \
+	modal_centering_test \
 	dump_ui_test \
 	accessibility_test \
 	scroll_anchor_test \
+	scroll_absolute_content_test \
 	measure_config_test \
 	scroll_anchor_test \
 	widget_retirement_test \
@@ -280,14 +291,20 @@ lighting_zones_test \
 	auto_text_color_test \
 	scissor_coalescing_test \
 	blend_batch_test \
+	draw_coalesce_test \
 	focus_origin_test \
 	tab_order_test \
 	reset_focus_test \
+	focus_select_on_focus_test \
+	focus_fallback_test \
 	focus_shortcuts_test \
 	cleanup_order_test \
 	attachment_test \
 	canonical_snapshot_test \
+	event_phases_test \
+	draw_only_test \
 	entity_pool_test \
+	session_reset_test \
 	entity_query_test \
 	entity_membership_test \
 	temp_warning_caller_test \
@@ -316,6 +333,7 @@ lighting_zones_test \
 	color_swatch_test \
 	overlay_placement_test \
 	tooltip_test \
+	delayed_busy_test \
 	progress_bar_test \
 	psx_budget_test \
 	psx_backend_test \
@@ -323,6 +341,7 @@ lighting_zones_test \
 	random_engine_test \
 	render_order_test \
 	draw_over_test \
+	imm_draw_order_test \
 	scroll_smoothing_test \
 	scrollbar_gutter_test \
 	setup_test \
@@ -362,6 +381,7 @@ lighting_zones_test \
 	texture_usable_raylib_test \
 	per_draw_filter_test \
 	stepper_test \
+	bg_inset_test \
 	styling_test \
 	system_tags_test \
 	should_run_overload_test \
@@ -388,6 +408,7 @@ lighting_zones_test \
 	translation_test \
 	layout_inspector_test \
 	letter_spacing_zero_test \
+	padding_empty_test \
 	mouse_pre_event_test
 
 # .app packaging is macOS-only, and the test shells out to plutil.
@@ -471,6 +492,7 @@ RAYLIB_TESTS := \
 	instance_batcher_persist_test \
 	dialog_test \
 	escape_owner_test \
+	modal_centering_test \
 	dump_ui_test \
 	scroll_anchor_test \
 	measure_config_test \
@@ -478,6 +500,7 @@ RAYLIB_TESTS := \
 	widget_retirement_test \
 	text_line_edit_test \
 	grapheme_edit_test \
+	delayed_busy_test \
 	progress_bar_test \
 	render_order_test \
 	setup_test \
@@ -491,6 +514,7 @@ RAYLIB_TESTS := \
 	small_components_test \
 	text_area_test \
 	text_input_test \
+	focus_select_on_focus_test \
 	color_swatch_test \
 	editing_capability_test \
 	label_inset_test \
@@ -506,6 +530,7 @@ RAYLIB_TESTS := \
 	mouse_axis_action_test \
 	unhandled_command_test \
 	overlay_layer_test \
+	popup_overlay_layer_test \
 	press_delay_test \
 	graphics_key_injection_test \
 	e2e_gamepad_test \

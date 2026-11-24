@@ -34,10 +34,10 @@ namespace detail {
 // app has differing heights, so hanabi hand-rolled this window three times
 // before it lived here.
 struct RowMetrics {
-  float uniform = 0.f;      // used when prefix is empty
-  std::vector<float> prefix; // prefix[i] = height of rows [0, i)
+  float uniform = 0.f;       // used when prefix is empty
+  std::vector<double> prefix; // prefix[i] = height of rows [0, i)
   // Set instead of prefix when the retained index owns the sums.
-  const std::vector<float> *borrowed = nullptr;
+  const std::vector<double> *borrowed = nullptr;
   HasVirtualListIndex *index = nullptr;
   size_t count = 0;
   float scale = 1.f;
@@ -56,15 +56,18 @@ struct RowMetrics {
   [[nodiscard]] float height_of(size_t i) const {
     if (is_uniform())
       return uniform * scale;
-    const std::vector<float> &p = borrowed ? *borrowed : prefix;
-    return (p[i + 1] - p[i]) * scale;
+    const std::vector<double> &p = borrowed ? *borrowed : prefix;
+    return static_cast<float>((p[i + 1] - p[i]) * scale);
   }
+  // Extent math in double until the final float coordinate, so cumulative
+  // sums do not drift at large row counts.
   [[nodiscard]] float offset_of(size_t i) const {
     if (is_uniform())
-      return (uniform * static_cast<float>(i)) * scale +
-             static_cast<float>(i) * gap;
-    const std::vector<float> &p = borrowed ? *borrowed : prefix;
-    return p[i] * scale + static_cast<float>(i) * gap;
+      return static_cast<float>(static_cast<double>(uniform) *
+                                    static_cast<double>(i) * scale +
+                                static_cast<double>(i) * gap);
+    const std::vector<double> &p = borrowed ? *borrowed : prefix;
+    return static_cast<float>(p[i] * scale + static_cast<double>(i) * gap);
   }
   [[nodiscard]] float total() const { return count ? offset_of(count) - gap : 0.f; }
   // Largest index whose offset is <= y, clamped to the list.
@@ -73,7 +76,8 @@ struct RowMetrics {
       return 0;
     if (y >= total()) return static_cast<long>(count);
     if (is_uniform())
-      return static_cast<long>(y / (uniform * scale + gap));
+      return static_cast<long>(static_cast<double>(y) /
+                               (static_cast<double>(uniform) * scale + gap));
     size_t lo = 0, hi = count;
     while (lo < hi) {
       const size_t mid = lo + (hi - lo) / 2;
@@ -381,7 +385,7 @@ inline void prepend_virtual_rows(Entity &list, size_t count) {
     return;
   auto &idx = list.template get<HasVirtualListIndex>();
   idx.heights.insert(idx.heights.begin(), count, 0.f);
-  idx.prefix.insert(idx.prefix.begin(), count, 0.f);
+  idx.prefix.insert(idx.prefix.begin(), count, 0.0);
   // Shift the pending range by the insertion, saturating at the union
   // identity so an empty range stays empty.
   const size_t cap = HasVirtualListIndex::kDirtyEmpty - count;
@@ -401,8 +405,8 @@ inline void prepend_virtual_rows(Entity &list, size_t count) {
   const auto &idx = list.template get<HasVirtualListIndex>();
   if (index >= idx.prefix.size())
     return 0.f;
-  return idx.prefix[index] * idx.last_scale +
-         static_cast<float>(index) * idx.last_gap;
+  return static_cast<float>(idx.prefix[index] * idx.last_scale +
+                            static_cast<double>(index) * idx.last_gap);
 }
 
 /// Total height of a measured virtual_list's rows, in pixels, as of its
@@ -414,8 +418,9 @@ inline void prepend_virtual_rows(Entity &list, size_t count) {
   if (idx.prefix.empty())
     return 0.f;
   const size_t count = idx.prefix.size() - 1;
-  return idx.prefix[count] * idx.last_scale +
-         static_cast<float>(count ? count - 1 : 0) * idx.last_gap;
+  return static_cast<float>(
+      idx.prefix[count] * idx.last_scale +
+      static_cast<double>(count ? count - 1 : 0) * idx.last_gap);
 }
 
 

@@ -530,6 +530,20 @@ static void register_batched_render_systems(
     sm.register_render_system(std::make_unique<ui::RenderTooltip<InputAction>>());
 }
 
+template<typename InputAction, typename... UserSystems>
+static void register_render_systems_after_ui(
+    SystemManager &sm, InputAction toggle_debug, UserSystems &&...user_systems) {
+    register_render_systems<InputAction>(sm, toggle_debug);
+    (sm.register_render_system(std::forward<UserSystems>(user_systems)), ...);
+}
+
+template<typename InputAction, typename... UserSystems>
+static void register_batched_render_systems_after_ui(
+    SystemManager &sm, InputAction toggle_debug, UserSystems &&...user_systems) {
+    register_batched_render_systems<InputAction>(sm, toggle_debug);
+    (sm.register_render_system(std::forward<UserSystems>(user_systems)), ...);
+}
+
 /// Conventional key bindings for the UI's own actions.
 ///
 /// Entries are matched to the caller's enum *by name*, so an app with extra

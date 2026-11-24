@@ -59,6 +59,18 @@ static inline Color resolve_image_tint(const Entity &entity, float opacity) {
   return colors::opacity_pct(tint, opacity);
 }
 
+static inline RectangleType fill_rect_for(const Entity &entity,
+                                          const RectangleType &draw_rect) {
+  if (!entity.has<HasColor>())
+    return draw_rect;
+  const auto &inset = entity.get<HasColor>().bg_inset;
+  if (!inset.has_value())
+    return draw_rect;
+  const float w = std::max(0.f, draw_rect.width - 2.f * inset->x);
+  const float h = std::max(0.f, draw_rect.height - 2.f * inset->y);
+  return {draw_rect.x + inset->x, draw_rect.y + inset->y, w, h};
+}
+
 static inline bool is_hidden_for_render(const Entity &entity) {
   const Entity *current = &entity;
   for (int depth = 0; depth < 64; ++depth) {
@@ -331,7 +343,7 @@ std::optional<FocusPaint> prepare_focus_paint(const UIContext<InputAction> &cont
         compute_intersected_clip_rect(entity, /*include_self=*/false);
     return FocusPaint{*ring, entity.id, i - 1, cmd.layer,
                       entity.has<HasUIModifiers>() ? entity.get<HasUIModifiers>().rotation : 0.f,
-                      has_clip && !entity.has<HasScrollView>() ? std::optional{clip} : std::nullopt};
+                      has_clip ? clip : std::optional<RectangleType>{}};
   }
   return {};
 }
@@ -664,7 +676,9 @@ position_text_ex(const ui::FontManager &fm, const std::string &text,
     // would report a box sized to exactly its own text -- a Dim::Text box --
     // as overflowing by precisely the margin, always.
     const float usable_y = measures_as_block ? container.height : max_text_size.y;
-    text_fits = ts.y <= usable_y && ts.x <= max_text_size.x;
+    text_fits = ts.y <= usable_y &&
+                (text_overflow == TextOverflow::Ellipsis ||
+                 ts.x <= max_text_size.x);
 #ifdef AFTERHOURS_DEBUG_TEXT_OVERFLOW
     if (!text_fits && report_overflow) {
       // Keyed on the LAYOUT, not the string. Keying on text meant an editable
@@ -850,16 +864,14 @@ inline void register_label_for_testing(const Entity &entity,
                                        float screen_width, float screen_height) {
   if (!testing::test_input::detail::test_mode) return;
   RectangleType viewport{0.f, 0.f, screen_width, screen_height};
-  if (!entity.has<HasScrollView>()) {
-    const auto [has_clip, clip] = compute_intersected_clip_rect(entity);
-    if (has_clip) {
-      const RectangleType scissor{
-          static_cast<float>(static_cast<int>(clip.x)),
-          static_cast<float>(static_cast<int>(clip.y)),
-          static_cast<float>(static_cast<int>(clip.width)),
-          static_cast<float>(static_cast<int>(clip.height))};
-      viewport = intersect_rects(viewport, scissor);
-    }
+  const auto [has_clip, clip] = compute_intersected_clip_rect(entity);
+  if (has_clip) {
+    const RectangleType scissor{
+        static_cast<float>(static_cast<int>(clip.x)),
+        static_cast<float>(static_cast<int>(clip.y)),
+        static_cast<float>(static_cast<int>(clip.width)),
+        static_cast<float>(static_cast<int>(clip.height))};
+    viewport = intersect_rects(viewport, scissor);
   }
   testing::VisibleTextRegistry::instance().register_text_in_clip(
       text, bounds.x, bounds.y, bounds.width, bounds.height,
@@ -972,7 +984,7 @@ inline void paint_label_text_selection(UIContext<InputAction> &context,
     draw(r, context.theme.selection);
 }
 
-static inline void draw_text_in_rect(
+static inline bool draw_text_in_rect(
     const ui::FontManager &fm, const std::string &text, RectangleType rect,
     TextAlignment alignment, Color color, bool show_debug_indicator = false,
     const std::optional<TextStroke> &stroke = std::nullopt,
@@ -1054,6 +1066,7 @@ static inline void draw_text_in_rect(
       float total_h = line_h * static_cast<float>(lines.size());
       // Vertically center the block within the rect.
       float y = rect.y + std::max(0.f, (rect.height - total_h) * 0.5f);
+      bool truncated = false;
       for (const auto &ln : lines) {
         // A line that does not fully fit is dropped, not drawn: the
         // own-box clip would otherwise slice it mid-glyph.
@@ -1064,10 +1077,12 @@ static inline void draw_text_in_rect(
                             rot_center_x, rot_center_y, TextOverflow::Clip,
                             letter_spacing, font_size, /*report_overflow=*/false,
                             inset, false);
+        } else {
+          truncated = true;
         }
         y += line_h;
       }
-      return;
+      return truncated;
     }
     // Single line that fits: fall through to normal single-line rendering.
   }
@@ -1118,7 +1133,7 @@ static inline void draw_text_in_rect(
   // MIN_FONT_SIZE, so any text below the floor was silently not drawn, and the
   // clamp above was the only thing keeping that from happening.
   if (result.rect.height < 1.f) {
-    return;
+    return !text.empty();
   }
 
   // Handle text overflow ellipsis truncation
@@ -1140,6 +1155,9 @@ static inline void draw_text_in_rect(
         });
     return truncated_text;
   }();
+  const bool truncated = text_overflow == TextOverflow::Ellipsis
+                             ? render_text != text
+                             : !result.text_fits;
 
   RectangleType sizing = result.rect;
 
@@ -1168,6 +1186,7 @@ static inline void draw_text_in_rect(
   detail::draw_text_at_position(fm, render_text, rect, alignment, sizing, color,
                                 rotation, rot_center_x, rot_center_y,
                                 letter_spacing);
+  return truncated;
 }
 
 // Draw coloured runs through the same wrap primitive as the plain path.
@@ -1176,7 +1195,7 @@ static inline void draw_text_in_rect(
 // Non-const fm: per-run weights are drawn by swapping the active font around
 // each run, since draw_text_in_rect resolves the face itself. The active font
 // is restored before returning.
-static inline void draw_runs_in_rect(
+static inline bool draw_runs_in_rect(
     ui::FontManager &fm, const std::vector<TextSpan> &runs,
     RectangleType rect, TextAlignment alignment,
     bool show_debug_indicator = false,
@@ -1190,7 +1209,7 @@ static inline void draw_runs_in_rect(
     // Pinned row height; 0 means the measured one.
     float line_height_px = 0.0f) {
   if (runs.empty() || rect.width <= 0.f)
-    return;
+    return false;
 
   Font font = fm.get_active_font();
   float font_size = explicit_font_size;
@@ -1221,7 +1240,7 @@ static inline void draw_runs_in_rect(
       text_overflow == TextOverflow::Wrap && explicit_font_size > 0.f;
   const float wrap_width = wants_wrap ? (rect.width - 2.f * inset.x) : 1e9f;
   if (wrap_width <= 0.f)
-    return;
+    return false;
 
   // Memoised: this runs every frame, usually on text that hasn't changed.
   const std::uint64_t wrap_key =
@@ -1237,6 +1256,7 @@ static inline void draw_runs_in_rect(
   float line_h = line_height_px > 0.f
                      ? line_height_px
                      : measure_text(font, "Ag", font_size, spacing).y;
+  bool truncated = false;
   // Auto-fit above sized the font against the joined text, i.e. for a single
   // line. Hard breaks still split it, so shrink to fit every line. A pinned
   // row height is not shrunk: lines past the bottom are dropped below.
@@ -1259,6 +1279,7 @@ static inline void draw_runs_in_rect(
     // A line that does not fully fit is dropped, not drawn: the
     // own-box clip would otherwise slice it mid-glyph.
     if (y + line_h > rect.y + rect.height + 0.5f) {
+      truncated = true;
       y += line_h;
       continue;
     }
@@ -1287,16 +1308,19 @@ static inline void draw_runs_in_rect(
         fm.set_active(want);
       // Same as the per-line calls above: a run's rect is sized to that run,
       // so charging it margins would report overflow for every one of them.
-      draw_text_in_rect(fm, run.text, run_rect, TextAlignment::Left, run.color,
-                        show_debug_indicator, stroke, shadow, rotation,
-                        rot_center_x, rot_center_y, TextOverflow::Clip,
-                        letter_spacing, font_size, /*report_overflow=*/false,
-                        Vector2Type{0.f, 0.f}, register_text);
+      truncated = draw_text_in_rect(fm, run.text, run_rect, TextAlignment::Left,
+                                    run.color, show_debug_indicator, stroke,
+                                    shadow, rotation, rot_center_x, rot_center_y,
+                                    TextOverflow::Clip, letter_spacing, font_size,
+                                    false,
+                                    Vector2Type{0.f, 0.f}, register_text) ||
+                  truncated;
       if (swap)
         fm.set_active(base_font);
     }
     y += line_h;
   }
+  return truncated;
 }
 
 static inline Vector2Type
@@ -1836,8 +1860,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       }
 
       if (col.a > 0) {
-        draw_rectangle_rounded(draw_rect, roundness, segments, col,
-                               corner_settings);
+        draw_rectangle_rounded(detail::fill_rect_for(entity, draw_rect),
+                               roundness, segments, col, corner_settings);
       }
     }
 
@@ -1973,13 +1997,11 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       // are exempt: an axis-aligned scissor would cut their corners.
       RectangleType label_clip = text_rect;
       std::optional<RectangleType> ancestor_clip;
-      if (!entity.has<HasScrollView>()) {
-        auto [has_clip, clip_rect] =
-            detail::compute_intersected_clip_rect(entity);
-        if (has_clip) {
-          ancestor_clip = clip_rect;
-          label_clip = detail::intersect_rects(label_clip, clip_rect);
-        }
+      auto [has_clip, clip_rect] =
+          detail::compute_intersected_clip_rect(entity);
+      if (has_clip) {
+        ancestor_clip = clip_rect;
+        label_clip = detail::intersect_rects(label_clip, clip_rect);
       }
       const bool clip_label = rotation == 0.f && label_clip.width > 0.f &&
                               label_clip.height > 0.f;
@@ -2017,20 +2039,18 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       // Without this branch with_styled_label is a no-op here, so the same
       // UI renders differently depending on `use_batched`.
       if (!hasLabel.spans.empty()) {
-        draw_runs_in_rect(font_manager, hasLabel.spans, label_rect,
-                          hasLabel.alignment, SHOW_TEXT_OVERFLOW_DEBUG, stroke,
-                          shadow, rotation, centerX, centerY,
-                          hasLabel.text_overflow, hasLabel.letter_spacing,
-                          explicit_fs, hasLabel.label, immediate_inset, false,
-                          label_line_h);
+        entity.get<HasLabel>().truncated = draw_runs_in_rect(
+            font_manager, hasLabel.spans, label_rect, hasLabel.alignment,
+            SHOW_TEXT_OVERFLOW_DEBUG, stroke, shadow, rotation, centerX, centerY,
+            hasLabel.text_overflow, hasLabel.letter_spacing, explicit_fs,
+            hasLabel.label, immediate_inset, false, label_line_h);
       } else {
-        draw_text_in_rect(font_manager, hasLabel.label.c_str(), label_rect,
-                          hasLabel.alignment, font_col,
-                          SHOW_TEXT_OVERFLOW_DEBUG, stroke, shadow, rotation,
-                          centerX, centerY, hasLabel.text_overflow,
-                          hasLabel.letter_spacing, explicit_fs,
-                          /*report_overflow=*/true, immediate_inset, false,
-                          label_line_h);
+        entity.get<HasLabel>().truncated = draw_text_in_rect(
+            font_manager, hasLabel.label.c_str(), label_rect, hasLabel.alignment,
+            font_col, SHOW_TEXT_OVERFLOW_DEBUG, stroke, shadow, rotation,
+            centerX, centerY, hasLabel.text_overflow, hasLabel.letter_spacing,
+            explicit_fs, true, immediate_inset, false,
+            label_line_h);
       }
       if (clip_label) {
         if (ancestor_clip)
@@ -2100,36 +2120,31 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
           font_manager.resolve_weighted(cmp.font_name, cmp.font_weight));
     }
 
-    // Scroll views define their own viewport — don't clip them by ancestors.
-    // Everything else (including HasClipChildren) gets clipped by the
-    // intersection of ALL ancestor clip rects.
     bool needs_scissor = false;
-    if (!entity.has<HasScrollView>()) {
-      auto [has_clip, clip_rect] =
-          detail::compute_intersected_clip_rect(entity);
-      if (has_clip) {
-        // Off-screen cull: if this entity is entirely outside its clip
-        // viewport, skip drawing it. Scrolled-away rows (e.g. the thousands of
-        // diff lines in a long diff) no longer pay text-shaping + draw cost
-        // every frame — only the visible slice does. Children carry their own
-        // render_cmds and are culled the same way, so returning here is safe.
-        // Use the same scroll-adjusted rect render_me draws with, so the
-        // intersection is against where the row actually paints on screen.
-        // Skip the cull for modifier-transformed elements — their painted rect
-        // is offset by apply_modifier() (translate/rotate) which we don't model
-        // here, so culling on the untransformed rect could wrongly drop them.
-        if (!entity.has<HasUIModifiers>()) {
-          const RectangleType er = detail::apply_ancestor_transform(entity, cmp.rect());
-          RectangleType vis = detail::intersect_rects(er, clip_rect);
-          if (vis.width <= 0.0f || vis.height <= 0.0f)
-            return;
-        }
-        begin_scissor_mode(static_cast<int>(clip_rect.x),
-                           static_cast<int>(clip_rect.y),
-                           static_cast<int>(clip_rect.width),
-                           static_cast<int>(clip_rect.height));
-        needs_scissor = true;
+    auto [has_clip, clip_rect] =
+        detail::compute_intersected_clip_rect(entity);
+    if (has_clip) {
+      // Off-screen cull: if this entity is entirely outside its clip
+      // viewport, skip drawing it. Scrolled-away rows (e.g. the thousands of
+      // diff lines in a long diff) no longer pay text-shaping + draw cost
+      // every frame — only the visible slice does. Children carry their own
+      // render_cmds and are culled the same way, so returning here is safe.
+      // Use the same scroll-adjusted rect render_me draws with, so the
+      // intersection is against where the row actually paints on screen.
+      // Skip the cull for modifier-transformed elements — their painted rect
+      // is offset by apply_modifier() (translate/rotate) which we don't model
+      // here, so culling on the untransformed rect could wrongly drop them.
+      if (!entity.has<HasUIModifiers>()) {
+        const RectangleType er = detail::apply_ancestor_transform(entity, cmp.rect());
+        RectangleType vis = detail::intersect_rects(er, clip_rect);
+        if (vis.width <= 0.0f || vis.height <= 0.0f)
+          return;
       }
+      begin_scissor_mode(static_cast<int>(clip_rect.x),
+                         static_cast<int>(clip_rect.y),
+                         static_cast<int>(clip_rect.width),
+                         static_cast<int>(clip_rect.height));
+      needs_scissor = true;
     }
 
     // Update scroll view content size before rendering (after layout is done)
@@ -2480,9 +2495,9 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       }
 
       if (col.a > 0) {
-        buffer.add_rounded_rectangle(draw_rect, col, roundness, segments,
-                                     corner_settings, layer, entity.id,
-                                     rotation);
+        buffer.add_rounded_rectangle(
+            detail::fill_rect_for(entity, draw_rect), col, roundness, segments,
+            corner_settings, layer, entity.id, rotation);
       }
     }
 
@@ -2636,13 +2651,11 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       // would cut their corners.
       RectangleType label_clip = text_rect;
       std::optional<RectangleType> ancestor_clip;
-      if (!entity.has<HasScrollView>()) {
-        auto [has_clip, clip_rect] =
-            detail::compute_intersected_clip_rect(entity);
-        if (has_clip) {
-          ancestor_clip = clip_rect;
-          label_clip = detail::intersect_rects(label_clip, clip_rect);
-        }
+      auto [has_clip, clip_rect] =
+          detail::compute_intersected_clip_rect(entity);
+      if (has_clip) {
+        ancestor_clip = clip_rect;
+        label_clip = detail::intersect_rects(label_clip, clip_rect);
       }
       const bool clip_label = rotation == 0.f && label_clip.width > 0.f &&
                               label_clip.height > 0.f;
@@ -2654,6 +2667,23 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
               static_cast<int>(label_clip.x), static_cast<int>(label_clip.y),
               static_cast<int>(label_clip.width),
               static_cast<int>(label_clip.height), layer, entity.id);
+        if (SHOW_TEXT_OVERFLOW_DEBUG && !result.text_fits) {
+          RectangleType dr = text_rect;
+          dr.x += hasLabel.text_x_offset;
+          dr.width -= hasLabel.text_x_offset;
+          dr.y += hasLabel.text_y_offset;
+          const Color overlay{255, 50, 50, 60}, border{255, 50, 50, 200};
+          const float t = 2.f;
+          buffer.add_rectangle(dr, overlay, layer, entity.id);
+          buffer.add_rectangle({dr.x, dr.y, dr.width, t}, border, layer,
+                               entity.id);
+          buffer.add_rectangle({dr.x, dr.y + dr.height - t, dr.width, t},
+                               border, layer, entity.id);
+          buffer.add_rectangle({dr.x, dr.y, t, dr.height}, border, layer,
+                               entity.id);
+          buffer.add_rectangle({dr.x + dr.width - t, dr.y, t, dr.height},
+                               border, layer, entity.id);
+        }
         // Handle text overflow ellipsis truncation for batched path
         std::string display_text = hasLabel.label;
         if (hasLabel.text_overflow == TextOverflow::Ellipsis &&
@@ -2668,6 +2698,10 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                   return measure_text(font, s.c_str(), font_size, spacing).x;
                 });
         }
+        entity.get<HasLabel>().truncated =
+            hasLabel.text_overflow == TextOverflow::Ellipsis
+                ? display_text != hasLabel.label
+                : !result.text_fits;
 
         // Pass the container rect (text_rect) not the position rect
         // (result.rect) render_text will handle centering within the container
@@ -2949,20 +2983,15 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           font_manager.resolve_weighted(cmp.font_name, cmp.font_weight));
     }
 
-    // Scroll views define their own viewport — don't clip them by ancestors.
-    // Everything else (including HasClipChildren) gets clipped by the
-    // intersection of ALL ancestor clip rects.
     bool needs_scissor = false;
-    if (!entity.has<HasScrollView>()) {
-      auto [has_clip, clip_rect] =
-          detail::compute_intersected_clip_rect(entity);
-      if (has_clip) {
-        buffer.add_scissor_start(
-            static_cast<int>(clip_rect.x), static_cast<int>(clip_rect.y),
-            static_cast<int>(clip_rect.width),
-            static_cast<int>(clip_rect.height), layer, entity.id);
-        needs_scissor = true;
-      }
+    auto [has_clip, clip_rect] =
+        detail::compute_intersected_clip_rect(entity);
+    if (has_clip) {
+      buffer.add_scissor_start(
+          static_cast<int>(clip_rect.x), static_cast<int>(clip_rect.y),
+          static_cast<int>(clip_rect.width),
+          static_cast<int>(clip_rect.height), layer, entity.id);
+      needs_scissor = true;
     }
 
     // Update scroll view content size

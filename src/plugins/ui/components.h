@@ -757,7 +757,8 @@ struct HasScrollView : BaseComponent {
 // text). Rows are in the caller's unscaled units.
 struct HasVirtualListIndex : BaseComponent {
   std::vector<float> heights;
-  std::vector<float> prefix; // prefix[i] = height of rows [0, i)
+  // double: a float32 prefix sum drifts by hundreds of px at 100k rows
+  std::vector<double> prefix; // prefix[i] = height of rows [0, i)
   // The pending re-measure range [dirty_from, dirty_to). Its empty value is
   // the union identity [kDirtyEmpty, 0), so invalidate is an unconditional
   // min/max with no empty case to branch on.
@@ -842,6 +843,7 @@ struct HasClipChildren : BaseComponent {};
 
 // Tag IDs for UI overlay input exclusivity.
 enum class UITag : TagId {
+  DrawOnly = 41,
   InputExclusivity =
       40, // Entity's tree receives exclusive input, blocking all
           // other entities. Used by overlay components (dropdowns,
