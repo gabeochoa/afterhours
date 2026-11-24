@@ -977,6 +977,40 @@ UIComponent *open_dropdown_tray(ImmTestHarness &h, float x, float y) {
 }
 } // namespace
 
+TEST(tray_key_repeat_carries_the_remainder) {
+  ImmTestHarness h;
+  UIComponent *t = open_dropdown_tray(h, 40.f, 50.f);
+  ui_test::check(t != nullptr, "tray exists", __FILE__, __LINE__);
+  if (!t) return;
+  Entity *tray_ent = nullptr;
+  for (auto &e : UICollectionHolder::get().collection.get_entities())
+    if (e && e->has<UIComponent>() && &e->get<UIComponent>() == t &&
+        e->has<HasTray>())
+      tray_ent = e.get();
+  ui_test::check(tray_ent != nullptr, "tray entity found", __FILE__, __LINE__);
+  if (!tray_ent) return;
+  EntityHelper::registerSingleton<UIContext<ui_test::TestInputAction>>(
+      h.context_entity());
+  h.context().focus_id = tray_ent->id;
+  auto &tray = tray_ent->get<HasTray>();
+  tray.repeat_timer = 0.f;
+  tray.was_held = false;
+  const size_t down_idx =
+      magic_enum::enum_index<ui_test::TestInputAction>(
+          ui_test::TestInputAction::WidgetDown).value();
+  h.context().all_actions[down_idx] = true;
+  ui::HandleTrayNavigation<ui_test::TestInputAction> nav;
+  nav.once(0.f);
+  nav.for_each_with(*tray_ent, *t, tray, 0.5f);
+  ui_test::check(std::fabs(tray.repeat_timer - 0.1f) < 1e-4f,
+                 "repeat timer keeps the remainder after firing", __FILE__,
+                 __LINE__);
+  ui_test::check(tray.was_held, "repeat entered the held phase", __FILE__,
+                 __LINE__);
+  EntityHelper::get_default_collection().singletonMap.erase(
+      components::get_type_id<UIContext<ui_test::TestInputAction>>());
+}
+
 TEST(d13_dropdown_opens_downward_with_room) {
   ImmTestHarness h;
   UIComponent *t = open_dropdown_tray(h, 40.f, 50.f);
@@ -1145,9 +1179,8 @@ TEST(d34_immediate_ring_draws_over_the_fill_not_under_it) {
 // system, so a game that moves focus during its build has that move undone the
 // same frame. There was no way to say "the keyboard just did this".
 //
-// ComputeVisualFocusId reads the context through the EntityHelper singleton
-// (default collection) while widgets live in the UI collection, so the context
-// here is a separate entity from the harness's.
+// The context here is a separate entity from the harness's, so the tests
+// pass singleton_ctx() explicitly.
 // ===========================================================================
 
 using ui_test::TestInputAction;
@@ -1192,7 +1225,7 @@ TEST(d35_explicit_set_focus_beats_hover) {
   ctx.set_focus(a); // what a game's own nav system does
 
   ComputeVisualFocusId<ui_test::TestInputAction> sys;
-  sys.for_each_with(h.context_entity(), 0.f);
+  sys.for_each_with(h.context_entity(), ctx, 0.f);
 
   ui_test::check(ctx.focus_id == a,
                  "an explicit set_focus this frame survives hover-follow",
@@ -1213,7 +1246,7 @@ TEST(d35_hover_still_follows_when_focus_was_only_regrabbed) {
   ctx.try_to_grab(a);
 
   ComputeVisualFocusId<ui_test::TestInputAction> sys;
-  sys.for_each_with(h.context_entity(), 0.f);
+  sys.for_each_with(h.context_entity(), ctx, 0.f);
 
   ui_test::check(ctx.focus_id == b, "hover still claims focus after a re-grab",
                  __FILE__, __LINE__);

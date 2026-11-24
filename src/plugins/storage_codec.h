@@ -49,17 +49,30 @@ inline std::optional<int> parse_version(std::string_view text) {
     return std::nullopt;
   return value;
 }
+struct Envelope {
+  int version = 0;
+  std::string_view payload;
+  std::string_view error;
+};
+
+inline Envelope parse_envelope(std::string_view text) {
+  const auto first = text.find('\n');
+  if (first == std::string_view::npos || text.substr(0, first) != MAGIC)
+    return {0, {}, "not a storage-codec envelope"};
+  const auto rest = text.substr(first + 1);
+  const auto second = rest.find('\n');
+  if (second == std::string_view::npos)
+    return {0, {}, "envelope has no payload separator"};
+  const auto found = parse_version(rest.substr(0, second));
+  if (!found || *found < 1)
+    return {0, {}, "envelope has a malformed version"};
+  return {*found, rest.substr(second + 1), {}};
+}
 }
 
 inline std::optional<int> peek_version(std::string_view text) {
-  const auto first = text.find('\n');
-  if (first == std::string_view::npos ||
-      text.substr(0, first) != detail::MAGIC)
-    return std::nullopt;
-  const auto rest = text.substr(first + 1);
-  const auto second = rest.find('\n');
-  if (second == std::string_view::npos) return std::nullopt;
-  return detail::parse_version(rest.substr(0, second));
+  const auto env = detail::parse_envelope(text);
+  return env.error.empty() ? std::optional<int>(env.version) : std::nullopt;
 }
 
 template <typename T> class Codec {
@@ -117,33 +130,21 @@ public:
     DecodeResult<T> result;
     result.current_version = version;
 
-    const auto first = text.find('\n');
-    if (first == std::string_view::npos ||
-        text.substr(0, first) != detail::MAGIC) {
-      result.message = "not a storage-codec envelope";
+    const auto env = detail::parse_envelope(text);
+    if (!env.error.empty()) {
+      result.message = std::string(env.error);
       return result;
     }
-    const auto rest = text.substr(first + 1);
-    const auto second = rest.find('\n');
-    if (second == std::string_view::npos) {
-      result.message = "envelope has no payload separator";
-      return result;
-    }
-    const auto found_version = detail::parse_version(rest.substr(0, second));
-    if (!found_version || *found_version < 1) {
-      result.message = "envelope has a malformed version";
-      return result;
-    }
-    result.found_version = *found_version;
-    std::string payload(rest.substr(second + 1));
+    result.found_version = env.version;
+    std::string payload(env.payload);
 
-    if (*found_version > version) {
+    if (env.version > version) {
       result.status = DecodeStatus::TooNew;
       result.message = "stored version is newer than this build";
       return result;
     }
 
-    for (int v = *found_version; v < version; ++v) {
+    for (int v = env.version; v < version; ++v) {
       const auto it = migration_map.find(v);
       if (it == migration_map.end()) {
         result.message =
@@ -165,8 +166,8 @@ public:
       return result;
     }
     result.value = std::move(*value);
-    result.status = *found_version == version ? DecodeStatus::Ok
-                                                 : DecodeStatus::Migrated;
+    result.status = env.version == version ? DecodeStatus::Ok
+                                           : DecodeStatus::Migrated;
     return result;
   }
 
