@@ -1,6 +1,7 @@
 #define AFTER_HOURS_USE_NONE
 
 #include <afterhours/src/plugins/ui_motion.h>
+#include <afterhours/src/plugins/animation_presets/basic_presets.h>
 
 #include <cmath>
 #include <cstdio>
@@ -219,6 +220,85 @@ int main() {
           "extensions_of finds the bridge rules ui used to own");
     check(ui::imm::extensions_of<int>(cfg) == nullptr,
           "extensions_of returns null for an absent type");
+  }
+
+  {
+    HasMotionState st;
+    std::vector<MotionRule> pop{{MotionTrigger::Change, {.scale = 0.97f}, motion::Spring::bouncy()}};
+    pop[0].stamp = 1;
+    resolve_motion(pop, {}, st);
+    pop[0].stamp = 2;
+    auto t = resolve_motion(pop, {}, st);
+    check(t[kScale].value == 0.97f && t[kScale].pulse_rest.has_value() &&
+              *t[kScale].pulse_rest == 1.f,
+          "single-value change marks a pulse back to rest");
+    t = resolve_motion(pop, {}, st);
+    check(!t[kScale].pulse_rest.has_value() && t[kScale].value == 1.f,
+          "frame after the pulse fires, rest is the target again");
+  }
+
+  {
+    ui::imm::ComponentConfig cfg;
+    cfg.with(afterhours::presets::fade_up());
+    auto rules = motion_rules(cfg);
+    check(rules.size() == 1 && rules[0].trigger == MotionTrigger::Appear,
+          "with(presets::fade_up()) reaches motion_rules");
+  }
+
+  {
+    struct FakeCtx {
+      bool was_hot(afterhours::EntityID) { return false; }
+      bool was_active(afterhours::EntityID) { return false; }
+      bool has_focus(afterhours::EntityID) { return false; }
+    } ctx;
+    Entity &e = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+    const motion::Timeline tenth{.keys = {{0.f, 0.f}, {0.1f, 1.f}}, .curve = motion::curves::ease_out_quad};
+    std::vector<MotionRule> rules;
+    rules.push_back(on_change(1, {.scale = 0.5f}, tenth).rule);
+    auto advance = [&](float dt) {
+      e.get<motion::HasTracks>().advance(dt);
+    };
+    apply_motion(ctx, e, rules);
+    rules[0].stamp = 2;
+    apply_motion(ctx, e, rules);
+    advance(0.05f);
+    apply_motion(ctx, e, rules);
+    float mid = apply_motion(ctx, e, rules).scale;
+    check(mid < 0.99f && mid > 0.5f, "pulse is en route to its target");
+    advance(0.05f);
+    float peak = apply_motion(ctx, e, rules).scale;
+    check(std::fabs(peak - 0.5f) < 0.05f, "pulse reaches its target value");
+    advance(0.11f);
+    float back = apply_motion(ctx, e, rules).scale;
+    check(std::fabs(back - 1.f) < 0.05f, "pulse returns to rest afterwards");
+    e.cleanup = true;
+    EntityHelper::cleanup();
+  }
+
+  {
+    struct FakeCtx {
+      bool was_hot(afterhours::EntityID) { return false; }
+      bool was_active(afterhours::EntityID) { return false; }
+      bool has_focus(afterhours::EntityID) { return false; }
+    } ctx;
+    Entity &e = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+    const motion::Timeline slow{.keys = {{0.f, 0.f}, {1.f, 1.f}}, .curve = motion::curves::ease_out_quad};
+    std::vector<MotionRule> rules;
+    rules.push_back(on_change(1, {.scale = {1.3f, 1.f}}, slow).rule);
+    apply_motion(ctx, e, rules);
+    rules[0].stamp = 2;
+    apply_motion(ctx, e, rules);
+    e.get<motion::HasTracks>().advance(0.5f);
+    float before = apply_motion(ctx, e, rules).scale;
+    rules[0].stamp = 3;
+    apply_motion(ctx, e, rules);
+    float after = e.get<motion::HasTracks>().track<float>(kScale).value();
+    check(std::fabs(after - before) < 1e-4f && std::fabs(after - 1.3f) > 0.05f,
+          "with_reset re-fire mid-flight does not teleport to reset pose");
+    e.cleanup = true;
+    EntityHelper::cleanup();
   }
 
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);

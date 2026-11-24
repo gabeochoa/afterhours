@@ -47,7 +47,7 @@
 #include <string>
 #include <unordered_map>
 
-// Shared state (also used by font_helper.h)
+#define AFTERHOURS_FONT_HELPER_HAS_ENSURE 1
 #include "font_helper.h"
 #include "metal_state.h"
 
@@ -173,9 +173,12 @@ inline sgl_pipeline g_blend_pip_additive{};
 inline sgl_pipeline g_blend_pip_multiplied{};
 inline sgl_pipeline g_blend_pip_premultiplied{};
 
-// sokol_gl + fontstash setup shared by the windowed (sokol_init_cb) and headless
-// (metal_init) bootstraps. Assumes sg_setup() has already run.
-inline void setup_sokol_gl_and_fonts() {
+inline bool g_sgl_ready = false;
+
+inline void ensure_sokol_gl_and_fonts() {
+  if (g_sgl_ready)
+    return;
+  g_sgl_ready = true;
   sgl_desc_t sgl_desc{};
   sgl_desc.max_vertices = 1 << 18; // 262144 vertices
   sgl_desc.max_commands = 1 << 16; // 65536 commands
@@ -275,6 +278,7 @@ struct InputState {
   float mouse_dy = 0.f;
   float scroll_x = 0.f;
   float scroll_y = 0.f;
+  bool scroll_precise = false;
 
   // Character input queue (UTF-32 codepoints from CHAR events)
   static constexpr int CHAR_QUEUE_SIZE = 32;
@@ -309,6 +313,7 @@ inline void input_begin_frame() {
   s.mouse_dy = 0.f;
   s.scroll_x = 0.f;
   s.scroll_y = 0.f;
+  s.scroll_precise = false;
   s.key_queue_len = 0;
   s.key_queue_read = 0;
 }
@@ -382,8 +387,6 @@ inline void sokol_init_cb() {
   stm_setup();
   g_start_time = stm_now();
 
-  // Initialize sokol_gl (2D drawing) + fontstash (text). Shared with headless.
-  setup_sokol_gl_and_fonts();
 
   g_initialized = true;
 
@@ -418,7 +421,10 @@ inline void sokol_cleanup_cb() {
     sfons_destroy(g_fons_ctx);
     g_fons_ctx = nullptr;
   }
-  sgl_shutdown();
+  if (g_sgl_ready) {
+    sgl_shutdown();
+    g_sgl_ready = false;
+  }
   sg_shutdown();
   g_initialized = false;
 }
@@ -501,6 +507,7 @@ inline void sokol_event_cb(const sapp_event *ev) {
   case SAPP_EVENTTYPE_MOUSE_SCROLL:
     s.scroll_x += ev->scroll_x;
     s.scroll_y += ev->scroll_y;
+    s.scroll_precise = ev->scroll_precise;
     break;
   case SAPP_EVENTTYPE_FOCUSED:
     g_window_focused = true;
@@ -534,6 +541,7 @@ struct MetalPlatformAPI {
   static constexpr int SHADER_UNIFORM_VEC2 = 1;
   static constexpr int SHADER_UNIFORM_FLOAT = 0;
   static constexpr int SHADER_UNIFORM_VEC4 = 3;
+  static constexpr int SHADER_UNIFORM_VEC3 = 2;
 
   // ── Window lifecycle (legacy API -- prefer run()) ──
   static void init_window(int, int, const char *) {
@@ -612,6 +620,7 @@ struct MetalPlatformAPI {
 
   // ── Frame ──
   static void begin_drawing() {
+    metal_detail::ensure_sokol_gl_and_fonts();
     // Headless: no swapchain — render into the offscreen texture instead. This
     // sets up the ortho projection + GL→Metal fixup internally, so we return.
     if (metal_detail::g_headless) {
@@ -679,6 +688,7 @@ struct MetalPlatformAPI {
   }
 
   static void clear_background(::afterhours::ColorLike auto c) {
+    metal_detail::ensure_sokol_gl_and_fonts();
     // Update pass action so sg_begin_pass clears to this color
     metal_detail::g_pass_action.colors[0].clear_value = {
         static_cast<float>(c.r) / 255.0f,
@@ -912,6 +922,7 @@ struct MetalPlatformAPI {
     // struct, so it is applied in input_system.h's Metal branch instead --
     // which is where the raylib path does it as well.
     float dpi = sapp_dpi_scale();
+    if (!(dpi > 0.f)) dpi = 1.f; // pre-init reads 0; 0/0 is NaN
     return {s.mouse_x / dpi, s.mouse_y / dpi};
   }
   static Vec2 get_screen_to_world_2d(const Vec2 &position,
@@ -968,6 +979,7 @@ struct MetalPlatformAPI {
   static Vec2 get_mouse_delta() {
     auto &s = metal_detail::input_state();
     float dpi = sapp_dpi_scale();
+    if (!(dpi > 0.f)) dpi = 1.f; // pre-init reads 0; 0/0 is NaN
     return {s.mouse_dx / dpi, s.mouse_dy / dpi};
   }
 
@@ -978,6 +990,10 @@ struct MetalPlatformAPI {
   static Vec2 get_mouse_wheel_move_v() {
     auto &s = metal_detail::input_state();
     return {s.scroll_x, s.scroll_y};
+  }
+
+  static bool get_mouse_wheel_precise() {
+    return metal_detail::input_state().scroll_precise;
   }
 
   // ── Application control ──
@@ -1045,6 +1061,7 @@ struct MetalPlatformAPI {
     desc.sample_count = 1;
     desc.enable_clipboard = true;
     desc.clipboard_size = 16 * 1024;  // 16 KB clipboard buffer
+    desc.macos.forward_cmd_chords = cfg.macos_forward_cmd_chords;
 
     // Map flags
     if (cfg.flags & FLAG_WINDOW_RESIZABLE) {
@@ -1158,7 +1175,6 @@ inline bool metal_init(const Config &cfg) {
     }
     stm_setup();
     metal_detail::g_start_time = stm_now();
-    metal_detail::setup_sokol_gl_and_fonts();
     metal_detail::g_initialized = true;
 
     const int scale =
@@ -1191,7 +1207,10 @@ inline void metal_shutdown() {
     sfons_destroy(metal_detail::g_fons_ctx);
     metal_detail::g_fons_ctx = nullptr;
   }
-  sgl_shutdown();
+  if (metal_detail::g_sgl_ready) {
+    sgl_shutdown();
+    metal_detail::g_sgl_ready = false;
+  }
   sg_shutdown();
 #ifdef AFTER_HOURS_USE_VULKAN
   vulkan_destroy_headless_environment();
