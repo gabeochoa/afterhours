@@ -202,6 +202,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
                                           : base_corners)
           .with_alignment(TextAlignment::Left)
           .with_overflow(Overflow::Hidden)
+          .with_select_on_focus(false)
           .with_render_layer(config.render_layer + 1);
   // Only impose the theme fill when the caller did not pick one, or an app
   // with its own tokens cannot theme the field.
@@ -287,8 +288,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   // Select all text when gaining focus via tab (not mouse click).
   // Mouse clicks position the cursor via the click listener instead.
   if (state.is_focused && !state.was_focused) {
-    bool mouse_caused_focus =
-        ctx.is_mouse_press(field_entity.id) || ctx.is_mouse_press(entity.id);
+    bool mouse_caused_focus = ctx.focus_modality == FocusSource::Pointer;
     if (!mouse_caused_focus && state.text_size() > 0) {
       state.selection_anchor = 0;
       state.cursor_position = state.text_size();
