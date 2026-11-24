@@ -13,8 +13,10 @@ struct SaveShortcut : System<> {
 
   bool should_iterate() const override { return false; }
   void once(float) override {
-    if (graphics::is_key_down(keys::LEFT_SUPER) &&
-        graphics::is_key_pressed(keys::S))
+    // Poll S first: a bare S press must be read (consumed) even when Super
+    // is not held, or the harness reports it as an unread press.
+    const bool s_pressed = graphics::is_key_pressed(keys::S);
+    if (graphics::is_key_down(keys::LEFT_SUPER) && s_pressed)
       saves++;
     auto &text = VisibleTextRegistry::instance();
     text.clear();

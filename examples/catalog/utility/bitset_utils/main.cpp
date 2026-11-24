@@ -1,4 +1,5 @@
 #include <bitset>
+#include <cassert>
 #include <iostream>
 #include <random>
 
@@ -64,12 +65,12 @@ int main() {
 
     // Test random bit selection
     std::cout << "=== Random Bit Selection ===\n";
-    std::random_device rd;
-    std::mt19937 gen(rd());
+    std::mt19937 gen(42);
 
     std::cout << "Random enabled bits (5 samples): ";
     for (int i = 0; i < 5; ++i) {
         int random_bit = bitset_utils::get_random_enabled_bit(bitset, gen);
+        assert(random_bit >= 0 && bitset.test(static_cast<size_t>(random_bit)));
         std::cout << random_bit << " ";
     }
     std::cout << "\n";
@@ -77,6 +78,7 @@ int main() {
     std::cout << "Random disabled bits (5 samples): ";
     for (int i = 0; i < 5; ++i) {
         int random_bit = bitset_utils::get_random_disabled_bit(bitset, gen);
+        assert(random_bit >= 0 && !bitset.test(static_cast<size_t>(random_bit)));
         std::cout << random_bit << " ";
     }
     std::cout << "\n\n";
@@ -117,6 +119,19 @@ int main() {
               << bitset_utils::get_first_enabled_bit(full_bitset) << "\n";
     std::cout << "First disabled bit in full: "
               << bitset_utils::get_first_disabled_bit(full_bitset) << "\n";
+
+    assert(bitset_utils::test(color_bitset, Color::Red));
+    assert(!bitset_utils::test(color_bitset, Color::Green));
+    assert(!bitset_utils::test(color_bitset, Color::Blue));
+    assert(bitset_utils::get_first_enabled_bit(bitset) == 2);
+    assert(bitset_utils::get_first_disabled_bit(bitset) == 0);
+    assert(bitset_utils::get_next_disabled_bit(bitset, 2) == 3);
+    assert(bitset_utils::index_of_nth_set_bit(bitset, 2) == 4);
+    assert(bitset_utils::index_of_nth_set_bit(bitset, 5) == -1);
+    assert(bitset_utils::get_first_enabled_bit(empty_bitset) == -1);
+    assert(bitset_utils::get_first_disabled_bit(empty_bitset) == 0);
+    assert(bitset_utils::get_first_enabled_bit(full_bitset) == 0);
+    assert(bitset_utils::get_first_disabled_bit(full_bitset) == -1);
 
     std::cout << "\n=== Example Complete ===\n";
     return 0;

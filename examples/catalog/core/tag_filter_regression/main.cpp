@@ -1,3 +1,4 @@
+#include <cassert>
 #include <iostream>
 
 #include "../../../../src/ecs.h"
@@ -32,5 +33,14 @@ int main() {
         std::cout << " - entity " << e.id << "\n";
     }
 
+    // a (Runner) and c (Chaser) have no Store tag; b does.
+    assert(non_store.size() == 2);
+    bool saw_a = false, saw_c = false;
+    for (Entity &e : non_store) {
+        assert(e.id != b.id);
+        saw_a |= e.id == a.id;
+        saw_c |= e.id == c.id;
+    }
+    assert(saw_a && saw_c);
     return 0;
 }

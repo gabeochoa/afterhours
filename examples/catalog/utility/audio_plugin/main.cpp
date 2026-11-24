@@ -7,6 +7,9 @@
 namespace graphics = afterhours::graphics;
 using Audio = afterhours::sound_system;
 
+static int played_count = 0;
+static float bus_volume = 0.f;
+
 int main() {
   graphics::RunConfig config;
   config.display = graphics::DisplayMode::Headless;
@@ -24,7 +27,9 @@ int main() {
     Audio::play_at("generated_blip", {2.f, 0.f, -4.f});
     Audio::play_at("generated_blip", {0.f, 0.f, -100.f});
 
-    std::printf("bird bus volume=%.3f\n", Audio::get_bus_volume("ambience"));
+    bus_volume = Audio::get_bus_volume("ambience");
+    played_count = static_cast<int>(Audio::play_log().size());
+    std::printf("bird bus volume=%.3f\n", bus_volume);
     for (const auto &rec : Audio::play_log()) {
       std::printf("played %s bus=%s volume=%.3f pan=%.2f\n", rec.name.c_str(),
                   rec.bus.c_str(), rec.volume, rec.pan);
@@ -33,5 +38,7 @@ int main() {
     graphics::request_quit();
   };
   graphics::run(config);
-  return 0;
+  // Only the in-range play is recorded; the one 100 units away is culled
+  // by the 20-unit range set above.
+  return played_count == 1 && bus_volume > 0.59f && bus_volume < 0.61f ? 0 : 1;
 }

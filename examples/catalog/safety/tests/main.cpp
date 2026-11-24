@@ -207,12 +207,16 @@ TEST_CASE("ECS: EntityHandle resolves after merge and becomes stale on cleanup",
     EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
 
     Entity &e = EntityHelper::createEntity();
-    // By default, handles are not assigned until merge.
-    REQUIRE_FALSE(EntityHelper::handle_for(e).valid());
+    // A slot is assigned at creation, so the handle is valid before merge
+    // and stays the same handle afterwards (slot_at_creation_test.cpp).
+    const EntityHandle pre_merge = EntityHelper::handle_for(e);
+    REQUIRE(pre_merge.valid());
+    REQUIRE(EntityHelper::resolve(pre_merge).valid());
 
     EntityHelper::merge_entity_arrays();
     EntityHandle h = EntityHelper::handle_for(e);
     REQUIRE(h.valid());
+    REQUIRE(h == pre_merge);
     REQUIRE(EntityHelper::resolve(h).valid());
     REQUIRE(EntityHelper::resolve(h).asE().id == e.id);
 
@@ -1211,14 +1215,18 @@ TEST_CASE("EntityHandle: invalid handle does not resolve",
     REQUIRE_FALSE(EntityHelper::resolve(h).valid());
 }
 
-TEST_CASE("EntityHandle: handle_for temp entity returns invalid",
+TEST_CASE("EntityHandle: handle_for temp entity returns a valid handle",
           "[ECS][EntityHandle]") {
     EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
 
     Entity &temp = EntityHelper::createEntity();
-    // Before merge, handle should be invalid
+    // A slot is assigned at creation, not at merge, so a temp entity
+    // already has a resolvable handle (slot_at_creation_test.cpp). It is
+    // still invisible to queries until the merge.
     EntityHandle h = EntityHelper::handle_for(temp);
-    REQUIRE_FALSE(h.valid());
+    REQUIRE(h.valid());
+    REQUIRE(EntityHelper::resolve(h).valid());
+    REQUIRE(EntityHelper::resolve(h).asE().id == temp.id);
 }
 
 TEST_CASE("EntityHandle: constexpr helpers", "[ECS][EntityHandle]") {
@@ -1521,20 +1529,21 @@ TEST_CASE("ECS: markIDForCleanup on already-cleaned-up ID is a safe no-op",
     REQUIRE_FALSE(EntityHelper::getEntityForID(id).valid());
 }
 
-TEST_CASE("ECS: markIDForCleanup does not affect unmerged temp entities",
+TEST_CASE("ECS: markIDForCleanup affects unmerged temp entities",
           "[ECS][Cleanup]") {
     EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
     Entity &temp = EntityHelper::createEntity();
     const int temp_id = temp.id;
     // Do NOT merge -- entity is still in temp_entities
 
-    // markIDForCleanup only scans merged entities, so this is a no-op
+    // A slot is assigned at creation, so markIDForCleanup finds the temp
+    // entity through the id->slot map and marks it (slot_at_creation).
     EntityHelper::markIDForCleanup(temp_id);
+    REQUIRE(temp.cleanup);
 
-    // After merge, entity should be alive (not marked) because
-    // markIDForCleanup scans get_entities(), not get_temp()
+    // The merge drops a cleanup-marked temp entity outright.
     EntityHelper::merge_entity_arrays();
-    REQUIRE(EntityHelper::getEntityForID(temp_id).valid());
+    REQUIRE_FALSE(EntityHelper::getEntityForID(temp_id).valid());
 }
 
 // ============================================================================

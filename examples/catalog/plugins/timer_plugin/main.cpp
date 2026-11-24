@@ -1,3 +1,4 @@
+#include <cassert>
 #include <iostream>
 
 #define AFTER_HOURS_ENTITY_HELPER
@@ -29,6 +30,7 @@ int main(int, char **) {
 
     float total_time = 0.0f;
     const float dt = 0.1f;  // 100ms per frame
+    int trigger_fires = 0;
 
     for (int frame = 0; frame < 50; ++frame) {
         total_time += dt;
@@ -46,6 +48,7 @@ int main(int, char **) {
         if (entity2.has<timer::TriggerOnDt>()) {
             auto &trigger = entity2.get<timer::TriggerOnDt>();
             if (trigger.test(dt)) {
+                ++trigger_fires;
                 std::cout << "Frame " << frame << " (" << total_time
                           << "s): Entity 2 trigger fired!" << std::endl;
             }
@@ -54,6 +57,13 @@ int main(int, char **) {
         // Run systems
         systems.run(dt);
     }
+
+    // The 1.5s trigger fires at 1.5s, 3.0s and 4.5s of simulated time.
+    assert(trigger_fires == 3);
+    // The auto-reset 2s timer cycles in [0, reset) and never stays ready.
+    const auto &timer = entity1.get<timer::HasTimer>();
+    assert(timer.reset_time == 2.0f);
+    assert(timer.current_time >= 0.0f && timer.current_time < timer.reset_time);
 
     std::cout << "\nTimer plugin example completed successfully!" << std::endl;
     return 0;

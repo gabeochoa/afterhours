@@ -1,3 +1,5 @@
+#include <cassert>
+#include <filesystem>
 #include <iostream>
 #include <string>
 
@@ -24,11 +26,18 @@ int main(int, char **) {
     auto config_path = files::get_config_path();
     std::cout << "Config path: " << config_path.string() << std::endl;
 
+    assert(resource_path.filename() == "player.png");
+    assert(resource_path.parent_path().filename() == "textures");
+    assert(!save_path.empty());
+    assert(!config_path.empty());
+
     // Ensure directory exists
     auto test_dir = save_path / "test_dir";
     if (files::ensure_directory_exists(test_dir)) {
         std::cout << "Created directory: " << test_dir.string() << std::endl;
     }
+    assert(std::filesystem::is_directory(test_dir));
+    std::filesystem::remove(test_dir);
 
     // Iterate over resources in a group (if they exist)
     std::cout << "\nResources in 'textures' group:" << std::endl;

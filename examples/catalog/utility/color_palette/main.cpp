@@ -1,3 +1,4 @@
+#include <cassert>
 #include <cstdio>
 
 #include "../../../../src/plugins/color.h"
@@ -15,5 +16,7 @@ int main() {
 
   static_assert(sky.r == 102 && sky.g == 191 && sky.b == 255);
   static_assert(alert.r == colors::RED.r && alert.g == colors::RED.g);
+  assert(card.r == 245 && card.g == 245 && card.b == 245);
+  assert(alert.r == 230 && alert.g == 41 && alert.b == 55);
   return 0;
 }

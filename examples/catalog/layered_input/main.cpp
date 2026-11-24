@@ -4,12 +4,13 @@
 // key bindings per game state (e.g., menu vs gameplay).
 //
 
+#include <cassert>
 #include <cstdio>
 
 #define AFTER_HOURS_ENTITY_HELPER
 #define AFTER_HOURS_SYSTEM
-#include "../../ah.h"
-#include "../../src/plugins/input_system.h"
+#include "../../../ah.h"
+#include "../../../src/plugins/input_system.h"
 
 // Example layer enum (projects define their own)
 enum class GameLayer {
@@ -71,17 +72,21 @@ int main(int, char**) {
   layered_input<GameLayer>::register_update_systems(systems);
 
   // Demonstrate layer switching
-  auto* mapper = singleton.get_ptr<ProvidesLayeredInputMapping<GameLayer>>();
+  auto *mapper = &singleton.get<ProvidesLayeredInputMapping<GameLayer>>();
 
   printf("Initial layer: %d (Menu)\n", static_cast<int>(mapper->get_active_layer()));
+  assert(mapper->get_active_layer() == GameLayer::Menu);
+  assert(mapper->get_bindings(Action::MoveUp).size() == 1);
 
   // Switch to Playing layer
   mapper->set_active_layer(GameLayer::Playing);
   printf("After switch: %d (Playing)\n", static_cast<int>(mapper->get_active_layer()));
+  assert(mapper->get_active_layer() == GameLayer::Playing);
 
   // In Playing layer, MoveUp should return WASD bindings
   const auto& bindings = mapper->get_bindings(Action::MoveUp);
   printf("MoveUp has %zu bindings in Playing layer\n", bindings.size());
+  assert(bindings.size() == 1);
 
   // Switch to Paused - MoveUp should have no bindings
   mapper->set_active_layer(GameLayer::Paused);
@@ -100,11 +105,17 @@ int main(int, char**) {
 
   const auto& new_bindings = mapper->get_bindings(Action::Confirm);
   printf("After adding Confirm binding to Paused: %zu bindings\n", new_bindings.size());
+  assert(new_bindings.size() == 1);
 
   // Clear the binding
   mapper->clear_binding(GameLayer::Paused, Action::Confirm);
   const auto& cleared_bindings = mapper->get_bindings(Action::Confirm);
   printf("After clearing Confirm binding: %zu bindings\n", cleared_bindings.size());
+  assert(cleared_bindings.empty());
+
+  assert(mapper->get_active_layer() == GameLayer::Paused);
+  assert(mapper->get_bindings(Action::MoveUp).empty());
+  assert(mapper->get_bindings(Action::Confirm).empty());
 
   printf("\nLayered input example completed successfully!\n");
   return 0;

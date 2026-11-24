@@ -12,7 +12,7 @@ using namespace afterhours::ui::imm;
 
 enum struct InputAction { None, WidgetNext, WidgetBack, WidgetPress };
 
-bool open = true;
+bool menu_open = true;
 const Color hover{56, 73, 98, 255};
 
 struct EditMenu : System<UIContext<InputAction>> {
@@ -24,7 +24,7 @@ struct EditMenu : System<UIContext<InputAction>> {
         MenuItem::sep(),
         {.label = "Select All", .shortcut = "Cmd+A"},
     };
-    context_menu(ctx, mk(entity, 0), items, Vector2Type{40, 40}, open,
+    context_menu(ctx, mk(entity, 0), items, Vector2Type{40, 40}, menu_open,
                  ComponentConfig{}
                      .with_size(ComponentSize{pixels(240), pixels(32)})
                      .with_padding(Padding::all(pixels(12)))

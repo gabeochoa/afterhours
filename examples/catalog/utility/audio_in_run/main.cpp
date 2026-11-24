@@ -22,5 +22,5 @@ int main() {
   graphics::run(config);
 
   std::printf("run opened the audio device: sound playing = %d\n", played);
-  return 0;
+  return played ? 0 : 1;
 }
