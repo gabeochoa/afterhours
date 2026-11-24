@@ -380,7 +380,8 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
                            : config.font_name,
                        config.font_size)
             .with_custom_text_color(placeholder_row
-                                        ? ctx.theme.font_muted
+                                        ? config.placeholder_color.value_or(
+                                              ctx.theme.font_muted)
                                         : config.custom_text_color.value_or(
                                               ctx.theme.font))
             .with_alignment(TextAlignment::Left)
