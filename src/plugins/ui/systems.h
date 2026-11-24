@@ -137,6 +137,21 @@ static inline bool in_inert_subtree(const Entity &entity) {
   return false;
 }
 
+// Nearest ancestor (not self) that can drag: it may claim a press that
+// started on a child once the pointer moves past the drag threshold.
+static inline EntityID nearest_drag_ancestor(EntityID id) {
+  OptEntity cur = UICollectionHolder::getEntityForID(id);
+  for (int depth = 0; cur.valid() && depth < 64; ++depth) {
+    if (!cur.asE().has<UIComponent>()) return -1;
+    OptEntity parent =
+        UICollectionHolder::getEntityForID(cur.asE().get<UIComponent>().parent);
+    if (!parent.valid()) return -1;
+    if (parent.asE().has<HasDragListener>()) return parent.asE().id;
+    cur = parent;
+  }
+  return -1;
+}
+
 static inline RectangleType hit_rect(const Entity &entity,
                                      const UIComponent &component) {
   RectangleType rect = component.rect();
@@ -441,6 +456,8 @@ inline Vector2Type measure_scroll_content(const UIComponent &cmp, const HasScrol
 
   float first = std::numeric_limits<float>::max();
   float last = std::numeric_limits<float>::lowest();
+  float cross_first = std::numeric_limits<float>::max();
+  float cross_last = std::numeric_limits<float>::lowest();
   float out_of_flow = 0.f;
   float span = 0.f;
   for (EntityID child_id : cmp.children) {
@@ -452,13 +469,29 @@ inline Vector2Type measure_scroll_content(const UIComponent &cmp, const HasScrol
       continue;
     const UIComponent &c = child.get<UIComponent>();
     span = std::max(span, c.computed[cross] + c.computed_margin[cross]);
-    if (c.absolute || c.should_hide) {
+    if (c.should_hide) {
       out_of_flow += c.computed[main] + c.computed_margin[main];
       continue;
     }
     first = std::min(first, c.computed_rel[main]);
     last = std::max(last, c.computed_rel[main] + c.computed[main] +
                               c.computed_margin[main]);
+    cross_first = std::min(cross_first, c.computed_rel[cross]);
+    cross_last = std::max(cross_last, c.computed_rel[cross] +
+                                          c.computed[cross] +
+                                          c.computed_margin[cross]);
+  }
+  if (last > first) {
+    const Axis main_start = main == Axis::X ? Axis::left : Axis::top;
+    const Axis cross_start = cross == Axis::X ? Axis::left : Axis::top;
+    first = std::min(first, cmp.computed_rel[main] +
+                                cmp.computed_margin[main_start] +
+                                cmp.computed_padd[main_start]);
+    cross_first = std::min(cross_first, cmp.computed_rel[cross] +
+                                            cmp.computed_margin[cross_start] +
+                                            cmp.computed_padd[cross_start]);
+    if (cross_last > cross_first)
+      span = cross_last - cross_first;
   }
   const float extent = (last > first ? last - first : 0.f) + out_of_flow;
 
@@ -554,7 +587,7 @@ private:
 };
 
 template <typename InputAction>
-struct TrackIfComponentWillBeRendered : System<> {
+struct TrackIfComponentWillBeRendered : System<UIContext<InputAction>> {
   UIEntityMappingCache *cache = nullptr;
 
   virtual void once(float) override {
@@ -581,16 +614,11 @@ struct TrackIfComponentWillBeRendered : System<> {
     }
   }
 
-  virtual void for_each_with(Entity &entity, float) override {
-    // TODO move to a system filter
-    if (entity.is_missing<UIContext<InputAction>>())
-      return;
-
+  virtual void for_each_with(Entity &, UIContext<InputAction> &context,
+                             float) override {
     if (!cache) {
       return; // Cache not ready yet
     }
-
-    auto &context = entity.get<UIContext<InputAction>>();
 
     // Only mark entities as visible if they were queued for render this frame.
     // This ensures that UI elements from inactive screens (which don't call
@@ -621,8 +649,22 @@ struct EndUIContextManager : System<UIContext<InputAction>> {
     } else {
       context.set_active(context.ROOT);
     }
-    if (!context.focused_ids.contains(context.focus_id))
-      context.focus_id = context.ROOT;
+    if (!context.focused_ids.contains(context.focus_id)) {
+      EntityID target = context.ROOT;
+      if (context.prev_focus_index >= 0 && !context.focus_order.empty()) {
+        const auto slot = std::min(
+            static_cast<std::size_t>(context.prev_focus_index),
+            context.focus_order.size() - 1);
+        target = context.focus_order[slot];
+      }
+      context.set_focus(target, FocusSource::Grab);
+    }
+    const auto it = std::find(context.focus_order.begin(),
+                              context.focus_order.end(), context.focus_id);
+    context.prev_focus_index =
+        context.focus_id == context.ROOT || it == context.focus_order.end()
+            ? -1
+            : static_cast<int>(it - context.focus_order.begin());
     context.focused_ids.clear();
 
     if (auto *text_cache =
@@ -632,9 +674,11 @@ struct EndUIContextManager : System<UIContext<InputAction>> {
   }
 };
 
-template <typename InputAction> struct ComputeVisualFocusId : System<> {
-  virtual void for_each_with(Entity &, float) override {
-    auto ctx = EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+template <typename InputAction>
+struct ComputeVisualFocusId : System<UIContext<InputAction>> {
+  virtual void for_each_with(Entity &, UIContext<InputAction> &context,
+                             float) override {
+    auto *ctx = &context;
     // FollowsMostRecentInput: when the mouse moved this frame, take focus (and
     // thus the ring, derived below) to the hovered widget. A parked mouse leaves
     // keyboard focus alone; empty space (hot_id==ROOT) leaves the ring put. Runs
@@ -703,12 +747,13 @@ inline float focus_scroll_delta(float start, float extent, float viewport_start,
   return 0.f;
 }
 
-template <typename InputAction>
-void reveal_focused_component(UIContext<InputAction> &context) {
-  auto opt = UICollectionHolder::getEntityForID(context.visual_focus_id);
-  if (!opt.valid() || !opt->template has<UIComponent>()) return;
-  const Entity &focused = opt.asE();
-  const auto &cmp = focused.get<UIComponent>();
+// Bring any entity into view in each scrollable ancestor (smallest scroll
+// that shows it fully, per enabled axis). This is the general scroll_to the
+// keyboard-focus reveal uses; call it directly for tab strips, carousels and
+// lists instead of nudging scroll_offset by hand.
+inline void scroll_to_entity(const Entity &entity) {
+  if (!entity.has<UIComponent>()) return;
+  const auto &cmp = entity.get<UIComponent>();
   EntityID parent_id = cmp.parent;
   int guard = 0;
   while (parent_id >= 0 && ++guard <= 64) {
@@ -718,9 +763,9 @@ void reveal_focused_component(UIContext<InputAction> &context) {
     parent_id = parent_cmp.parent;
     if (!parent->template has<HasScrollView>()) continue;
     auto &scroll = parent->template get<HasScrollView>();
-    auto target = detail::apply_ancestor_transform(focused, cmp.rect());
-    if (focused.has<HasUIModifiers>())
-      target = focused.get<HasUIModifiers>().apply_modifier(target);
+    auto target = detail::apply_ancestor_transform(entity, cmp.rect());
+    if (entity.has<HasUIModifiers>())
+      target = entity.get<HasUIModifiers>().apply_modifier(target);
     const auto viewport = detail::apply_ancestor_transform(parent.asE(), parent_cmp.rect());
     if (scroll.horizontal_enabled)
       scroll.scroll_offset.x += focus_scroll_delta(target.x, target.width, viewport.x, viewport.width);
@@ -729,6 +774,13 @@ void reveal_focused_component(UIContext<InputAction> &context) {
     scroll.scroll_target = scroll.scroll_offset;
     scroll.clamp_scroll();
   }
+}
+
+template <typename InputAction>
+void reveal_focused_component(UIContext<InputAction> &context) {
+  auto opt = UICollectionHolder::getEntityForID(context.visual_focus_id);
+  if (!opt.valid() || !opt->template has<UIComponent>()) return;
+  scroll_to_entity(opt.asE());
 }
 
 template <typename InputAction> struct RevealKeyboardFocus : System<> {
@@ -796,6 +848,15 @@ struct ResolveHitTarget : SystemWithUIContext<> {
       visit(*e, winner, best_layer);
     }
 
+    // Past the drag threshold, a draggable ancestor claims the press from
+    // its child, so the child keeps taps and the parent gets drags.
+    if (context->mouse.left_down && context->mouse.press_moved) {
+      const EntityID drag_parent =
+          detail::nearest_drag_ancestor(context->active_id);
+      if (drag_parent != context->ROOT)
+        context->set_active(drag_parent);
+    }
+
     const EntityID locked_active = context->active_id;
     const bool hot_locked = context->mouse.left_down &&
                             locked_active != context->ROOT &&
@@ -825,7 +886,8 @@ private:
                    Hoverable>())
       return false;
     // Opted out of hit-testing entirely: the element behind it wins instead.
-    if (e.has<IgnorePointerEvents>() || detail::in_inert_subtree(e))
+    if (e.has<IgnorePointerEvents>() || e.hasTag(UITag::DrawOnly) ||
+        detail::in_inert_subtree(e))
       return false;
     if (!cmp.was_rendered_to_screen)
       return false;
@@ -889,7 +951,19 @@ struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
       hasClickListener.down = true;
     }
 
-    if (context->mouse_activates(entity.id)) {
+    // Under a draggable ancestor a press is not yet a click: it may become
+    // the parent's drag, so fire only on a release that stayed a tap.
+    const bool under_drag_parent =
+        detail::nearest_drag_ancestor(entity.id) != context->ROOT;
+    if (!under_drag_parent && context->mouse_activates(entity.id)) {
+      if (entity.is_missing<DoesNotTakeFocus>())
+        context->set_focus(entity.id, FocusSource::Pointer);
+      hasClickListener.cb(entity);
+      hasClickListener.down = true;
+    }
+    if (under_drag_parent && context->mouse.just_released &&
+        context->is_active(entity.id) && context->is_hot(entity.id) &&
+        !context->mouse.press_moved) {
       if (entity.is_missing<DoesNotTakeFocus>())
         context->set_focus(entity.id, FocusSource::Pointer);
       hasClickListener.cb(entity);
@@ -1045,7 +1119,7 @@ struct CloseDropdownOnClickOutside : System<HasDropdownState, UIComponent> {
 // not ShouldHide, was rendered this frame, and input is allowed.
 template <typename InputAction>
 bool can_be_focused(UIContext<InputAction> &ctx, const Entity &e) {
-  return ctx.is_tab_focusable(e);
+  return !e.hasTag(UITag::DrawOnly) && ctx.is_tab_focusable(e);
 }
 
 template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
@@ -1076,6 +1150,15 @@ template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
   }
 };
 
+template <typename InputAction>
+struct DispatchShortcuts : System<UIContext<InputAction>> {
+  virtual void for_each_with(Entity &, UIContext<InputAction> &context,
+                             float) override {
+    if (context.last_action == InputAction::None)
+      return;
+    context.dispatch_focused_shortcut(context.last_action);
+  }
+};
 template <typename InputAction>
 struct HandleTrayNavigation : SystemWithUIContext<ui::HasTray> {
   UIContext<InputAction> *context;
@@ -1156,7 +1239,7 @@ struct HandleTrayNavigation : SystemWithUIContext<ui::HasTray> {
       float threshold =
           tray.was_held ? tray.repeat_interval : tray.repeat_delay;
       if (tray.repeat_timer >= threshold) {
-        tray.repeat_timer = 0.f;
+        tray.repeat_timer -= threshold;
         tray.was_held = true;
         // Determine direction from whichever key is held
         dir = context->is_held_down(fwd) ? 1 : -1;
@@ -1430,8 +1513,8 @@ struct HandleSelectOnFocus
     bool currently_focused = context->has_focus(entity.id);
     bool was_focused = last_focused_ids.contains(entity.id);
 
-    if (currently_focused && !was_focused) {
-      // Component just gained focus, trigger the click
+    if (currently_focused && !was_focused &&
+        context->focus_modality != FocusSource::Pointer) {
       hasClickListener.cb(entity);
       hasClickListener.down = true;
     }
@@ -1476,8 +1559,8 @@ private:
       bool currently_focused = context->has_focus(child.id);
       bool was_focused = last_focused_ids.contains(child.id);
 
-      if (currently_focused && !was_focused) {
-        // Component just gained focus, trigger the click
+      if (currently_focused && !was_focused &&
+          context->focus_modality != FocusSource::Pointer) {
         child_hasClickListener.cb(child);
         child_hasClickListener.down = true;
       }
@@ -2341,6 +2424,10 @@ struct HandleScrollInput : SystemWithUIContext<HasScrollView> {
       return;
 
     Vector2Type wheel_v = input::get_mouse_wheel_move_v();
+    const float wheel_speed =
+        input::get_mouse_wheel_kind() == WheelDeltaKind::Precise
+            ? scroll_state.scroll_speed_precise
+            : scroll_state.scroll_speed;
     if (wheel_v.x == 0.f &&
         (input::get_current_modifiers() & input::KeyChord::MOD_SHIFT))
       wheel_v = {wheel_v.y, 0.f};
@@ -2353,13 +2440,13 @@ struct HandleScrollInput : SystemWithUIContext<HasScrollView> {
     // Vertical scrolling
     if (scroll_state.vertical_enabled && wheel_v.y != 0.0f) {
       scroll_state.scroll_target.y +=
-          direction * wheel_v.y * scroll_state.scroll_speed;
+          direction * wheel_v.y * wheel_speed;
     }
 
     // Horizontal scrolling
     if (scroll_state.horizontal_enabled && wheel_v.x != 0.0f) {
       scroll_state.scroll_target.x +=
-          direction * wheel_v.x * scroll_state.scroll_speed;
+          direction * wheel_v.x * wheel_speed;
     }
 
     scroll_state.clamp_scroll();

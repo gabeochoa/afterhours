@@ -135,6 +135,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
 
   EntityID text_selection_entity = ROOT;
   text_selection::Selection label_text_selection;
+  int prev_focus_index = -1;
 
   EntityID hot_id = ROOT;          // hot means the mouse is over this element
   EntityID prev_hot_id = ROOT;     // previous frame's hot_id (for animations)
@@ -481,6 +482,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     focus_modality = FocusSource::Grab;
     focused_ids.clear();
     focus_order.clear();
+    prev_focus_index = -1;
     render_cmds.clear();
     input_gates.clear();
     last_action = InputAction::None;
@@ -585,6 +587,34 @@ template <typename InputAction> struct UIContext final : BaseComponent {
       all_actions[magic_enum::enum_index<InputAction>(name).value()] = false;
     }
     return a;
+  }
+
+  bool dispatch_focused_shortcut(InputAction action) {
+    if (action == InputAction::None)
+      return false;
+    const int wanted = static_cast<int>(action);
+    EntityID cur = focus_id;
+    for (int depth = 0; depth < 64 && cur != ROOT && cur >= 0; depth++) {
+      OptEntity opt = UICollectionHolder::getEntityForID(cur);
+      if (!opt.has_value())
+        break;
+      Entity &e = opt.asE();
+      if (is_input_allowed(cur) && e.template has<HasShortcuts>() &&
+          e.template get<HasShortcuts>().dispatch(wanted, e)) {
+        last_action = InputAction::None;
+        last_action_modifiers = 0;
+        const auto idx = magic_enum::enum_index<InputAction>(action);
+        if (idx.has_value()) {
+          all_actions.reset(idx.value());
+          all_actions_repeat.reset(idx.value());
+        }
+        return true;
+      }
+      if (!e.template has<UIComponent>())
+        break;
+      cur = e.template get<UIComponent>().parent;
+    }
+    return false;
   }
 
   // Does the focused element own WidgetUp/WidgetDown? When true they belong to

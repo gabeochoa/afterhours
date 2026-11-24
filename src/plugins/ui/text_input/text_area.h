@@ -149,6 +149,9 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       },
       text);
 
+  auto &submit_state = entity.template addComponentIfMissing<IsSubmittable>();
+  submit_state.submitted = false;
+
   state.readonly = config.text_readonly;
   state.disabled = config.disabled;
   state.copy_disabled = config.text_copy_disabled;
@@ -201,6 +204,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
           // Lines past the bottom of a fixed-height field must not paint
           // over whatever sits below it.
           .with_overflow(Overflow::Hidden)
+          .with_select_on_focus(false)
           .with_render_layer(config.render_layer + 1);
   // A caller's background (with_custom_background / with_transparent_bg)
   // replaces the default fill, as it does on text_input; the hardcoded
@@ -379,7 +383,8 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
                            : config.font_name,
                        config.font_size)
             .with_custom_text_color(placeholder_row
-                                        ? ctx.theme.font_muted
+                                        ? config.placeholder_color.value_or(
+                                              ctx.theme.font_muted)
                                         : config.custom_text_color.value_or(
                                               ctx.theme.font))
             .with_alignment(TextAlignment::Left)
@@ -426,7 +431,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Render cursor when focused
   if (state.is_focused) {
-    bool show_cursor = update_blink(state, 0.016f);
+    bool show_cursor = update_blink(state, ctx.dt > 0.f ? ctx.dt : (1.f / 60.f));
 
     // Use computed padding for positioning
     float pad_left = field_cmp.computed_padd[Axis::left];
@@ -618,14 +623,27 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       const bool wants_newline = !config.text_area_single_line &&
                                  (!config.text_area_submit_on_enter || shift);
       if (wants_newline) {
-        if (editable && insert_newline(state)) {
-          reset_blink(state);
-          text_changed = true;
+        if (editable) {
+          state.push_undo_snapshot();
+          if (state.has_selection())
+            delete_selection(state);
+          if (insert_newline(state)) {
+            state.clear_selection();
+            reset_blink(state);
+            text_changed = true;
+          }
         }
-      } else if (entity.template has<HasTextInputListener>()) {
-        if (auto &listener = entity.template get<HasTextInputListener>();
-            listener.on_submit)
-          listener.on_submit(entity);
+      } else {
+        submit_state.submitted = true;
+        if (entity.template has<HasTextInputListener>()) {
+          if (auto &listener = entity.template get<HasTextInputListener>();
+              listener.on_submit)
+            listener.on_submit(entity);
+        }
+        if (config.on_submit) {
+          const std::string submitted_text = state.text();
+          config.on_submit(submitted_text);
+        }
       }
     }
 
@@ -760,7 +778,8 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
 
   text = state.text();
   entity.template addComponentIfMissing<FocusClusterRoot>();
-  return ElementResult{state.changed_since, entity};
+  ElementResult result{state.changed_since, entity};
+  return result;
 }
 
 } // namespace text_input
