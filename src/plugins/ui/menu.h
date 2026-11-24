@@ -195,7 +195,7 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
           .with_flex_direction(FlexDirection::Column)
           .with_no_wrap()
           .with_absolute_position(local_x, local_y)
-          .with_render_layer(config.render_layer + 1);
+          .with_render_layer(config.render_layer + overlay::OVERLAY_BASE);
   if (bounded)
     list_config.with_overflow(Overflow::Scroll, Axis::Y);
   auto list = tray(ctx, mk(entity), list_config);
@@ -253,7 +253,12 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
                    .without_border()
                    .with_label(item.label)
                    .with_disabled(item.disabled);
-    if (!config.padding_is_default)
+    const bool caller_set_padding =
+        config.padding_explicitly_set || config.padding.top.dim != Dim::None ||
+        config.padding.left.dim != Dim::None ||
+        config.padding.bottom.dim != Dim::None ||
+        config.padding.right.dim != Dim::None;
+    if (!config.padding_is_default && caller_set_padding)
       row.with_padding(config.padding);
     if (config.color_usage != Theme::Usage::Default &&
         config.color_usage != Theme::Usage::Custom)
@@ -315,7 +320,8 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
                                         Theme::Usage::FontMuted))
               .with_ignore_pointer_events()
               .with_skip_tabbing(true)
-              .with_render_layer(config.render_layer + 2));
+              .with_render_layer(config.render_layer +
+                                 overlay::OVERLAY_BASE + 1));
     }
     if (item.checked && item.mark != MenuMark::None) {
       const Color mark_color = ctx.theme.from_usage(
@@ -330,7 +336,8 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
               .with_transparent_bg()
               .with_ignore_pointer_events()
               .with_skip_tabbing(true)
-              .with_render_layer(config.render_layer + 2)
+              .with_render_layer(config.render_layer +
+                                 overlay::OVERLAY_BASE + 1)
               .with_on_draw_fg([mark, mark_color](RectangleType r) {
                 const float size = std::min(r.width, r.height) * 0.5f;
                 const float x = r.x + (r.width - size) * 0.5f;
@@ -459,7 +466,8 @@ popover(HasUIContext auto &ctx, EntityParent ep_pair,
                .with_flex_direction(FlexDirection::Column)
                .with_absolute_position(placed.x - root_rect.x,
                                        placed.y - root_rect.y)
-               .with_render_layer(config.render_layer + 1));
+               .with_render_layer(config.render_layer +
+                                  overlay::OVERLAY_BASE));
   if (panel.ent().template has<HasColor>())
     panel.ent().template get<HasColor>().skip_hover_override = true;
 

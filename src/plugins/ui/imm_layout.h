@@ -212,7 +212,7 @@ ElementResult value_pill(HasUIContext auto &ctx, EntityParent ep_pair,
     config.with_alignment(TextAlignment::Center);
   if (config.size.is_default)
     config.with_size(ComponentSize{children(), pixels(28.f)});
-  if (!config.has_padding())
+  if (!config.has_padding() && !config.padding_explicitly_set)
     config.with_padding(Padding::horizontal(pixels(12.f)));
   if (!config.corner_radius.has_value())
     config.with_roundness(1.f);

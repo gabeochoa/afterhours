@@ -1,6 +1,7 @@
 #pragma once
 
 #include <set>
+#include <atomic>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -51,11 +52,30 @@ static inline RectangleType snap_origin(RectangleType rect,
 
 static inline float compute_effective_opacity(const Entity &entity);
 
+static inline const Theme &theme_for(const Entity &entity,
+                                     const Theme &fallback) {
+  return entity.has<HasThemeSnapshot>()
+             ? entity.get<HasThemeSnapshot>().theme
+             : fallback;
+}
+
 static inline Color resolve_image_tint(const Entity &entity, float opacity) {
   const Color tint = entity.has<HasImageTint>()
                          ? entity.get<HasImageTint>().color
                          : Color{255, 255, 255, 255};
   return colors::opacity_pct(tint, opacity);
+}
+
+static inline RectangleType fill_rect_for(const Entity &entity,
+                                          const RectangleType &draw_rect) {
+  if (!entity.has<HasColor>())
+    return draw_rect;
+  const auto &inset = entity.get<HasColor>().bg_inset;
+  if (!inset.has_value())
+    return draw_rect;
+  const float w = std::max(0.f, draw_rect.width - 2.f * inset->x);
+  const float h = std::max(0.f, draw_rect.height - 2.f * inset->y);
+  return {draw_rect.x + inset->x, draw_rect.y + inset->y, w, h};
 }
 
 static inline bool is_hidden_for_render(const Entity &entity) {
@@ -663,7 +683,9 @@ position_text_ex(const ui::FontManager &fm, const std::string &text,
     // would report a box sized to exactly its own text -- a Dim::Text box --
     // as overflowing by precisely the margin, always.
     const float usable_y = measures_as_block ? container.height : max_text_size.y;
-    text_fits = ts.y <= usable_y && ts.x <= max_text_size.x;
+    text_fits = ts.y <= usable_y &&
+                (text_overflow == TextOverflow::Ellipsis ||
+                 ts.x <= max_text_size.x);
 #ifdef AFTERHOURS_DEBUG_TEXT_OVERFLOW
     if (!text_fits && report_overflow) {
       // Keyed on the LAYOUT, not the string. Keying on text meant an editable
@@ -913,6 +935,46 @@ resolve_text_inset(const Theme &theme,
   return Vector2Type{base.x * theme.ui_scale, base.y * theme.ui_scale};
 }
 
+struct ResolvedTextOrigin {
+  Vector2Type origin{0.f, 0.f};
+  float font_size = 0.f;
+  Vector2Type inset{0.f, 0.f};
+  RectangleType laid_out_rect{0.f, 0.f, 0.f, 0.f};
+  bool text_fits = true;
+};
+
+static inline std::optional<ResolvedTextOrigin>
+resolved_text_origin(const Entity &entity,
+                     const ui::FontManager &fm, const Theme &theme,
+                     float screen_height) {
+  if (!entity.has<HasLabel>() || !entity.has<UIComponent>())
+    return std::nullopt;
+  const HasLabel &hasLabel = entity.get<HasLabel>();
+  const UIComponent &cmp = entity.get<UIComponent>();
+  float explicit_fs = 0.f;
+  if (cmp.font_size_explicitly_set) {
+    const float uis = imm::ThemeDefaults::get().theme.ui_scale;
+    explicit_fs = resolve_to_pixels(cmp.font_size, screen_height,
+                                    cmp.resolved_scaling_mode, uis);
+  }
+  const Vector2Type inset = resolve_text_inset(theme, hasLabel.text_inset);
+  RectangleType label_rect = cmp.rect();
+  label_rect.x += hasLabel.text_x_offset;
+  label_rect.width -= hasLabel.text_x_offset;
+  label_rect.y += hasLabel.text_y_offset;
+  const TextPositionResult pos = position_text_ex(
+      fm, hasLabel.label.c_str(), label_rect, hasLabel.alignment, inset,
+      explicit_fs, hasLabel.letter_spacing, hasLabel.text_overflow,
+      false);
+  return ResolvedTextOrigin{
+      .origin = Vector2Type{pos.rect.x, pos.rect.y},
+      .font_size = pos.rect.height,
+      .inset = inset,
+      .laid_out_rect = cmp.rect(),
+      .text_fits = pos.text_fits,
+  };
+}
+
 template <typename DrawLine>
 void render_checkbox_mark(RectangleType rect, const HasLabel &style,
                           const Theme &theme, float opacity, DrawLine draw) {
@@ -969,7 +1031,7 @@ inline void paint_label_text_selection(UIContext<InputAction> &context,
     draw(r, context.theme.selection);
 }
 
-static inline void draw_text_in_rect(
+static inline bool draw_text_in_rect(
     const ui::FontManager &fm, const std::string &text, RectangleType rect,
     TextAlignment alignment, Color color, bool show_debug_indicator = false,
     const std::optional<TextStroke> &stroke = std::nullopt,
@@ -1051,6 +1113,7 @@ static inline void draw_text_in_rect(
       float total_h = line_h * static_cast<float>(lines.size());
       // Vertically center the block within the rect.
       float y = rect.y + std::max(0.f, (rect.height - total_h) * 0.5f);
+      bool truncated = false;
       for (const auto &ln : lines) {
         // A line that does not fully fit is dropped, not drawn: the
         // own-box clip would otherwise slice it mid-glyph.
@@ -1061,10 +1124,12 @@ static inline void draw_text_in_rect(
                             rot_center_x, rot_center_y, TextOverflow::Clip,
                             letter_spacing, font_size, /*report_overflow=*/false,
                             inset, false);
+        } else {
+          truncated = true;
         }
         y += line_h;
       }
-      return;
+      return truncated;
     }
     // Single line that fits: fall through to normal single-line rendering.
   }
@@ -1115,7 +1180,7 @@ static inline void draw_text_in_rect(
   // MIN_FONT_SIZE, so any text below the floor was silently not drawn, and the
   // clamp above was the only thing keeping that from happening.
   if (result.rect.height < 1.f) {
-    return;
+    return !text.empty();
   }
 
   // Handle text overflow ellipsis truncation
@@ -1137,6 +1202,9 @@ static inline void draw_text_in_rect(
         });
     return truncated_text;
   }();
+  const bool truncated = text_overflow == TextOverflow::Ellipsis
+                             ? render_text != text
+                             : !result.text_fits;
 
   RectangleType sizing = result.rect;
 
@@ -1165,6 +1233,7 @@ static inline void draw_text_in_rect(
   detail::draw_text_at_position(fm, render_text, rect, alignment, sizing, color,
                                 rotation, rot_center_x, rot_center_y,
                                 letter_spacing);
+  return truncated;
 }
 
 // Draw coloured runs through the same wrap primitive as the plain path.
@@ -1173,7 +1242,7 @@ static inline void draw_text_in_rect(
 // Non-const fm: per-run weights are drawn by swapping the active font around
 // each run, since draw_text_in_rect resolves the face itself. The active font
 // is restored before returning.
-static inline void draw_runs_in_rect(
+static inline bool draw_runs_in_rect(
     ui::FontManager &fm, const std::vector<TextSpan> &runs,
     RectangleType rect, TextAlignment alignment,
     bool show_debug_indicator = false,
@@ -1187,7 +1256,7 @@ static inline void draw_runs_in_rect(
     // Pinned row height; 0 means the measured one.
     float line_height_px = 0.0f) {
   if (runs.empty() || rect.width <= 0.f)
-    return;
+    return false;
 
   Font font = fm.get_active_font();
   float font_size = explicit_font_size;
@@ -1218,7 +1287,7 @@ static inline void draw_runs_in_rect(
       text_overflow == TextOverflow::Wrap && explicit_font_size > 0.f;
   const float wrap_width = wants_wrap ? (rect.width - 2.f * inset.x) : 1e9f;
   if (wrap_width <= 0.f)
-    return;
+    return false;
 
   // Memoised: this runs every frame, usually on text that hasn't changed.
   const std::uint64_t wrap_key =
@@ -1234,6 +1303,7 @@ static inline void draw_runs_in_rect(
   float line_h = line_height_px > 0.f
                      ? line_height_px
                      : measure_text(font, "Ag", font_size, spacing).y;
+  bool truncated = false;
   // Auto-fit above sized the font against the joined text, i.e. for a single
   // line. Hard breaks still split it, so shrink to fit every line. A pinned
   // row height is not shrunk: lines past the bottom are dropped below.
@@ -1256,6 +1326,7 @@ static inline void draw_runs_in_rect(
     // A line that does not fully fit is dropped, not drawn: the
     // own-box clip would otherwise slice it mid-glyph.
     if (y + line_h > rect.y + rect.height + 0.5f) {
+      truncated = true;
       y += line_h;
       continue;
     }
@@ -1284,16 +1355,19 @@ static inline void draw_runs_in_rect(
         fm.set_active(want);
       // Same as the per-line calls above: a run's rect is sized to that run,
       // so charging it margins would report overflow for every one of them.
-      draw_text_in_rect(fm, run.text, run_rect, TextAlignment::Left, run.color,
-                        show_debug_indicator, stroke, shadow, rotation,
-                        rot_center_x, rot_center_y, TextOverflow::Clip,
-                        letter_spacing, font_size, /*report_overflow=*/false,
-                        Vector2Type{0.f, 0.f}, register_text);
+      truncated = draw_text_in_rect(fm, run.text, run_rect, TextAlignment::Left,
+                                    run.color, show_debug_indicator, stroke,
+                                    shadow, rotation, rot_center_x, rot_center_y,
+                                    TextOverflow::Clip, letter_spacing, font_size,
+                                    false,
+                                    Vector2Type{0.f, 0.f}, register_text) ||
+                  truncated;
       if (swap)
         fm.set_active(base_font);
     }
     y += line_h;
   }
+  return truncated;
 }
 
 static inline Vector2Type
@@ -1386,10 +1460,11 @@ void draw_layer_scrollbars(UIContext<InputAction> &context, size_t begin,
       const auto geometry = scrollbar_geometry(
           scroll, view, vertical, metrics.thickness, metrics.min_thumb);
       if (!geometry.visible) return;
+      const Theme &theme = theme_for(entity, context.theme);
       const auto track = colors::opacity_pct(scroll.scrollbar_track_color.value_or(
-          context.theme.from_usage(scroll.scrollbar_track_usage)), opacity);
+          theme.from_usage(scroll.scrollbar_track_usage)), opacity);
       const auto thumb = colors::opacity_pct(scroll.scrollbar_thumb_color.value_or(
-          context.theme.from_usage(scroll.scrollbar_thumb_usage)), opacity);
+          theme.from_usage(scroll.scrollbar_thumb_usage)), opacity);
       // Fully rounded: at 6px wide that is a capsule, which reads as a bar.
       draw(cmd, geometry.track, track, has_clip, clip);
       draw(cmd, geometry.thumb, thumb, has_clip, clip);
@@ -1801,10 +1876,12 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                        ? entity.get<HasRoundedCorners>().segments
                        : 8;
 
-    // Push rotation transform - all subsequent drawing will be rotated around
-    // component center
-    const float centerX = rect::center(draw_rect).x;
-    const float centerY = rect::center(draw_rect).y;
+    const Vector2Type rot_center = entity.has<HasUIModifiers>()
+        ? entity.get<HasUIModifiers>().rotation_center(draw_rect)
+        : Vector2Type{draw_rect.x + draw_rect.width / 2.0f,
+                      draw_rect.y + draw_rect.height / 2.0f};
+    float centerX = rot_center.x;
+    float centerY = rot_center.y;
     push_rotation(centerX, centerY, rotation);
 
     // Draw shadow first (behind the element)
@@ -1831,8 +1908,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       }
 
       if (col.a > 0) {
-        draw_rectangle_rounded(draw_rect, roundness, segments, col,
-                               corner_settings);
+        draw_rectangle_rounded(detail::fill_rect_for(entity, draw_rect),
+                               roundness, segments, col, corner_settings);
       }
     }
 
@@ -1912,12 +1989,12 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     }
 
     if (entity.has<HasCheckboxMark>()) {
-      render_checkbox_mark(draw_rect, entity.get<HasLabel>(), context.theme,
+      render_checkbox_mark(draw_rect, entity.get<HasLabel>(), detail::theme_for(entity, context.theme),
                            effective_opacity, draw_line_ex);
     } else if (entity.has<HasLabel>()) {
       const HasLabel &hasLabel = entity.get<HasLabel>();
       warn_ignored_label_padding(entity, cmp);
-      Color font_col = detail::resolve_label_color(hasLabel, context.theme);
+      Color font_col = detail::resolve_label_color(hasLabel, detail::theme_for(entity, context.theme));
 
       if (effective_opacity < 1.0f) {
         font_col = colors::opacity_pct(font_col, effective_opacity);
@@ -1956,7 +2033,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
               : 0.f;
 
       const Vector2Type immediate_inset =
-          resolve_text_inset(context.theme, hasLabel.text_inset);
+          resolve_text_inset(detail::theme_for(entity, context.theme), hasLabel.text_inset);
 
       RectangleType label_rect = text_rect;
       label_rect.x += hasLabel.text_x_offset;
@@ -2010,20 +2087,18 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       // Without this branch with_styled_label is a no-op here, so the same
       // UI renders differently depending on `use_batched`.
       if (!hasLabel.spans.empty()) {
-        draw_runs_in_rect(font_manager, hasLabel.spans, label_rect,
-                          hasLabel.alignment, SHOW_TEXT_OVERFLOW_DEBUG, stroke,
-                          shadow, rotation, centerX, centerY,
-                          hasLabel.text_overflow, hasLabel.letter_spacing,
-                          explicit_fs, hasLabel.label, immediate_inset, false,
-                          label_line_h);
+        entity.get<HasLabel>().truncated = draw_runs_in_rect(
+            font_manager, hasLabel.spans, label_rect, hasLabel.alignment,
+            SHOW_TEXT_OVERFLOW_DEBUG, stroke, shadow, rotation, centerX, centerY,
+            hasLabel.text_overflow, hasLabel.letter_spacing, explicit_fs,
+            hasLabel.label, immediate_inset, false, label_line_h);
       } else {
-        draw_text_in_rect(font_manager, hasLabel.label.c_str(), label_rect,
-                          hasLabel.alignment, font_col,
-                          SHOW_TEXT_OVERFLOW_DEBUG, stroke, shadow, rotation,
-                          centerX, centerY, hasLabel.text_overflow,
-                          hasLabel.letter_spacing, explicit_fs,
-                          /*report_overflow=*/true, immediate_inset, false,
-                          label_line_h);
+        entity.get<HasLabel>().truncated = draw_text_in_rect(
+            font_manager, hasLabel.label.c_str(), label_rect, hasLabel.alignment,
+            font_col, SHOW_TEXT_OVERFLOW_DEBUG, stroke, shadow, rotation,
+            centerX, centerY, hasLabel.text_overflow, hasLabel.letter_spacing,
+            explicit_fs, true, immediate_inset, false,
+            label_line_h);
       }
       if (clip_label) {
         if (ancestor_clip)
@@ -2468,9 +2543,9 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       }
 
       if (col.a > 0) {
-        buffer.add_rounded_rectangle(draw_rect, col, roundness, segments,
-                                     corner_settings, layer, entity.id,
-                                     rotation);
+        buffer.add_rounded_rectangle(
+            detail::fill_rect_for(entity, draw_rect), col, roundness, segments,
+            corner_settings, layer, entity.id, rotation);
       }
     }
 
@@ -2556,7 +2631,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
     // Label/text
     if (entity.has<HasCheckboxMark>()) {
-      render_checkbox_mark(draw_rect, entity.get<HasLabel>(), context.theme,
+      render_checkbox_mark(draw_rect, entity.get<HasLabel>(), detail::theme_for(entity, context.theme),
                            effective_opacity,
                            [&](Vector2Type start, Vector2Type end, float thickness, Color color) {
         buffer.add_line(start, end, thickness, color, layer, entity.id);
@@ -2564,7 +2639,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     } else if (entity.has<HasLabel>()) {
       const HasLabel &hasLabel = entity.get<HasLabel>();
       warn_ignored_label_padding(entity, cmp);
-      Color font_col = detail::resolve_label_color(hasLabel, context.theme);
+      Color font_col = detail::resolve_label_color(hasLabel, detail::theme_for(entity, context.theme));
 
       if (effective_opacity < 1.0f) {
         font_col = colors::opacity_pct(font_col, effective_opacity);
@@ -2603,7 +2678,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
               : 0.f;
 
       const Vector2Type label_inset =
-          resolve_text_inset(context.theme, hasLabel.text_inset);
+          resolve_text_inset(detail::theme_for(entity, context.theme), hasLabel.text_inset);
 
       // Position text to get font size
       TextPositionResult result = position_text_ex(
@@ -2640,6 +2715,23 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
               static_cast<int>(label_clip.x), static_cast<int>(label_clip.y),
               static_cast<int>(label_clip.width),
               static_cast<int>(label_clip.height), layer, entity.id);
+        if (SHOW_TEXT_OVERFLOW_DEBUG && !result.text_fits) {
+          RectangleType dr = text_rect;
+          dr.x += hasLabel.text_x_offset;
+          dr.width -= hasLabel.text_x_offset;
+          dr.y += hasLabel.text_y_offset;
+          const Color overlay{255, 50, 50, 60}, border{255, 50, 50, 200};
+          const float t = 2.f;
+          buffer.add_rectangle(dr, overlay, layer, entity.id);
+          buffer.add_rectangle({dr.x, dr.y, dr.width, t}, border, layer,
+                               entity.id);
+          buffer.add_rectangle({dr.x, dr.y + dr.height - t, dr.width, t},
+                               border, layer, entity.id);
+          buffer.add_rectangle({dr.x, dr.y, t, dr.height}, border, layer,
+                               entity.id);
+          buffer.add_rectangle({dr.x + dr.width - t, dr.y, t, dr.height},
+                               border, layer, entity.id);
+        }
         // Handle text overflow ellipsis truncation for batched path
         std::string display_text = hasLabel.label;
         if (hasLabel.text_overflow == TextOverflow::Ellipsis &&
@@ -2654,6 +2746,10 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                   return measure_text(font, s.c_str(), font_size, spacing).x;
                 });
         }
+        entity.get<HasLabel>().truncated =
+            hasLabel.text_overflow == TextOverflow::Ellipsis
+                ? display_text != hasLabel.label
+                : !result.text_fits;
 
         // Pass the container rect (text_rect) not the position rect
         // (result.rect) render_text will handle centering within the container
@@ -2665,8 +2761,12 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         label_rect.y += label_inset.y;
         label_rect.width = std::max(0.f, label_rect.width - 2.f * label_inset.x);
         label_rect.height = std::max(0.f, label_rect.height - 2.f * label_inset.y);
-        const float centerX = rect::center(draw_rect).x;
-        const float centerY = rect::center(draw_rect).y;
+        const Vector2Type rot_center = entity.has<HasUIModifiers>()
+            ? entity.get<HasUIModifiers>().rotation_center(draw_rect)
+            : Vector2Type{draw_rect.x + draw_rect.width / 2.0f,
+                          draw_rect.y + draw_rect.height / 2.0f};
+        float centerX = rot_center.x;
+        float centerY = rot_center.y;
 
         if (entity.has<HasSelectableText>()) {
           const std::string sel_font = cmp.resolved_font_name();
@@ -2798,6 +2898,13 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           }
         }
 
+        if (wrapped && entity.template has<HasTextUnitMotion>()) {
+          static std::atomic_bool warned_unit_motion_wrapped{false};
+          if (!warned_unit_motion_wrapped.exchange(true))
+            log_warn("per-unit text motion is skipped for wrapped text "
+                     "(entity {}); the label draws without unit animation",
+                     entity.id);
+        }
         const bool per_unit = !wrapped && entity.template has<HasTextUnitMotion>() &&
                               hasLabel.alignment == TextAlignment::Left &&
                               display_text == hasLabel.label &&

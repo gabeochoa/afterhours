@@ -182,7 +182,8 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                  .with_absolute_position()
                  .with_translate(pixels(placed.x - anchor.x),
                                  pixels(placed.y - anchor.y))
-                 .with_render_layer(config.render_layer + 1));
+                 .with_render_layer(config.render_layer +
+                                    overlay::OVERLAY_BASE));
 
     // Set tray selection to current option only when first opened
     if (!dropdownState.was_open_last_frame &&
