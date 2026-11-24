@@ -34,7 +34,8 @@ inline void draw_circle_v(Vector2Type center, float radius, Color color);
 
 inline void draw_text_ex(const afterhours::Font font, const char *content,
                          const Vector2Type position, const float font_size,
-                         const float, const Color color, const float = 0.0f,
+                         const float spacing, const Color color,
+                         const float = 0.0f,
                          const float = 0.0f, const float = 0.0f) {
   capture::record("text", RectangleType{position.x, position.y, 0.f, font_size},
                   color, content ? content : "");
@@ -56,6 +57,7 @@ inline void draw_text_ex(const afterhours::Font font, const char *content,
   // space that is 1/dpi_scale, so the resulting quads land at the correct
   // logical pixel position.
   float dpi = graphics::metal_detail::dpi_scale();
+  fonsSetSpacing(ctx, (spacing - 1.f) * dpi);
   if (dpi > 1.01f) {
     float inv = 1.0f / dpi;
     fonsSetSize(ctx, font_size * dpi);
@@ -84,6 +86,7 @@ inline void draw_text(const char *content, const float x, const float y,
                                       content, shown);
 
   float dpi = graphics::metal_detail::dpi_scale();
+  fonsSetSpacing(ctx, 0.f);
   if (dpi > 1.01f) {
     float inv = 1.0f / dpi;
     fonsSetSize(ctx, font_size * dpi);
@@ -551,6 +554,7 @@ inline void draw_ring(float centerX, float centerY, float innerRadius,
 // sokol has no rlSetBlendMode, so each mode is its own pipeline. Skipped when
 // already active: a pipeline swap breaks the batch.
 inline void set_blend_mode(blend::Mode mode) {
+  graphics::metal_detail::ensure_sokol_gl_and_fonts();
   if (mode == blend::detail::current_mode())
     return;
   blend::detail::current_mode() = mode;
@@ -887,6 +891,7 @@ inline void draw_quad(const Vector2Type (&p)[4], Color color) {
   capture::record("quad", RectangleType{min_x, min_y, max_x - min_x, max_y - min_y}, color, "");
   draw_rectangle(RectangleType{min_x, min_y, max_x - min_x, max_y - min_y}, color);
 }
+
 inline void draw_texture_quad(TextureType tex, const Vector2Type (&p)[4], Color tint) {
   const float min_x = std::min({p[0].x, p[1].x, p[2].x, p[3].x}), max_x = std::max({p[0].x, p[1].x, p[2].x, p[3].x});
   const float min_y = std::min({p[0].y, p[1].y, p[2].y, p[3].y}), max_y = std::max({p[0].y, p[1].y, p[2].y, p[3].y});
@@ -1016,10 +1021,12 @@ inline afterhours::Font &default_font_override() {
 inline void set_default_font(afterhours::Font font) {
   detail::default_font_override() = font;
 }
+
 inline void clear_default_font() { detail::default_font_override() = {}; }
 inline afterhours::Font get_default_font() {
   return detail::default_font_override();
 }
+
 inline afterhours::Font get_unset_font() { return get_default_font(); }
 
 // Reused across render textures. Not destroyed on unload: sokol_gl's pipeline
@@ -1205,25 +1212,6 @@ inline graphics::RenderTextureType load_render_texture_with_samples(int w,
     return rt;
   }
 
-  // An sgl context depends on the pixel formats and sample count, never on the
-  // size, so a resize does not need a new one. It used to get one anyway, and
-  // sgl_destroy_context does not release the five render pipelines the context
-  // made, so every resize leaked them: 4.8 MB per 1000 frames of a resize
-  // loop. Keyed and reused instead, so a resize makes none.
-  sgl_context sgl_ctx = sgl_context_for(color_fmt, depth_fmt, sc);
-  if (sgl_ctx.id == SG_INVALID_ID) {
-    log_error("load_render_texture: sgl context creation failed");
-    sg_destroy_sampler(smp);
-    sg_destroy_view(tex_view);
-    if (resolve_view.id) sg_destroy_view(resolve_view);
-    if (resolve.id) sg_destroy_image(resolve);
-    sg_destroy_view(depth_view);
-    sg_destroy_view(color_view);
-    sg_destroy_image(depth);
-    sg_destroy_image(color);
-    return rt;
-  }
-
   rt.color_img_id = color.id;
   rt.depth_img_id = depth.id;
   rt.color_view_id = color_view.id;
@@ -1232,13 +1220,13 @@ inline graphics::RenderTextureType load_render_texture_with_samples(int w,
   rt.resolve_img_id = resolve.id;
   rt.resolve_view_id = resolve_view.id;
   rt.sampler_id = smp.id;
-  rt.sgl_ctx_id = sgl_ctx.id;
   return rt;
 }
 
 inline graphics::RenderTextureType load_render_texture(int w, int h) {
   return load_render_texture_with_samples(w, h, 1);
 }
+
 inline graphics::RenderTextureType load_msaa_render_texture(int w, int h,
                                                              int samples) {
   return load_render_texture_with_samples(w, h, samples);
@@ -1266,6 +1254,18 @@ inline void unload_render_texture(graphics::RenderTextureType &rt) {
 }
 
 inline void begin_texture_mode(graphics::RenderTextureType &rt) {
+  graphics::metal_detail::ensure_sokol_gl_and_fonts();
+  if (rt.sgl_ctx_id == 0) {
+    const auto cdesc = sg_query_image_desc({rt.color_img_id});
+    const auto ddesc = sg_query_image_desc({rt.depth_img_id});
+    const sgl_context ctx =
+        sgl_context_for(cdesc.pixel_format, ddesc.pixel_format, cdesc.sample_count);
+    if (ctx.id == SG_INVALID_ID) {
+      log_error("begin_texture_mode: sgl context creation failed");
+      return;
+    }
+    rt.sgl_ctx_id = ctx.id;
+  }
   auto unwind_camera_stack = []() {
     if (graphics::metal_detail::g_camera_mode_depth <= 0)
       return;
@@ -1376,7 +1376,8 @@ inline void end_texture_mode() {
   // Restore the default sgl context (swapchain format).
   // The caller is responsible for starting the next pass
   // (via begin_drawing or another begin_texture_mode).
-  sgl_set_context(sgl_default_context());
+  if (graphics::metal_detail::g_sgl_ready)
+    sgl_set_context(sgl_default_context());
   graphics::metal_detail::g_in_texture_mode = false;
 }
 
@@ -1896,6 +1897,11 @@ inline TextureType load_texture(const char *path) {
   TextureType tex = metal_texture_detail::load_texture_from_pixels(pixels, w, h);
   stbi_image_free(pixels);
   return tex;
+}
+
+// sg_make_* is only valid once the backend is initialized.
+inline bool texture_is_usable() {
+  return graphics::metal_detail::g_initialized;
 }
 
 inline TextureType load_texture_from_rgba(const std::uint8_t *rgba, int w,
