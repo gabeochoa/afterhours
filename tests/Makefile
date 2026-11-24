@@ -398,6 +398,7 @@ lighting_zones_test \
 	translation_test \
 	layout_inspector_test \
 	letter_spacing_zero_test \
+	padding_empty_test \
 	mouse_pre_event_test
 
 # .app packaging is macOS-only, and the test shells out to plutil.

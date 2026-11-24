@@ -68,6 +68,7 @@ struct ComponentConfig {
 
   Padding padding;
   bool padding_is_default = false;
+  bool padding_explicitly_set = false;
   Margin margin;
   std::string label;
   bool is_absolute = false;
@@ -312,6 +313,7 @@ struct ComponentConfig {
   ComponentConfig &with_padding(const Padding &padding_) {
     padding = padding_;
     padding_is_default = false;
+    padding_explicitly_set = true;
     return *this;
   }
   ComponentConfig &with_margin(const Margin &margin_) {
@@ -328,6 +330,7 @@ struct ComponentConfig {
   }
   ComponentConfig &with_padding(Spacing spacing) {
     padding_is_default = false;
+    padding_explicitly_set = true;
     auto gap_size = spacing_to_size(spacing);
     padding = Padding{.top = gap_size,
                       .left = gap_size,
@@ -1238,7 +1241,7 @@ struct ComponentConfig {
   }
 
   ComponentConfig &apply_automatic_defaults() {
-    if (!has_padding()) {
+    if (!has_padding() && !padding_explicitly_set) {
       padding = Padding{.top = DefaultSpacing::medium(),
                         .left = DefaultSpacing::medium(),
                         .bottom = DefaultSpacing::medium(),
@@ -1259,9 +1262,10 @@ struct ComponentConfig {
   ComponentConfig &apply_overrides_from(const ComponentConfig &overrides) {
     ComponentConfig &merged = *this;
 
-    if (overrides.has_padding()) {
+    if (overrides.has_padding() || overrides.padding_explicitly_set) {
       merged.padding = overrides.padding;
       merged.padding_is_default = overrides.padding_is_default;
+      merged.padding_explicitly_set = overrides.padding_explicitly_set;
     }
     if (overrides.has_margin())
       merged.margin = overrides.margin;
