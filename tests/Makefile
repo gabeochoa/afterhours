@@ -506,6 +506,7 @@ RAYLIB_TESTS := \
 	dialog_test \
 	escape_owner_test \
 	modal_centering_test \
+	plugin_context_test \
 	dump_ui_test \
 	scroll_anchor_test \
 	measure_config_test \
@@ -630,6 +631,7 @@ $(OUT)/audio_plugin_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(OUT)/audio_plugin_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/audio_stream_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(OUT)/audio_stream_test: INCLUDES_T = $(INCLUDES_RAYLIB)
+$(OUT)/plugin_context_test: ../src/plugins/files.cpp ../src/plugins/settings.cpp
 $(OUT)/files_atomic_write_test: ../src/plugins/files.cpp
 $(OUT)/files_confined_path_test: ../src/plugins/files.cpp
 $(OUT)/files_resource_path_test: ../src/plugins/files.cpp

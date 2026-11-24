@@ -4,7 +4,9 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <optional>
 #include <sstream>
+#include <vector>
 
 #include "../core/base_component.h"
 #include "../core/entity_query.h"
@@ -549,5 +551,33 @@ struct window_manager : developer::Plugin {
 // concept
 static_assert(developer::PluginCore<window_manager>,
               "window_manager must implement the core plugin interface");
+
+struct WindowManagerPlugin {
+  int target_fps = 60;
+  std::optional<window_manager::Resolution> resolution{};
+  std::vector<window_manager::Resolution> available_resolutions{};
+
+  void install(PluginContext &ctx) const {
+    ctx.ensure_singleton<window_manager::ProvidesTargetFPS>(target_fps);
+    if (resolution.has_value()) {
+      ctx.ensure_singleton<window_manager::ProvidesCurrentResolution>(
+          *resolution);
+    } else {
+      ctx.ensure_singleton<window_manager::ProvidesCurrentResolution>();
+    }
+    if (!available_resolutions.empty()) {
+      ctx.ensure_singleton<window_manager::ProvidesAvailableWindowResolutions>(
+          available_resolutions);
+    } else {
+      ctx.ensure_singleton<window_manager::ProvidesAvailableWindowResolutions>();
+    }
+    ctx.add_system(Stage::PreUpdate,
+                   std::make_unique<window_manager::CollectCurrentResolution>());
+    ctx.add_system(
+        Stage::PreUpdate,
+        std::make_unique<window_manager::CollectAvailableResolutions>());
+  }
+};
+static_assert(InstallablePlugin<WindowManagerPlugin>);
 
 } // namespace afterhours

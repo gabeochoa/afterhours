@@ -485,4 +485,17 @@ struct settings : developer::Plugin {
 static_assert(developer::PluginCore<settings>,
               "settings must implement the core plugin interface");
 
+template <typename GameSettings> struct SettingsPlugin {
+  GameSettings data{};
+  std::string file{};
+
+  void install(PluginContext &ctx) const {
+    ctx.ensure_singleton<settings::ProvidesSettings<GameSettings>>(data, file);
+    ctx.add_system(Stage::Update,
+                   std::make_unique<settings::SettingsLoadSystem<GameSettings>>());
+    ctx.add_system(Stage::Update,
+                   std::make_unique<settings::SettingsSaveSystem<GameSettings>>());
+  }
+};
+
 } // namespace afterhours
