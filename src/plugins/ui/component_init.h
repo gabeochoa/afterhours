@@ -248,6 +248,10 @@ inline void apply_flags(Entity &entity, const ComponentConfig &config) {
   entity.toggleComponent<SelectOnFocus>(config.select_on_focus);
   entity.toggleComponent<HasClickActivationMode>(
       config.has_click_activation_override(), config.click_activation);
+  if (auto *hs = entity.toggleComponent<HasShortcuts>(
+          !config.shortcuts.empty(), config.shortcuts)) {
+    hs->bindings = config.shortcuts;
+  }
   entity.toggleComponent<IsDisabled>(config.disabled);
   entity.toggleComponent<ShouldHide>(config.hidden);
 }
@@ -502,6 +506,7 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
                              config.overflow_y == Overflow::Auto);
       sv.auto_overflow = (config.overflow_x == Overflow::Auto ||
                           config.overflow_y == Overflow::Auto);
+      sv.scrollbar_gutter = config.scrollbar_gutter;
     } else if (entity.has<HasScrollView>() &&
                entity.get<HasScrollView>().config_owned) {
       entity.removeComponentIfExists<HasScrollView>();
