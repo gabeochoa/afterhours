@@ -249,6 +249,12 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
     {
       const auto prev_pos = context.mouse.pos;
       context.mouse.pos = input::get_mouse_position();
+      // A backend with no cursor yet (pre-init sokol) can report NaN; pin
+      // it off-screen so every read below sees the pre-event position.
+      if (!std::isfinite(context.mouse.pos.x) ||
+          !std::isfinite(context.mouse.pos.y)) {
+        context.mouse.pos = input::MousePosition{-1.f, -1.f};
+      }
       context.mouse.moved_this_frame = context.mouse.moved_since(prev_pos);
       // No dead zone here, unlike moved_this_frame: a drag has to track every
       // pixel. Both ends must be finite or the subtraction yields NaN, which a
@@ -1125,6 +1131,15 @@ template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
   }
 };
 
+template <typename InputAction>
+struct DispatchShortcuts : System<UIContext<InputAction>> {
+  virtual void for_each_with(Entity &, UIContext<InputAction> &context,
+                             float) override {
+    if (context.last_action == InputAction::None)
+      return;
+    context.dispatch_focused_shortcut(context.last_action);
+  }
+};
 template <typename InputAction>
 struct HandleTrayNavigation : SystemWithUIContext<ui::HasTray> {
   UIContext<InputAction> *context;
@@ -2390,6 +2405,10 @@ struct HandleScrollInput : SystemWithUIContext<HasScrollView> {
       return;
 
     Vector2Type wheel_v = input::get_mouse_wheel_move_v();
+    const float wheel_speed =
+        input::get_mouse_wheel_kind() == WheelDeltaKind::Precise
+            ? scroll_state.scroll_speed_precise
+            : scroll_state.scroll_speed;
     if (wheel_v.x == 0.f &&
         (input::get_current_modifiers() & input::KeyChord::MOD_SHIFT))
       wheel_v = {wheel_v.y, 0.f};
@@ -2402,13 +2421,13 @@ struct HandleScrollInput : SystemWithUIContext<HasScrollView> {
     // Vertical scrolling
     if (scroll_state.vertical_enabled && wheel_v.y != 0.0f) {
       scroll_state.scroll_target.y +=
-          direction * wheel_v.y * scroll_state.scroll_speed;
+          direction * wheel_v.y * wheel_speed;
     }
 
     // Horizontal scrolling
     if (scroll_state.horizontal_enabled && wheel_v.x != 0.0f) {
       scroll_state.scroll_target.x +=
-          direction * wheel_v.x * scroll_state.scroll_speed;
+          direction * wheel_v.x * wheel_speed;
     }
 
     scroll_state.clamp_scroll();

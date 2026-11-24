@@ -278,6 +278,7 @@ struct InputState {
   float mouse_dy = 0.f;
   float scroll_x = 0.f;
   float scroll_y = 0.f;
+  bool scroll_precise = false;
 
   // Character input queue (UTF-32 codepoints from CHAR events)
   static constexpr int CHAR_QUEUE_SIZE = 32;
@@ -312,6 +313,7 @@ inline void input_begin_frame() {
   s.mouse_dy = 0.f;
   s.scroll_x = 0.f;
   s.scroll_y = 0.f;
+  s.scroll_precise = false;
   s.key_queue_len = 0;
   s.key_queue_read = 0;
 }
@@ -505,6 +507,7 @@ inline void sokol_event_cb(const sapp_event *ev) {
   case SAPP_EVENTTYPE_MOUSE_SCROLL:
     s.scroll_x += ev->scroll_x;
     s.scroll_y += ev->scroll_y;
+    s.scroll_precise = ev->scroll_precise;
     break;
   case SAPP_EVENTTYPE_FOCUSED:
     g_window_focused = true;
@@ -538,6 +541,7 @@ struct MetalPlatformAPI {
   static constexpr int SHADER_UNIFORM_VEC2 = 1;
   static constexpr int SHADER_UNIFORM_FLOAT = 0;
   static constexpr int SHADER_UNIFORM_VEC4 = 3;
+  static constexpr int SHADER_UNIFORM_VEC3 = 2;
 
   // ── Window lifecycle (legacy API -- prefer run()) ──
   static void init_window(int, int, const char *) {
@@ -918,6 +922,7 @@ struct MetalPlatformAPI {
     // struct, so it is applied in input_system.h's Metal branch instead --
     // which is where the raylib path does it as well.
     float dpi = sapp_dpi_scale();
+    if (!(dpi > 0.f)) dpi = 1.f; // pre-init reads 0; 0/0 is NaN
     return {s.mouse_x / dpi, s.mouse_y / dpi};
   }
   static Vec2 get_screen_to_world_2d(const Vec2 &position,
@@ -974,6 +979,7 @@ struct MetalPlatformAPI {
   static Vec2 get_mouse_delta() {
     auto &s = metal_detail::input_state();
     float dpi = sapp_dpi_scale();
+    if (!(dpi > 0.f)) dpi = 1.f; // pre-init reads 0; 0/0 is NaN
     return {s.mouse_dx / dpi, s.mouse_dy / dpi};
   }
 
@@ -984,6 +990,10 @@ struct MetalPlatformAPI {
   static Vec2 get_mouse_wheel_move_v() {
     auto &s = metal_detail::input_state();
     return {s.scroll_x, s.scroll_y};
+  }
+
+  static bool get_mouse_wheel_precise() {
+    return metal_detail::input_state().scroll_precise;
   }
 
   // ── Application control ──
@@ -1051,6 +1061,7 @@ struct MetalPlatformAPI {
     desc.sample_count = 1;
     desc.enable_clipboard = true;
     desc.clipboard_size = 16 * 1024;  // 16 KB clipboard buffer
+    desc.macos.forward_cmd_chords = cfg.macos_forward_cmd_chords;
 
     // Map flags
     if (cfg.flags & FLAG_WINDOW_RESIZABLE) {
