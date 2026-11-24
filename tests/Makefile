@@ -223,7 +223,8 @@ ALL_TESTS := \
 	font_catalog_test \
 	frame_rate_stats_test \
 	tunable_test \
-	model_library_test \
+model_library_test \
+lighting_zones_test \
 	app_states_test \
 	intro_sequence_test \
 	graphics_concepts_pedantic_test \
