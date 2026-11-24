@@ -56,7 +56,8 @@ inline raylib::Font get_unset_font() { return get_default_font(); }
 
 inline float font_display_scale() {
   float scale = static_cast<float>(graphics::render_scale());
-  if (raylib::IsWindowReady()) {
+  if (raylib::IsWindowReady() &&
+      raylib::IsWindowState(raylib::FLAG_WINDOW_HIGHDPI)) {
     const float dpi = raylib::GetWindowScaleDPI().x;
     if (dpi > scale)
       scale = dpi;
@@ -324,8 +325,14 @@ inline std::optional<raylib::Font> load_bundled_default_font() {
 // before any GL context produces glyphs but no atlas; the next call after a
 // context exists reloads it once so text measures and draws for real.
 inline std::optional<raylib::Font> &bundled_default_font() {
+  static std::uint64_t loaded_epoch = graphics::context_epoch();
   static std::optional<raylib::Font> font = load_bundled_default_font();
-  if (font && font->texture.id == 0 && font_gl_ready()) {
+  const std::uint64_t epoch = graphics::context_epoch();
+  if (loaded_epoch != epoch) {
+    font.reset();
+    loaded_epoch = epoch;
+  }
+  if (!font || (font->texture.id == 0 && font_gl_ready())) {
     if (const auto reloaded = load_bundled_default_font())
       font = reloaded;
   }

@@ -72,6 +72,7 @@ inline void raylib_shutdown() {
       },
       storage());
   storage() = std::monostate{};
+  bump_context_epoch();
 }
 
 inline bool host_input_activity() {
@@ -244,7 +245,10 @@ struct RaylibPlatformAPI {
   static void init_window(int w, int h, const char *title) {
     raylib::InitWindow(w, h, title);
   }
-  static void close_window() { raylib::CloseWindow(); }
+  static void close_window() {
+    raylib::CloseWindow();
+    bump_context_epoch();
+  }
   static bool window_should_close() { return raylib::WindowShouldClose(); }
   static bool is_window_ready() { return raylib::IsWindowReady(); }
   static bool is_window_fullscreen() { return raylib::IsWindowFullscreen(); }
