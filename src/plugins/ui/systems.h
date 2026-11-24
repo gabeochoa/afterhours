@@ -642,7 +642,7 @@ private:
 };
 
 template <typename InputAction>
-struct TrackIfComponentWillBeRendered : System<> {
+struct TrackIfComponentWillBeRendered : System<UIContext<InputAction>> {
   UIEntityMappingCache *cache = nullptr;
 
   virtual void once(float) override {
@@ -669,16 +669,11 @@ struct TrackIfComponentWillBeRendered : System<> {
     }
   }
 
-  virtual void for_each_with(Entity &entity, float) override {
-    // TODO move to a system filter
-    if (entity.is_missing<UIContext<InputAction>>())
-      return;
-
+  virtual void for_each_with(Entity &, UIContext<InputAction> &context,
+                             float) override {
     if (!cache) {
       return; // Cache not ready yet
     }
-
-    auto &context = entity.get<UIContext<InputAction>>();
 
     // Only mark entities as visible if they were queued for render this frame.
     // This ensures that UI elements from inactive screens (which don't call
@@ -734,9 +729,11 @@ struct EndUIContextManager : System<UIContext<InputAction>> {
   }
 };
 
-template <typename InputAction> struct ComputeVisualFocusId : System<> {
-  virtual void for_each_with(Entity &, float) override {
-    auto ctx = EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+template <typename InputAction>
+struct ComputeVisualFocusId : System<UIContext<InputAction>> {
+  virtual void for_each_with(Entity &, UIContext<InputAction> &context,
+                             float) override {
+    auto *ctx = &context;
     // FollowsMostRecentInput: when the mouse moved this frame, take focus (and
     // thus the ring, derived below) to the hovered widget. A parked mouse leaves
     // keyboard focus alone; empty space (hot_id==ROOT) leaves the ring put. Runs
