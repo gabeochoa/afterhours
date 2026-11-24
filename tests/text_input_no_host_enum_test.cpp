@@ -162,4 +162,87 @@ TEST(bare_enum_text_input_edits_and_copies_via_defaults) {
   CHECK(value == "xy");
 }
 
+namespace {
+
+enum struct DiagnosticMissingActions {
+  None,
+  WidgetMod,
+  WidgetNext,
+  WidgetBack,
+  WidgetPress,
+  TextCopy,
+};
+
+enum struct DiagnosticFullActions {
+  TextUndo,
+  TextRedo,
+  TextCopy,
+  TextCut,
+  TextPaste,
+  TextWordLeft,
+  TextWordRight,
+  TextSelectLeft,
+  TextSelectRight,
+  TextDeleteWordBack,
+  TextDeleteWordForward,
+  TextDeleteLineBack,
+  TextDeleteLineForward,
+};
+
+std::string captured_warnings;
+
+void capture_warn(const char *level, const char *message) {
+  if (std::string_view(level).find("WARN") != std::string_view::npos)
+    captured_warnings += message;
+}
+
+} // namespace
+
+TEST(has_default_text_chord_matches_platform_table) {
+  CHECK(text_input::has_default_text_chord("TextCopy"));
+  CHECK(!text_input::has_default_text_chord("TextBogus"));
+#if defined(__APPLE__)
+  CHECK(text_input::has_default_text_chord("TextDeleteLineForward"));
+#else
+  CHECK(!text_input::has_default_text_chord("TextDeleteLineForward"));
+#endif
+}
+
+TEST(report_missing_editing_actions_names_missing_with_defaults) {
+  captured_warnings.clear();
+  const auto previous_sink = log_sink_fn;
+  log_sink_fn = &capture_warn;
+  text_input::report_missing_editing_actions<DiagnosticMissingActions>();
+  const std::string after_first = captured_warnings;
+  text_input::report_missing_editing_actions<DiagnosticMissingActions>();
+  log_sink_fn = previous_sink;
+  CHECK(captured_warnings == after_first);
+  CHECK(!after_first.empty());
+  CHECK(after_first.find("TextUndo") != std::string::npos);
+  CHECK(after_first.find("TextCopy") == std::string::npos);
+  CHECK(after_first.find("will use library default chords") !=
+        std::string::npos);
+  CHECK(after_first.find("Add and bind the enumerator to customize") !=
+        std::string::npos);
+  CHECK(after_first.find("are off") == std::string::npos);
+  CHECK(after_first.find("compiled out") == std::string::npos);
+#if defined(__APPLE__)
+  CHECK(after_first.find("TextDeleteLineForward") != std::string::npos);
+  CHECK(after_first.find("no library default chord") == std::string::npos);
+#else
+  CHECK(after_first.find("TextDeleteLineForward") != std::string::npos);
+  CHECK(after_first.find("no library default chord") != std::string::npos);
+  CHECK(after_first.find("unavailable") != std::string::npos);
+#endif
+}
+
+TEST(report_missing_editing_actions_silent_when_all_present) {
+  captured_warnings.clear();
+  const auto previous_sink = log_sink_fn;
+  log_sink_fn = &capture_warn;
+  text_input::report_missing_editing_actions<DiagnosticFullActions>();
+  log_sink_fn = previous_sink;
+  CHECK(captured_warnings.empty());
+}
+
 int main() { return ui_test::run_registered_tests("text input no host enum"); }

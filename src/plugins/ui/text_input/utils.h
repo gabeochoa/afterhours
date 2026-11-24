@@ -651,7 +651,7 @@ inline void insert_pasted_text(State &s, const std::string &clip) {
   }
 }
 
-inline bool default_text_chord_pressed(std::string_view name, bool repeat) {
+inline const auto &default_text_chord_table() {
   using KeyChord = input::KeyChord;
   constexpr uint8_t SHIFT = KeyChord::MOD_SHIFT;
 #if defined(__APPLE__)
@@ -696,9 +696,20 @@ inline bool default_text_chord_pressed(std::string_view name, bool repeat) {
                  static_cast<uint8_t>(KeyChord::MOD_CTRL | SHIFT)}}},
 #endif
   };
+  return table;
+}
+
+inline bool has_default_text_chord(std::string_view name) {
+  for (const auto &[entry_name, chords] : default_text_chord_table())
+    if (entry_name == name)
+      return !chords.empty();
+  return false;
+}
+
+inline bool default_text_chord_pressed(std::string_view name, bool repeat) {
   const uint8_t mods = input::get_current_modifiers();
-  for (const auto &[n, chords] : table) {
-    if (n != name) continue;
+  for (const auto &[entry_name, chords] : default_text_chord_table()) {
+    if (entry_name != name) continue;
     for (const auto &chord : chords)
       if (chord.required_modifiers == mods &&
           (repeat ? input::is_key_pressed_repeat(chord.key)

@@ -21,8 +21,7 @@ namespace text_input {
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
-// Opted into by naming them in the consumer's InputAction enum, so a typo
-// silently removes the feature.
+// A typo bypasses the host binding and falls back to the library default.
 inline constexpr std::string_view optional_editing_actions[] = {
     "TextUndo",      "TextRedo",       "TextCopy",
     "TextCut",       "TextPaste",      "TextWordLeft",
@@ -36,7 +35,38 @@ constexpr bool has_editing_action(std::string_view name) {
   return magic_enum::enum_contains<InputAction>(name);
 }
 
-template <typename InputAction> inline void report_missing_editing_actions() {}
+template <typename InputAction> inline void report_missing_editing_actions() {
+  static bool reported = false;
+  if (reported)
+    return;
+  reported = true;
+
+  std::string with_default;
+  std::string unavailable;
+  for (const std::string_view name : optional_editing_actions) {
+    if (has_editing_action<InputAction>(name))
+      continue;
+    std::string &list =
+        has_default_text_chord(name) ? with_default : unavailable;
+    if (!list.empty())
+      list += ", ";
+    list += name;
+  }
+  if (with_default.empty() && unavailable.empty())
+    return;
+  if (!with_default.empty())
+    log_warn("text_input: {} has no enumerator for: {}. They have no host "
+             "enumerator and will use library default chords where "
+             "available. Add and bind the enumerator to customize them, or "
+             "ignore this if the defaults are intended.",
+             type_name<InputAction>(), with_default);
+  if (!unavailable.empty())
+    log_warn("text_input: {} has no enumerator for: {}. They have no host "
+             "enumerator and no library default chord on this platform, so "
+             "they are unavailable. Add and bind the enumerator to enable "
+             "them, or ignore this if they are not needed.",
+             type_name<InputAction>(), unavailable);
+}
 
 // Given a local x coordinate within a text field, find the byte offset
 // in the display text that's closest to that position.
