@@ -426,7 +426,6 @@ popover(HasUIContext auto &ctx, EntityParent ep_pair,
         overlay::Placement preferred = overlay::Placement::Below,
         ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
-  auto &state = entity.template addComponentIfMissing<HasMenuState>();
 
   // Built even while closed, like menu_root: the panel's screen
   // placement is converted through this holder's rect, so the holder
@@ -439,11 +438,19 @@ popover(HasUIContext auto &ctx, EntityParent ep_pair,
   init_component(ctx, ep_pair, root_config, ComponentType::Div, false,
                  "popover_root");
 
-  if (detail::dismiss_menu(ctx, state, open)) {
+  const bool was_open =
+      entity.template has<HasMenuState>() &&
+      entity.template get<HasMenuState>().was_open_last_frame;
+  if (!open && !was_open) return ElementResult{false, entity};
+  auto &state = entity.template addComponentIfMissing<HasMenuState>();
+
+  const bool dismissed = detail::dismiss_menu(ctx, state, open);
+  const bool final_frame = dismissed && open && was_open;
+  if (dismissed && !final_frame) {
     open = false;
-    state.was_open_last_frame = false;
     return ElementResult{false, entity};
   }
+  if (final_frame) open = false;
 
   const float width =
       config.size.x_axis.value > 0.f ? config.size.x_axis.value : anchor.width;
@@ -460,7 +467,9 @@ popover(HasUIContext auto &ctx, EntityParent ep_pair,
 
   auto panel =
       tray(ctx, mk(entity),
-           ComponentConfig::inherit_from(config, "popover_panel")
+           ComponentConfig::inherit_from(
+               config, config.debug_name.empty() ? "popover_panel"
+                                                 : config.debug_name)
                .with_background(Theme::Usage::Surface)
                .with_size(ComponentSize{pixels(width), pixels(height)})
                .with_flex_direction(FlexDirection::Column)
@@ -472,11 +481,11 @@ popover(HasUIContext auto &ctx, EntityParent ep_pair,
     panel.ent().template get<HasColor>().skip_hover_override = true;
 
   state.panel = panel.ent().id;
-  if (!state.was_open_last_frame) {
+  if (!was_open) {
     state.restore_focus = ctx.focus_id;
     ctx.set_focus(state.panel);
   }
-  state.was_open_last_frame = true;
+  state.was_open_last_frame = open;
 
   return ElementResult{true, panel.ent()};
 }

@@ -6,6 +6,7 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+- **`imm::popover` runs its body on the dismissal frame**, so a click recorded inside the panel is delivered once before it closes; caller-set `open = false` still closes immediately. The panel also keeps the caller's `with_debug_name`. Covered in `menu_test` and `color_swatch_test`.
 - **`EntityHelper::ScopedCollection`** (`src/core/entity_helper.h`) binds a collection as the thread-local default for its scope and restores the previous binding on destruction. Construct from `EntityCollection&`, or call `ScopedCollection::use_default()` for the singleton default. Covered by `collection_binding_test`.
 - **`tab_container(..., active_config)`** applies overrides only to the selected tab. Set a shared corner mask on the bar to round every tab, then use `active_config` for a distinct selected edge. Omitting both keeps the default underline.
 
