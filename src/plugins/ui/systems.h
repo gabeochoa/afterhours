@@ -137,6 +137,21 @@ static inline bool in_inert_subtree(const Entity &entity) {
   return false;
 }
 
+// Nearest ancestor (not self) that can drag: it may claim a press that
+// started on a child once the pointer moves past the drag threshold.
+static inline EntityID nearest_drag_ancestor(EntityID id) {
+  OptEntity cur = UICollectionHolder::getEntityForID(id);
+  for (int depth = 0; cur.valid() && depth < 64; ++depth) {
+    if (!cur.asE().has<UIComponent>()) return -1;
+    OptEntity parent =
+        UICollectionHolder::getEntityForID(cur.asE().get<UIComponent>().parent);
+    if (!parent.valid()) return -1;
+    if (parent.asE().has<HasDragListener>()) return parent.asE().id;
+    cur = parent;
+  }
+  return -1;
+}
+
 static inline RectangleType hit_rect(const Entity &entity,
                                      const UIComponent &component) {
   RectangleType rect = component.rect();
@@ -851,6 +866,15 @@ struct ResolveHitTarget : SystemWithUIContext<> {
       visit(*e, winner, best_layer);
     }
 
+    // Past the drag threshold, a draggable ancestor claims the press from
+    // its child, so the child keeps taps and the parent gets drags.
+    if (context->mouse.left_down && context->mouse.press_moved) {
+      const EntityID drag_parent =
+          detail::nearest_drag_ancestor(context->active_id);
+      if (drag_parent != context->ROOT)
+        context->set_active(drag_parent);
+    }
+
     const EntityID locked_active = context->active_id;
     const bool hot_locked = context->mouse.left_down &&
                             locked_active != context->ROOT &&
@@ -944,7 +968,19 @@ struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
       hasClickListener.down = true;
     }
 
-    if (context->mouse_activates(entity.id)) {
+    // Under a draggable ancestor a press is not yet a click: it may become
+    // the parent's drag, so fire only on a release that stayed a tap.
+    const bool under_drag_parent =
+        detail::nearest_drag_ancestor(entity.id) != context->ROOT;
+    if (!under_drag_parent && context->mouse_activates(entity.id)) {
+      if (entity.is_missing<DoesNotTakeFocus>())
+        context->set_focus(entity.id, FocusSource::Pointer);
+      hasClickListener.cb(entity);
+      hasClickListener.down = true;
+    }
+    if (under_drag_parent && context->mouse.just_released &&
+        context->is_active(entity.id) && context->is_hot(entity.id) &&
+        !context->mouse.press_moved) {
       if (entity.is_missing<DoesNotTakeFocus>())
         context->set_focus(entity.id, FocusSource::Pointer);
       hasClickListener.cb(entity);
