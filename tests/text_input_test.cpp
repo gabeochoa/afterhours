@@ -203,6 +203,46 @@ TEST(d12_placeholder_is_muted_and_real_text_is_not) {
   }
 }
 
+TEST(r030_placeholder_color_overrides_the_muted_default) {
+  const Color hint{140, 140, 166, 255};
+  {
+    ImmTestHarness h;
+    std::string text;
+    two_frames(h, [&] {
+      imm::text_input(h.context(), mk(h.root(), 0), text,
+                      ComponentConfig{}
+                          .with_size(ComponentSize{pixels(220), pixels(40)})
+                          .with_placeholder("hint")
+                          .with_placeholder_color(hint));
+    });
+    Entity *field = find_field_entity();
+    ui_test::check(field != nullptr && field->has<HasLabel>(), "field exists",
+                   __FILE__, __LINE__);
+    if (field && field->has<HasLabel>())
+      ui_test::check(field->get<HasLabel>().explicit_text_color.has_value() &&
+                         same_color(*field->get<HasLabel>().explicit_text_color,
+                                    hint),
+                     "the placeholder draws the caller's colour", __FILE__,
+                     __LINE__);
+  }
+  {
+    ImmTestHarness h;
+    std::string text = "typed";
+    two_frames(h, [&] {
+      imm::text_input(h.context(), mk(h.root(), 0), text,
+                      ComponentConfig{}
+                          .with_size(ComponentSize{pixels(220), pixels(40)})
+                          .with_placeholder("hint")
+                          .with_placeholder_color(hint));
+    });
+    Entity *field = find_field_entity();
+    if (field && field->has<HasLabel>())
+      ui_test::check(!field->get<HasLabel>().explicit_text_color.has_value(),
+                     "typed text ignores the placeholder colour", __FILE__,
+                     __LINE__);
+  }
+}
+
 // The placeholder must not feed the cursor maths, or the caret would sit after
 // the hint instead of where typing starts.
 TEST(d12_placeholder_does_not_move_the_cursor) {
