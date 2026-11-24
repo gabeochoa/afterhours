@@ -83,6 +83,7 @@ ALL_TESTS := \
 	terminal_ui_test \
 	font_atlas_measure_test \
 	font_prewarm_test \
+	font_display_size_test \
 	font_points_test \
 	window_focus_test \
 	glyph_placeholder_test \
@@ -102,6 +103,8 @@ ALL_TESTS := \
 	appearance_test \
 	frame_loop_test \
 	headless_cadence_test \
+	jobs_test \
+	frame_phases_test \
 	color_value_test \
 	value_types_test \
 	value_types_none_test \
@@ -110,6 +113,7 @@ ALL_TESTS := \
 	wrappers_test \
 	window_state_test \
 	animation_presets_test \
+	shimmer_test \
 	particles_test \
 	trigger_volume_test \
 	ui_modifiers_test \
@@ -121,6 +125,7 @@ ALL_TESTS := \
 	text_unit_motion_test \
 	text_alignment_test \
 	sound_volume_test \
+	caption_test \
 	audio_plugin_test \
 	audio_stream_test \
 	synth_beep_test \
@@ -141,6 +146,7 @@ ALL_TESTS := \
 	input_enum_actions_test \
 	input_repeat_test \
 	input_remap_test \
+	input_axis_edge_test \
 	file_watcher_test \
 	render_capture_test \
 	presented_frame_test \
@@ -148,14 +154,18 @@ ALL_TESTS := \
 	charts_test \
 	system_profile_test \
 	allocation_counters_test \
+	system_groups_test \
 	profiling_test \
 	profiling_disabled_test \
 	profiling_collapsed_test \
 	spike_capture_test \
 	perf_provider_warn_test \
 	blend_mode_test \
+	blur_shader_test \
 	rect_test \
+	math3d_test \
 	rounded_corners_test \
+	rounded_outline_mask_test \
 	viewport_test \
 	grid_test \
 	pathfinding_provider_test \
@@ -166,10 +176,12 @@ ALL_TESTS := \
 	crash_handler_web_sim_test \
 	crash_report_file_test \
 	setting_row_style_test \
+	settings_presets_test \
 	singleton_iteration_test \
 	get_unique_test \
 	singleton_add_test \
 	ui_idle_cost_test \
+	cached_singleton_test \
 	press_delay_test \
 	graphics_key_injection_test \
 	e2e_gamepad_test \
@@ -181,6 +193,7 @@ ALL_TESTS := \
 	e2e_resize_steps_test \
 	e2e_render_checkpoint_test \
 	e2e_window_size_test \
+	e2e_audio_commands_test \
 	e2e_register_command_test \
 	e2e_screenshot_test \
 	e2e_expect_screenshot_test \
@@ -202,6 +215,7 @@ ALL_TESTS := \
 	font_catalog_test \
 	frame_rate_stats_test \
 	tunable_test \
+	intro_sequence_test \
 	graphics_concepts_pedantic_test \
 	fixed_tick_rate_test \
 	sound_playback_test \
@@ -219,6 +233,7 @@ ALL_TESTS := \
 	dialog_test \
 	escape_owner_test \
 	dump_ui_test \
+	accessibility_test \
 	scroll_anchor_test \
 	measure_config_test \
 	scroll_anchor_test \
@@ -227,11 +242,13 @@ ALL_TESTS := \
 	grapheme_edit_test \
 	entity_mapping_test \
 	files_atomic_write_test \
+	files_confined_path_test \
 	files_resource_path_test \
 	files_cache_path_test \
 	files_documents_test \
 	capture_test \
 	capture_perf_test \
+	capture_async_test \
 	polyline_test \
 	measure_memo_test \
 	design_defaults_test \
@@ -290,6 +307,7 @@ ALL_TESTS := \
 	render_order_test \
 	draw_over_test \
 	scroll_smoothing_test \
+	scrollbar_gutter_test \
 	setup_test \
 	slot_at_creation_test \
 	size_constraints_test \
@@ -304,11 +322,13 @@ ALL_TESTS := \
 	text_action_names_test \
 	sizing_repro_test \
 	slider_test \
+	form_binding_test \
 	split_test \
 	downstream_gaps_test \
 	headless_fallback_test \
 	raylib_fallback_test \
 	models_test \
+	effects_uniform_cache_test \
 	house_of_cards_test \
 	frustum_test \
 	instance_batcher_test \
@@ -316,12 +336,17 @@ ALL_TESTS := \
 	lod_test \
 	blob_shadow_test \
 	world_label_test \
+	render_view_test \
 	image_test \
 	image_raylib_test \
+	texture_usable_test \
+	texture_usable_raylib_test \
+	per_draw_filter_test \
 	stepper_test \
 	styling_test \
 	system_tags_test \
 	should_run_overload_test \
+	system_deactivate_hook_test \
 	library_duplicate_test \
 	library_intern_test \
 	shared_handlers_test \
@@ -332,6 +357,7 @@ ALL_TESTS := \
 	tab_toggle_geometry_test \
 	small_components_test \
 	text_area_test \
+	text_area_wrap_cache_test \
 	text_input_test \
 	toast_test \
 	text_wrap_test \
@@ -339,9 +365,11 @@ ALL_TESTS := \
 	theme_io_test \
 	tree_view_test \
 	window_helpers_test \
+	skeletal_test \
 	translation_test \
 	layout_inspector_test \
-	letter_spacing_zero_test
+	letter_spacing_zero_test \
+	mouse_pre_event_test
 
 # .app packaging is macOS-only, and the test shells out to plutil.
 ifeq ($(UNAME_S),Darwin)
@@ -350,10 +378,12 @@ ALL_TESTS += native_dialogs_macos_test
 ALL_TESTS += render_capture_metal_test
 ALL_TESTS += triangle_winding_metal_test
 ALL_TESTS += image_metal_test
+ALL_TESTS += texture_usable_metal_test
 # Sokol is Metal here, so macOS-only; renders headless, no window.
 ALL_TESTS += sokol_blend_test
 ALL_TESTS += sokol_capture_test
 ALL_TESTS += sokol_geometry_test
+ALL_TESTS += sokol_rounded_outline_mask_test
 # Own process: the Metal backend cannot be re-initialised, so this cannot be a
 # section of sokol_blend_test.
 ALL_TESTS += sokol_hidpi_test
@@ -362,22 +392,28 @@ ALL_TESTS += sokol_resize_test
 ALL_TESTS += sokol_multires_capture_test
 ALL_TESTS += sokol_headless_run_test
 ALL_TESTS += web_metal_symbols_test
+ALL_TESTS += sokol_lazy_gl_test
 ALL_TESTS += sokol_include_order_test
 ALL_TESTS += sokol_wrappers_test
 ALL_TESTS += sokol_frame_dt_test
 ALL_TESTS += sokol_msaa_test
 ALL_TESTS += sokol_cmd_chords_test
+ALL_TESTS += sokol_mouse_pre_init_test
+ALL_TESTS += sokol_startup_order_test
 ALL_TESTS += staging_texture_leak_test
 endif
 
 RAYLIB_TESTS := \
 	auto_text_color_test \
+	skeletal_test \
+	math3d_test \
 	value_types_test \
 	wrappers_test \
 	window_focus_test \
 	window_state_test \
 	edit_keys_test \
 	default_font_test \
+	font_display_size_test \
 	load_font_size_test \
 	border_width_test \
 	border_only_test \
@@ -392,15 +428,19 @@ RAYLIB_TESTS := \
 	input_device_activity_test \
 	input_activity_snapshot_test \
 	input_enum_actions_test \
+	input_axis_edge_test \
 	render_capture_test \
 	presented_frame_test \
 	triangle_winding_test \
+	blur_shader_test \
+	rounded_outline_mask_test \
 	clipboard_test \
 	mk_cost_test \
 	capture_perf_test \
 	headless_fallback_test \
 	raylib_fallback_test \
 	models_test \
+	effects_uniform_cache_test \
 	house_of_cards_test \
 	frustum_test \
 	instance_batcher_test \
@@ -419,6 +459,7 @@ RAYLIB_TESTS := \
 	setup_test \
 	size_constraints_test \
 	slider_test \
+	form_binding_test \
 	split_test \
 	stepper_test \
 	styling_test \
@@ -482,19 +523,19 @@ $(OUT)/crash_handler_web_sim_test: INCLUDES_T = -Iweb_sim $(INCLUDES)
 # Shift+Enter is a raw is_key_down check, and the key injector is only wired in
 # behind this macro. Without it the backend is asked directly and answers false
 # with no window, so the modifier half of a chord cannot be tested at all.
-$(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test: LDFLAGS_T = $(subst $(RAYLIB_LIB)/libraylib.a,-L$(RAYLIB_LIB) -lraylib,$(LDFLAGS_RAYLIB))
-# These two tests double every raylib input function they exercise and stub
+$(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test $(OUT)/input_axis_edge_test: LDFLAGS_T = $(subst $(RAYLIB_LIB)/libraylib.a,-L$(RAYLIB_LIB) -lraylib,$(LDFLAGS_RAYLIB))
+# These tests double every raylib input function they exercise and stub
 # the rest (input_raylib_unused_stubs.h), so they link no raylib at all.
 # Linking the real archive pulls rcore.c.o for the unused window/rlgl entry
 # points, and raylib 6.x's rcore.c.o also defines the doubled input
 # functions: duplicate symbols against a static-only install. Keep just the
 # platform frameworks (either raylib spelling is stripped, so this holds on
 # Linux too).
-$(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test: LDFLAGS_T = $(subst -lraylib,,$(subst $(RAYLIB_LIB)/libraylib.a,,$(LDFLAGS_RAYLIB)))
+$(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test $(OUT)/input_axis_edge_test: LDFLAGS_T = $(subst -lraylib,,$(subst $(RAYLIB_LIB)/libraylib.a,,$(LDFLAGS_RAYLIB)))
 
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/middle_click_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/wheel_input_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
-$(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test $(OUT)/graphics_key_injection_test $(OUT)/input_activity_snapshot_test $(OUT)/e2e_gamepad_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
+$(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test $(OUT)/graphics_key_injection_test $(OUT)/input_activity_snapshot_test $(OUT)/e2e_gamepad_test $(OUT)/form_binding_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 
 # Filter to sources: the .d files list every header as a prerequisite, and a
 # bare $^ would hand them all to clang. .cc is the sokol implementation TU.
@@ -517,11 +558,14 @@ $(OUT)/graphics_concepts_pedantic_test: CXXFLAGS_T += -Wpedantic -Werror
 $(OUT)/graphics_concepts_pedantic_test: INCLUDES_T = -I$(INCLUDE_ROOT) -isystem $(AFTERHOURS_ROOT)/vendor -isystem $(BREW_PREFIX)/include
 $(OUT)/sound_volume_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(OUT)/sound_volume_test: INCLUDES_T = $(INCLUDES_RAYLIB)
+$(OUT)/caption_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
+$(OUT)/caption_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/audio_plugin_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(OUT)/audio_plugin_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/audio_stream_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(OUT)/audio_stream_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/files_atomic_write_test: ../src/plugins/files.cpp
+$(OUT)/files_confined_path_test: ../src/plugins/files.cpp
 $(OUT)/files_resource_path_test: ../src/plugins/files.cpp
 $(OUT)/files_test_roots_test: ../src/plugins/files.cpp
 $(OUT)/files_e2e_temp_roots_test: ../src/plugins/files.cpp
@@ -572,6 +616,10 @@ $(OUT)/web_metal_symbols_test: web_metal_symbols_test.cpp web_sim/web_probe.cpp 
 $(OUT)/sokol_blend_test: ../src/backends/sokol/drawing_helpers.h
 $(OUT)/sokol_capture_test: ../src/backends/sokol/drawing_helpers.h ../src/capture.h ../src/graphics_common.h
 $(OUT)/sokol_geometry_test: ../src/backends/sokol/drawing_helpers.h
+$(OUT)/sokol_rounded_outline_mask_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_rounded_outline_mask_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_rounded_outline_mask_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_rounded_outline_mask_test: ../src/backends/sokol/drawing_helpers.h ../src/plugins/ui/rounded_corners.h
 $(OUT)/sokol_hidpi_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_hidpi_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_hidpi_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
@@ -589,6 +637,10 @@ $(OUT)/sokol_multires_capture_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_headless_run_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_headless_run_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_headless_run_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_lazy_gl_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_lazy_gl_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_lazy_gl_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_lazy_gl_test: ../src/backends/sokol/drawing_helpers.h ../src/backends/sokol/backend.h
 $(OUT)/sokol_include_order_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_include_order_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_include_order_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
@@ -609,6 +661,10 @@ $(OUT)/sokol_cmd_chords_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_cmd_chords_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_cmd_chords_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_cmd_chords_test: ../src/backends/sokol/backend.h
+$(OUT)/sokol_startup_order_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_startup_order_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_startup_order_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_startup_order_test: ../src/backends/sokol/backend.h ../src/backends/sokol/capture_impl.h
 
 $(OUT)/staging_texture_leak_test: ../examples/web/sokol_impl.cc
 $(OUT)/staging_texture_leak_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
@@ -624,7 +680,18 @@ $(OUT)/triangle_winding_metal_test: triangle_winding_test.cpp ../examples/web/so
 $(OUT)/image_metal_test: image_test.cpp ../examples/web/sokol_impl.cc
 	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) -DAFTER_HOURS_USE_SOKOL -x objective-c++ $(filter %.cpp %.cc,$^) $(SOKOL_FRAMEWORKS) -o $@
 
+$(OUT)/blur_shader_test: ../src/plugins/files.cpp
+
 $(OUT)/image_raylib_test: image_test.cpp
+	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $< $(LDFLAGS_RAYLIB) -o $@
+
+$(OUT)/texture_usable_metal_test: texture_usable_test.cpp ../examples/web/sokol_impl.cc
+	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) -DAFTER_HOURS_USE_SOKOL -x objective-c++ $(filter %.cpp %.cc,$^) $(SOKOL_FRAMEWORKS) -o $@
+
+$(OUT)/texture_usable_raylib_test: texture_usable_test.cpp
+	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $< $(LDFLAGS_RAYLIB) -o $@
+
+$(OUT)/per_draw_filter_test: per_draw_filter_test.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $< $(LDFLAGS_RAYLIB) -o $@
 
 # Windows/Vulkan cross-build (from macOS, via zig). The .exes link on the Mac
@@ -709,6 +776,7 @@ $(OUT)/font_prewarm_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/f
 $(OUT)/font_points_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/glyph_placeholder_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/load_font_size_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
+$(OUT)/font_display_size_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/font_memory_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/headless_fallback_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/capture_perf_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
@@ -718,3 +786,8 @@ $(OUT)/models_test: CXXFLAGS_T += -DAFTERHOURS_MODEL_FIXTURE=\"$(realpath ../exa
 $(OUT)/house_of_cards_test: CXXFLAGS_T += -DAFTERHOURS_MODELS_DIR=\"$(realpath ../examples/catalog/3d)\"
 $(OUT)/instance_batcher_test: CXXFLAGS_T += -DAFTERHOURS_MODELS_DIR=\"$(realpath ../examples/catalog/3d)\"
 $(OUT)/instance_batcher_persist_test: CXXFLAGS_T += -DAFTERHOURS_MODELS_DIR=\"$(realpath ../examples/catalog/3d)\"
+
+$(OUT)/sokol_mouse_pre_init_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_mouse_pre_init_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_mouse_pre_init_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_mouse_pre_init_test: ../src/backends/sokol/backend.h
