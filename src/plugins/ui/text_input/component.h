@@ -119,6 +119,9 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
       },
       text);
 
+  auto &submit_state = entity.template addComponentIfMissing<IsSubmittable>();
+  submit_state.submitted = false;
+
   // Apply readonly/disabled from config each frame
   state.readonly = config.text_readonly;
   state.disabled = config.disabled;
@@ -797,16 +800,23 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
     }
 
     // Enter/Submit
-    if (ctx.pressed(InputAction::WidgetPress) &&
-        entity.has<HasTextInputListener>())
-      if (auto &listener = entity.get<HasTextInputListener>();
-          listener.on_submit)
-        listener.on_submit(entity);
+    if (ctx.pressed(InputAction::WidgetPress)) {
+      submit_state.submitted = true;
+      if (entity.has<HasTextInputListener>())
+        if (auto &listener = entity.get<HasTextInputListener>();
+            listener.on_submit)
+          listener.on_submit(entity);
+      if (config.on_submit) {
+        const std::string submitted_text = state.text();
+        config.on_submit(submitted_text);
+      }
+    }
   }
 
   text = state.text();
   entity.template addComponentIfMissing<FocusClusterRoot>();
-  return ElementResult{state.changed_since, entity};
+  ElementResult result{state.changed_since, entity};
+  return result;
 }
 
 } // namespace text_input

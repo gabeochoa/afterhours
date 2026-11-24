@@ -11,6 +11,7 @@
 
 #ifdef AFTER_HOURS_SOKOL
 
+#include "../../file_drop.h"
 #include "../../graphics_common.h"
 #include "../../logging.h"
 #include "../../warn_once.h"
@@ -442,6 +443,7 @@ inline void sokol_event_cb(const sapp_event *ev) {
     case SAPP_EVENTTYPE_MOUSE_MOVE:
     case SAPP_EVENTTYPE_MOUSE_SCROLL:
     case SAPP_EVENTTYPE_RESIZED:
+    case SAPP_EVENTTYPE_FILES_DROPPED:
     case SAPP_EVENTTYPE_FOCUSED:
     case SAPP_EVENTTYPE_RESTORED:
       frame_loop::request_frame();
@@ -515,6 +517,13 @@ inline void sokol_event_cb(const sapp_event *ev) {
   case SAPP_EVENTTYPE_UNFOCUSED:
     g_window_focused = false;
     break;
+  case SAPP_EVENTTYPE_FILES_DROPPED: {
+    std::vector<std::string> paths;
+    const int n = sapp_get_num_dropped_files();
+    for (int i = 0; i < n; i++)
+      paths.emplace_back(sapp_get_dropped_file_path(i));
+    file_drop::push_dropped_files(std::move(paths));
+  }
   default:
     break;
   }
@@ -1061,6 +1070,10 @@ struct MetalPlatformAPI {
     desc.sample_count = 1;
     desc.enable_clipboard = true;
     desc.clipboard_size = 16 * 1024;  // 16 KB clipboard buffer
+    file_drop::set_enabled(cfg.enable_file_drop);
+    desc.enable_dragndrop = cfg.enable_file_drop;
+    if (cfg.enable_file_drop)
+      desc.max_dropped_files = 8;
     desc.macos.forward_cmd_chords = cfg.macos_forward_cmd_chords;
 
     // Map flags
@@ -1076,6 +1089,7 @@ struct MetalPlatformAPI {
   }
 
   static void run_headless(const RunConfig &cfg) {
+    file_drop::clear();
     Config headless;
     headless.display = DisplayMode::Headless;
     headless.width = cfg.width;
