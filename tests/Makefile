@@ -200,6 +200,7 @@ ALL_TESTS := \
 	e2e_resize_steps_test \
 	e2e_render_checkpoint_test \
 	e2e_window_size_test \
+	e2e_app_test \
 	e2e_audio_commands_test \
 	e2e_audio_volume_test \
 	e2e_audio_volume_disabled_test \
@@ -422,6 +423,7 @@ endif
 
 RAYLIB_TESTS := \
 	auto_text_color_test \
+	e2e_app_test \
 	skeletal_test \
 	math3d_test \
 	value_types_test \
