@@ -253,6 +253,7 @@ lighting_zones_test \
 	dump_ui_test \
 	accessibility_test \
 	scroll_anchor_test \
+	scroll_absolute_content_test \
 	measure_config_test \
 	scroll_anchor_test \
 	widget_retirement_test \
