@@ -6,6 +6,7 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+- **UTF-8 ingest sanitization (`ui::is_valid_utf8`, `ui::sanitize_utf8`).** Paste (`insert_pasted_text`) and external text replacement (`replace_text_externally`) normalize invalid UTF-8 sequences to `U+FFFD` (RFC 3629 / WHATWG maximal subpart) while passing valid UTF-8 through unchanged. Covered by `utf8_sanitize_test`.
 - **Versioned storage codecs (`src/plugins/storage_codec.h`).** `storage::Codec<T>` stamps a version envelope, runs ordered migrations, and returns `DecodeStatus` (`Ok`, `Migrated`, `Corrupt`, `TooNew`). Includes `peek_version` and `make_string_codec`. Covered by `storage_codec_test`.
 - **Styled labels honor `TextOverflow::Ellipsis`.** `detail::ellipsize_runs` truncates styled `TextSpan` runs at a grapheme boundary with `...` in the cut run's style in both immediate and batched renderers, sharing `detail::JoinedRuns` with `wrap_runs_to_width`. Covered by `styled_ellipsis_test`.
 - **Generation-checked focus restore (`UIContext::capture_focus()` / `restore_focus(EntityHandle)`).** Modals and menus/popovers now save focus as an `EntityHandle` via `UICollectionHolder::handle_for` / `resolve`, so deleted, reused, hidden, or `DoesNotTakeFocus` targets become safe no-ops on close. Covered by `focus_return_test`.
