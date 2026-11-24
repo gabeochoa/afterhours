@@ -163,6 +163,8 @@ ALL_TESTS := \
 	profiling_disabled_test \
 	profiling_collapsed_test \
 	spike_capture_test \
+	render_counters_test \
+	render_counters_disabled_test \
 	perf_provider_warn_test \
 	blend_mode_test \
 	blur_shader_test \
