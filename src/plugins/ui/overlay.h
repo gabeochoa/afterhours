@@ -12,6 +12,12 @@ namespace afterhours {
 namespace ui {
 namespace overlay {
 
+// Reserved band above an anchor's layer for popup panels (dropdown trays,
+// menus, popovers), so a later widget's internals (text_area cursor is +10)
+// cannot paint over an open popup; relative so a popup inside a modal
+// (layer 1000, like the drag overlay) clears that modal instead.
+inline constexpr int OVERLAY_BASE = 1000;
+
 enum struct Placement { Below, Above, Right, Left };
 
 struct Placed {

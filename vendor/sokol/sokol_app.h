@@ -1618,6 +1618,7 @@ typedef struct sapp_event {
     float mouse_dy;                     // relative vertical mouse movement since last frame, always valid
     float scroll_x;                     // horizontal mouse wheel scroll distance, valid in MOUSE_SCROLL events
     float scroll_y;                     // vertical mouse wheel scroll distance, valid in MOUSE_SCROLL events
+    bool scroll_precise;                // true for precise (trackpad) deltas, valid in MOUSE_SCROLL events
     int num_touches;                    // number of valid items in the touches[] array
     sapp_touchpoint touches[SAPP_MAX_TOUCHPOINTS];  // current touch points, valid in TOUCHES_BEGIN, TOUCHES_MOVED, TOUCHES_ENDED
     int window_width;                   // current window- and framebuffer sizes in pixels, always valid
@@ -2024,6 +2025,10 @@ typedef struct sapp_ios_desc {
     bool keyboard_resizes_canvas; // if true, showing the iOS keyboard shrinks the canvas
 } sapp_ios_desc;
 
+typedef struct sapp_macos_desc {
+    bool forward_cmd_chords;    // if true, Cmd+key chords reach the app as key events instead of only being offered as menu key equivalents (afterhours patch, default false)
+} sapp_macos_desc;
+
 typedef struct sapp_desc {
     void (*init_cb)(void);                  // these are the user-provided callbacks without user data
     void (*frame_cb)(void);
@@ -2058,6 +2063,7 @@ typedef struct sapp_desc {
     sapp_win32_desc win32;
     sapp_html5_desc html5;
     sapp_ios_desc ios;
+    sapp_macos_desc macos;
 } sapp_desc;
 
 /* HTML5 specific: request and response structs for
@@ -2172,6 +2178,8 @@ SOKOL_APP_API_DECL void sapp_unbind_mouse_cursor_image(sapp_mouse_cursor cursor)
 SOKOL_APP_API_DECL void* sapp_userdata(void);
 /* return a copy of the sapp_desc structure */
 SOKOL_APP_API_DECL sapp_desc sapp_query_desc(void);
+/* afterhours patch: pure decision used by the macOS view's performKeyEquivalent: */
+SOKOL_APP_API_DECL bool sapp_macos_should_forward_key_equivalent(sapp_keycode key_code, uint32_t modifiers, bool forward_cmd_chords);
 /* initiate a "soft quit" (sends SAPP_EVENTTYPE_QUIT_REQUESTED) */
 SOKOL_APP_API_DECL void sapp_request_quit(void);
 /* cancel a pending quit (when SAPP_EVENTTYPE_QUIT_REQUESTED has been received) */
@@ -6081,6 +6089,7 @@ static void _sapp_gl_make_current(void) {
         }
         if ((_sapp_absf(dx) > 0.0f) || (_sapp_absf(dy) > 0.0f)) {
             _sapp_init_event(SAPP_EVENTTYPE_MOUSE_SCROLL);
+            _sapp.event.scroll_precise = event.hasPreciseScrollingDeltas;
             _sapp.event.modifiers = _sapp_macos_mods(event);
             _sapp.event.scroll_x = dx;
             _sapp.event.scroll_y = dy;
@@ -6094,7 +6103,8 @@ static void _sapp_gl_make_current(void) {
         const uint32_t mods = _sapp_macos_mods(event);
         const sapp_keycode key_code = _sapp_translate_key(event.keyCode);
         _sapp_macos_key_event(SAPP_EVENTTYPE_KEY_DOWN, key_code, event.isARepeat, mods);
-        const NSString* chars = event.characters;
+        // A Cmd chord is a shortcut, not text: never emit CHAR for it.
+        const NSString* chars = (mods & SAPP_MODIFIER_SUPER) ? @"" : event.characters;
         const NSUInteger len = chars.length;
         if (len > 0) {
             _sapp_init_event(SAPP_EVENTTYPE_CHAR);
@@ -6127,8 +6137,14 @@ static void _sapp_gl_make_current(void) {
             [_sapp.macos.view keyDown:event];
             return YES;
         default:
-            return NO;
+            break;
     }
+    // Opt-in only: claiming a chord here takes it away from menu equivalents.
+    if (sapp_macos_should_forward_key_equivalent(_sapp_translate_key(event.keyCode), _sapp_macos_mods(event), _sapp.desc.macos.forward_cmd_chords)) {
+        [_sapp.macos.view keyDown:event];
+        return YES;
+    }
+    return NO;
 }
 
 - (void)keyUp:(NSEvent*)event {
@@ -7294,6 +7310,7 @@ _SOKOL_PRIVATE EM_BOOL _sapp_emsc_wheel_cb(int emsc_type, const EmscriptenWheelE
             case DOM_DELTA_PAGE:  scale = -10.0f; break; // FIXME: this is a guess
             default:              scale = -0.1f; break;  // shouldn't happen
         }
+        _sapp.event.scroll_precise = (emsc_event->deltaMode == DOM_DELTA_PIXEL);
         _sapp.event.scroll_x = scale * (float)emsc_event->deltaX;
         _sapp.event.scroll_y = scale * (float)emsc_event->deltaY;
         consume_event |= _sapp_call_event(&_sapp.event);
@@ -13568,6 +13585,12 @@ SOKOL_API_IMPL void* sapp_userdata(void) {
 
 SOKOL_API_IMPL sapp_desc sapp_query_desc(void) {
     return _sapp.desc;
+}
+
+SOKOL_API_IMPL bool sapp_macos_should_forward_key_equivalent(sapp_keycode key_code, uint32_t modifiers, bool forward_cmd_chords) {
+    // Tab is already forwarded unconditionally by performKeyEquivalent:.
+    return forward_cmd_chords && (modifiers & SAPP_MODIFIER_SUPER) &&
+           key_code != SAPP_KEYCODE_INVALID && key_code != SAPP_KEYCODE_TAB;
 }
 
 SOKOL_API_IMPL uint64_t sapp_frame_count(void) {

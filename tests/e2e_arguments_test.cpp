@@ -834,6 +834,48 @@ TEST(click_label_hit_test) {
     ui_commands::HandleClickLabelCommand<ui_test::TestInputAction>{}.for_each_with(h.root(), amb, 0.f);
     CHECK(amb.is_consumed() && !amb.error_message.empty());
     CHECK(amb.error_message.find("2 elements match") != std::string::npos);
+    CHECK(amb.error_message.find("candidates") != std::string::npos);
+  }
+  // Composed contract: extra arguments fail (main), scope resolves through
+  // the unified resolver with under=/in= anywhere after the text (PR).
+  {
+    ui_test::ImmTestHarness h;
+    reset_ui_context_singleton();
+    EntityHelper::registerSingleton<ui::UIContext<ui_test::TestInputAction>>(h.context_entity());
+    h.begin_frame();
+    auto left = ui::imm::div(h.context(), ui::imm::mk(h.root(), 0),
+                             ui::imm::ComponentConfig{}
+                                 .with_size({ui::pixels(300), ui::pixels(100)})
+                                 .with_debug_name("left_panel"));
+    auto left_row = ui::imm::div(h.context(), ui::imm::mk(left.ent(), 0),
+                                 ui::imm::ComponentConfig{}
+                                     .with_size({ui::pixels(100), ui::pixels(40)})
+                                     .with_label("Same"));
+    left_row.ent().addComponent<ui::HasClickListener>([](Entity &) {});
+    auto right = ui::imm::div(h.context(), ui::imm::mk(h.root(), 1),
+                              ui::imm::ComponentConfig{}
+                                  .with_size({ui::pixels(300), ui::pixels(100)})
+                                  .with_absolute_position(0, 120)
+                                  .with_debug_name("right_panel"));
+    auto right_row = ui::imm::div(h.context(), ui::imm::mk(right.ent(), 0),
+                                  ui::imm::ComponentConfig{}
+                                      .with_size({ui::pixels(100), ui::pixels(40)})
+                                      .with_label("Same"));
+    right_row.ent().addComponent<ui::HasClickListener>([](Entity &) {});
+    h.layout_only();
+    auto extra = pending_for("click_label", {"Same", "bogus"});
+    ui_commands::HandleClickLabelCommand<ui_test::TestInputAction>{}.for_each_with(h.root(), extra, 0.f);
+    CHECK(extra.is_consumed() && !extra.error_message.empty());
+    CHECK(extra.error_message.find("unexpected argument 'bogus'") != std::string::npos);
+    auto scoped = pending_for("click_label", {"Same", "under=right_panel"});
+    ui_commands::HandleClickLabelCommand<ui_test::TestInputAction>{}.for_each_with(h.root(), scoped, 0.f);
+    CHECK(scoped.is_consumed() && scoped.error_message.empty());
+    auto aliased = pending_for("click_label", {"Same", "in=left_panel"});
+    ui_commands::HandleClickLabelCommand<ui_test::TestInputAction>{}.for_each_with(h.root(), aliased, 0.f);
+    CHECK(aliased.is_consumed() && aliased.error_message.empty());
+    auto missing_scope = pending_for("click_label", {"Same", "under=nope"});
+    ui_commands::HandleClickLabelCommand<ui_test::TestInputAction>{}.for_each_with(h.root(), missing_scope, 0.f);
+    CHECK(missing_scope.is_retry());
   }
   reset_ui_context_singleton();
 }
