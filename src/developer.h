@@ -5,6 +5,9 @@
 #include <concepts>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
+#include <string_view>
+#include <utility>
 
 #include "core/base_component.h"
 #include "core/entity_query.h"
@@ -351,5 +354,57 @@ concept PluginTemplated = requires(SystemManager &sm) {
 template <PluginCore P> constexpr bool plugin_ok = true;
 
 } // namespace developer
+
+struct PluginContext {
+  SystemManager &systems;
+  EntityCollection &collection;
+  Entity *singleton_host = nullptr;
+
+  explicit PluginContext(
+      SystemManager &sm,
+      EntityCollection &coll = EntityHelper::get_default_collection())
+      : systems(sm), collection(coll) {}
+  PluginContext(SystemManager &sm, Entity &host)
+      : systems(sm), collection(EntityHelper::get_default_collection()),
+        singleton_host(&host) {}
+  PluginContext(SystemManager &sm, EntityCollection &coll, Entity &host)
+      : systems(sm), collection(coll), singleton_host(&host) {}
+
+  template <typename T, typename... Args>
+  T &ensure_singleton(Args &&...args) {
+    if (collection.has_singleton<T>())
+      return collection.get_singleton_cmp_enforce<T>();
+    if (!singleton_host)
+      singleton_host = &collection.createPermanentEntity();
+    T &cmp = singleton_host->addComponent<T>(std::forward<Args>(args)...);
+    collection.registerSingleton<T>(*singleton_host);
+    collection.merge_entity_arrays();
+    systems.register_system(
+        Stage::PreUpdate,
+        std::make_unique<developer::EnforceSingleton<T>>());
+    return cmp;
+  }
+
+  void add_system(Stage stage, std::unique_ptr<SystemBase> sys,
+                  std::string_view group = {}) {
+    systems.register_system(stage, std::move(sys), group);
+  }
+  void add_system(Stage stage, const std::function<void(float)> &cb,
+                  std::string_view group = {}) {
+    systems.register_system(stage, cb, group);
+  }
+
+  template <typename P>
+    requires requires(const P &p, PluginContext &ctx) { p.install(ctx); }
+  PluginContext &use(const P &plugin) {
+    plugin.install(*this);
+    return *this;
+  }
+};
+
+template <typename P>
+concept InstallablePlugin = requires(const P &p, PluginContext &ctx) {
+  { p.install(ctx) } -> std::same_as<void>;
+};
 
 } // namespace afterhours
