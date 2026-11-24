@@ -202,6 +202,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
                                           : base_corners)
           .with_alignment(TextAlignment::Left)
           .with_overflow(Overflow::Hidden)
+          .with_select_on_focus(false)
           .with_render_layer(config.render_layer + 1);
   // Only impose the theme fill when the caller did not pick one, or an app
   // with its own tokens cannot theme the field.
@@ -232,7 +233,8 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   // Entities persist across frames, so the muted colour has to be cleared
   // again rather than only set.
   if (show_placeholder)
-    field_label.explicit_text_color = ctx.theme.font_muted;
+    field_label.explicit_text_color =
+        config.placeholder_color.value_or(ctx.theme.font_muted);
   else if (config.custom_text_color.has_value())
     field_label.explicit_text_color = config.custom_text_color;
   else
@@ -286,8 +288,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   // Select all text when gaining focus via tab (not mouse click).
   // Mouse clicks position the cursor via the click listener instead.
   if (state.is_focused && !state.was_focused) {
-    bool mouse_caused_focus =
-        ctx.is_mouse_press(field_entity.id) || ctx.is_mouse_press(entity.id);
+    bool mouse_caused_focus = ctx.focus_modality == FocusSource::Pointer;
     if (!mouse_caused_focus && state.text_size() > 0) {
       state.selection_anchor = 0;
       state.cursor_position = state.text_size();
@@ -775,7 +776,8 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
     }
 
     // FAKE prevents try_to_grab from immediately re-focusing the first widget.
-    if (ctx.pressed(InputAction::MenuBack)) {
+    // with_escape_blurs(false) leaves both focus and the press to the app.
+    if (config.text_escape_blurs && ctx.pressed(InputAction::MenuBack)) {
       state.clear_selection();
       ctx.set_focus(ctx.FAKE);
     }

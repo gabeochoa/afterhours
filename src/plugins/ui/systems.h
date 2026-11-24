@@ -137,11 +137,33 @@ static inline bool in_inert_subtree(const Entity &entity) {
   return false;
 }
 
+// Nearest ancestor (not self) that can drag: it may claim a press that
+// started on a child once the pointer moves past the drag threshold.
+static inline EntityID nearest_drag_ancestor(EntityID id) {
+  OptEntity cur = UICollectionHolder::getEntityForID(id);
+  for (int depth = 0; cur.valid() && depth < 64; ++depth) {
+    if (!cur.asE().has<UIComponent>()) return -1;
+    OptEntity parent =
+        UICollectionHolder::getEntityForID(cur.asE().get<UIComponent>().parent);
+    if (!parent.valid()) return -1;
+    if (parent.asE().has<HasDragListener>()) return parent.asE().id;
+    cur = parent;
+  }
+  return -1;
+}
+
 static inline RectangleType hit_rect(const Entity &entity,
                                      const UIComponent &component) {
   RectangleType rect = component.rect();
   if (entity.has<HasUIModifiers>())
     rect = entity.get<HasUIModifiers>().apply_modifier(rect);
+  if (entity.has<HasHitExpand>()) {
+    const HasHitExpand &pad = entity.get<HasHitExpand>();
+    rect.x -= pad.pad_x;
+    rect.y -= pad.pad_y;
+    rect.width += pad.pad_x * 2.f;
+    rect.height += pad.pad_y * 2.f;
+  }
   rect = apply_ancestor_transform(entity, rect);
   return clip_hit_rect(entity, rect);
 }
@@ -242,6 +264,12 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
     {
       const auto prev_pos = context.mouse.pos;
       context.mouse.pos = input::get_mouse_position();
+      // A backend with no cursor yet (pre-init sokol) can report NaN; pin
+      // it off-screen so every read below sees the pre-event position.
+      if (!std::isfinite(context.mouse.pos.x) ||
+          !std::isfinite(context.mouse.pos.y)) {
+        context.mouse.pos = input::MousePosition{-1.f, -1.f};
+      }
       context.mouse.moved_this_frame = context.mouse.moved_since(prev_pos);
       // No dead zone here, unlike moved_this_frame: a drag has to track every
       // pixel. Both ends must be finite or the subtraction yields NaN, which a
@@ -483,6 +511,8 @@ inline Vector2Type measure_scroll_content(const UIComponent &cmp, const HasScrol
 
   float first = std::numeric_limits<float>::max();
   float last = std::numeric_limits<float>::lowest();
+  float cross_first = std::numeric_limits<float>::max();
+  float cross_last = std::numeric_limits<float>::lowest();
   float out_of_flow = 0.f;
   float span = 0.f;
   for (EntityID child_id : cmp.children) {
@@ -494,13 +524,29 @@ inline Vector2Type measure_scroll_content(const UIComponent &cmp, const HasScrol
       continue;
     const UIComponent &c = child.get<UIComponent>();
     span = std::max(span, c.computed[cross] + c.computed_margin[cross]);
-    if (c.absolute || c.should_hide) {
+    if (c.should_hide) {
       out_of_flow += c.computed[main] + c.computed_margin[main];
       continue;
     }
     first = std::min(first, c.computed_rel[main]);
     last = std::max(last, c.computed_rel[main] + c.computed[main] +
                               c.computed_margin[main]);
+    cross_first = std::min(cross_first, c.computed_rel[cross]);
+    cross_last = std::max(cross_last, c.computed_rel[cross] +
+                                          c.computed[cross] +
+                                          c.computed_margin[cross]);
+  }
+  if (last > first) {
+    const Axis main_start = main == Axis::X ? Axis::left : Axis::top;
+    const Axis cross_start = cross == Axis::X ? Axis::left : Axis::top;
+    first = std::min(first, cmp.computed_rel[main] +
+                                cmp.computed_margin[main_start] +
+                                cmp.computed_padd[main_start]);
+    cross_first = std::min(cross_first, cmp.computed_rel[cross] +
+                                            cmp.computed_margin[cross_start] +
+                                            cmp.computed_padd[cross_start]);
+    if (cross_last > cross_first)
+      span = cross_last - cross_first;
   }
   const float extent = (last > first ? last - first : 0.f) + out_of_flow;
 
@@ -663,8 +709,22 @@ struct EndUIContextManager : System<UIContext<InputAction>> {
     } else {
       context.set_active(context.ROOT);
     }
-    if (!context.focused_ids.contains(context.focus_id))
-      context.focus_id = context.ROOT;
+    if (!context.focused_ids.contains(context.focus_id)) {
+      EntityID target = context.ROOT;
+      if (context.prev_focus_index >= 0 && !context.focus_order.empty()) {
+        const auto slot = std::min(
+            static_cast<std::size_t>(context.prev_focus_index),
+            context.focus_order.size() - 1);
+        target = context.focus_order[slot];
+      }
+      context.set_focus(target, FocusSource::Grab);
+    }
+    const auto it = std::find(context.focus_order.begin(),
+                              context.focus_order.end(), context.focus_id);
+    context.prev_focus_index =
+        context.focus_id == context.ROOT || it == context.focus_order.end()
+            ? -1
+            : static_cast<int>(it - context.focus_order.begin());
     context.focused_ids.clear();
 
     if (auto *text_cache =
@@ -846,6 +906,15 @@ struct ResolveHitTarget : SystemWithUIContext<> {
       visit(*e, winner, best_layer);
     }
 
+    // Past the drag threshold, a draggable ancestor claims the press from
+    // its child, so the child keeps taps and the parent gets drags.
+    if (context->mouse.left_down && context->mouse.press_moved) {
+      const EntityID drag_parent =
+          detail::nearest_drag_ancestor(context->active_id);
+      if (drag_parent != context->ROOT)
+        context->set_active(drag_parent);
+    }
+
     const EntityID locked_active = context->active_id;
     const bool hot_locked = context->mouse.left_down &&
                             locked_active != context->ROOT &&
@@ -875,7 +944,8 @@ private:
                    Hoverable>())
       return false;
     // Opted out of hit-testing entirely: the element behind it wins instead.
-    if (e.has<IgnorePointerEvents>() || detail::in_inert_subtree(e))
+    if (e.has<IgnorePointerEvents>() || e.hasTag(UITag::DrawOnly) ||
+        detail::in_inert_subtree(e))
       return false;
     if (!cmp.was_rendered_to_screen)
       return false;
@@ -939,7 +1009,19 @@ struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
       hasClickListener.down = true;
     }
 
-    if (context->mouse_activates(entity.id)) {
+    // Under a draggable ancestor a press is not yet a click: it may become
+    // the parent's drag, so fire only on a release that stayed a tap.
+    const bool under_drag_parent =
+        detail::nearest_drag_ancestor(entity.id) != context->ROOT;
+    if (!under_drag_parent && context->mouse_activates(entity.id)) {
+      if (entity.is_missing<DoesNotTakeFocus>())
+        context->set_focus(entity.id, FocusSource::Pointer);
+      hasClickListener.cb(entity);
+      hasClickListener.down = true;
+    }
+    if (under_drag_parent && context->mouse.just_released &&
+        context->is_active(entity.id) && context->is_hot(entity.id) &&
+        !context->mouse.press_moved) {
       if (entity.is_missing<DoesNotTakeFocus>())
         context->set_focus(entity.id, FocusSource::Pointer);
       hasClickListener.cb(entity);
@@ -1095,7 +1177,7 @@ struct CloseDropdownOnClickOutside : System<HasDropdownState, UIComponent> {
 // not ShouldHide, was rendered this frame, and input is allowed.
 template <typename InputAction>
 bool can_be_focused(UIContext<InputAction> &ctx, const Entity &e) {
-  return ctx.is_tab_focusable(e);
+  return !e.hasTag(UITag::DrawOnly) && ctx.is_tab_focusable(e);
 }
 
 template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
@@ -1126,6 +1208,15 @@ template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
   }
 };
 
+template <typename InputAction>
+struct DispatchShortcuts : System<UIContext<InputAction>> {
+  virtual void for_each_with(Entity &, UIContext<InputAction> &context,
+                             float) override {
+    if (context.last_action == InputAction::None)
+      return;
+    context.dispatch_focused_shortcut(context.last_action);
+  }
+};
 template <typename InputAction>
 struct HandleTrayNavigation : SystemWithUIContext<ui::HasTray> {
   UIContext<InputAction> *context;
@@ -1480,8 +1571,8 @@ struct HandleSelectOnFocus
     bool currently_focused = context->has_focus(entity.id);
     bool was_focused = last_focused_ids.contains(entity.id);
 
-    if (currently_focused && !was_focused) {
-      // Component just gained focus, trigger the click
+    if (currently_focused && !was_focused &&
+        context->focus_modality != FocusSource::Pointer) {
       hasClickListener.cb(entity);
       hasClickListener.down = true;
     }
@@ -1526,8 +1617,8 @@ private:
       bool currently_focused = context->has_focus(child.id);
       bool was_focused = last_focused_ids.contains(child.id);
 
-      if (currently_focused && !was_focused) {
-        // Component just gained focus, trigger the click
+      if (currently_focused && !was_focused &&
+          context->focus_modality != FocusSource::Pointer) {
         child_hasClickListener.cb(child);
         child_hasClickListener.down = true;
       }
@@ -2391,6 +2482,10 @@ struct HandleScrollInput : SystemWithUIContext<HasScrollView> {
       return;
 
     Vector2Type wheel_v = input::get_mouse_wheel_move_v();
+    const float wheel_speed =
+        input::get_mouse_wheel_kind() == WheelDeltaKind::Precise
+            ? scroll_state.scroll_speed_precise
+            : scroll_state.scroll_speed;
     if (wheel_v.x == 0.f &&
         (input::get_current_modifiers() & input::KeyChord::MOD_SHIFT))
       wheel_v = {wheel_v.y, 0.f};
@@ -2403,13 +2498,13 @@ struct HandleScrollInput : SystemWithUIContext<HasScrollView> {
     // Vertical scrolling
     if (scroll_state.vertical_enabled && wheel_v.y != 0.0f) {
       scroll_state.scroll_target.y +=
-          direction * wheel_v.y * scroll_state.scroll_speed;
+          direction * wheel_v.y * wheel_speed;
     }
 
     // Horizontal scrolling
     if (scroll_state.horizontal_enabled && wheel_v.x != 0.0f) {
       scroll_state.scroll_target.x +=
-          direction * wheel_v.x * scroll_state.scroll_speed;
+          direction * wheel_v.x * wheel_speed;
     }
 
     scroll_state.clamp_scroll();
