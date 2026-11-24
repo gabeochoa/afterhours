@@ -16,6 +16,7 @@
 #include "../../capture.h"
 #include "../../render_capture.h"
 #include "../../graphics.h"
+#include "../../render_counters.h"
 #include "../../plugins/color.h"
 #include "../../plugins/texture_manager.h"
 #include "font_helper.h"
@@ -1220,6 +1221,11 @@ inline graphics::RenderTextureType load_render_texture_with_samples(int w,
   rt.resolve_img_id = resolve.id;
   rt.resolve_view_id = resolve_view.id;
   rt.sampler_id = smp.id;
+  // One create per successful render target, as on raylib: the sokol
+  // images/views/sampler above are the creation. The sgl context is made
+  // lazily in begin_texture_mode and shared/cached per format, so it is
+  // not counted separately.
+  render_counters::note_create();
   return rt;
 }
 
@@ -1880,6 +1886,7 @@ inline TextureType load_texture_from_pixels(const unsigned char *rgba, int w,
   tex.img_id = img.id;
   tex.view_id = view.id;
   tex.sampler_id = smp.id;
+  render_counters::note_create();
   return tex;
 }
 
