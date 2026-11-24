@@ -345,12 +345,6 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
 }
 
 
-/// Tab visual variant for tab_container().
-enum struct TabStyle {
-  Default, // active tab: surface fill + bottom accent underline (unchanged)
-  Paper,   // active tab: raised paper look, accent 1px top edge, no underline
-};
-
 /// Tab container - horizontal row of tabs for organizing content into panels
 ///
 /// @param ctx The UI context
@@ -358,8 +352,11 @@ enum struct TabStyle {
 /// @param tab_labels Container of tab label strings
 /// @param active_tab Reference to the currently active tab index
 /// @param config Component configuration
-/// @param style TabStyle::Paper raises the active tab (accent top edge, no
-///              underline); TabStyle::Default (default) is unchanged
+/// @param active_config Overrides applied to the active tab only, after the
+///        built-in active-tab styling (see ComponentConfig::apply_overrides).
+///        Empty (the default) leaves the active tab unchanged; for example,
+///        pass a config with with_border_top() and top-rounded corners to
+///        replace the bottom underline with a top edge.
 ///
 /// Features:
 /// - Horizontal row of equally-sized tabs
@@ -384,7 +381,7 @@ template <typename Container>
 ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
                             const Container &tab_labels, size_t &active_tab,
                             ComponentConfig config = ComponentConfig(),
-                            TabStyle style = TabStyle::Default) {
+                            ComponentConfig active_config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
 
   if (tab_labels.empty())
@@ -441,14 +438,11 @@ ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
             .with_custom_text_color(tab_text)
             .with_align_items(AlignItems::Center)
             .with_justify_content(JustifyContent::Center)
-            .with_text_overflow(TextOverflow::Ellipsis);
+            .with_text_overflow(TextOverflow::Ellipsis)
+            .with_border_bottom(underline_color, pixels(underline_h));
 
-    if (style == TabStyle::Paper && is_active) {
-      tab_config.with_border_top(ctx.theme.accent, pixels(1.0f))
-          .with_rounded_corners(RoundedCorners().top_round());
-    } else {
-      tab_config.with_border_bottom(underline_color, pixels(underline_h));
-    }
+    if (is_active)
+      tab_config.apply_overrides_from(active_config);
 
     auto tab = button(ctx, mk(entity, i), tab_config);
     // Content-fit floor: never shrink a tab below its label width (+ padding).

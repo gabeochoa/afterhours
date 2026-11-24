@@ -185,16 +185,19 @@ static Entity *find_ent(ImmTestHarness &h, const std::string &name) {
   return nullptr;
 }
 
-TEST(tab_container_paper_active_top_edge_and_selects) {
+TEST(tab_container_custom_active_overrides_top_edge_and_selects) {
   ImmTestHarness h;
   std::vector<std::string> tabs = {"One", "Two", "Three"};
   size_t active = 0;
   auto emit = [&] {
-    return tab_container(h.context(), mk(h.root(), 0), tabs, active,
-                         ComponentConfig{}
-                             .with_size(ComponentSize{pixels(600), pixels(44)})
-                             .with_debug_name("tabs"),
-                         TabStyle::Paper);
+    return tab_container(
+        h.context(), mk(h.root(), 0), tabs, active,
+        ComponentConfig{}
+            .with_size(ComponentSize{pixels(600), pixels(44)})
+            .with_debug_name("tabs"),
+        ComponentConfig{}
+            .with_border_top(h.context().theme.accent, pixels(1.0f))
+            .with_rounded_corners(RoundedCorners().top_round()));
   };
   h.begin_frame();
   emit();
@@ -211,8 +214,12 @@ TEST(tab_container_paper_active_top_edge_and_selects) {
   CHECK(b0.border.top.has_border());
   CHECK(b0.border.top.thickness.value == 1.0f);
   CHECK(!b0.border.bottom.has_border());
+  CHECK(e0->template get<HasRoundedCorners>().get() ==
+        RoundedCorners().top_round().get());
   auto &b1 = e1->template get<HasBorder>();
   CHECK(!b1.border.top.has_border());
+  CHECK(b1.border.bottom.has_border());
+  CHECK(b1.border.bottom.thickness.value == 1.0f);
   CHECK_APPROX(t0->rect().y, t1->rect().y);
   CHECK(t1->rect().x > t0->rect().x);
 
