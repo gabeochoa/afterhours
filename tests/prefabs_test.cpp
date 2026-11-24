@@ -1,7 +1,7 @@
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
 
-#include <afterhours/src/prefabs.h>
+#include <afterhours/src/plugins/prefabs.h>
 
 #include <cstdio>
 #include <string>

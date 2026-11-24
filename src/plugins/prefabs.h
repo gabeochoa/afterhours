@@ -6,18 +6,14 @@
 #include <utility>
 #include <vector>
 
-#include "core/entity_collection.h"
-#include "core/entity_helper.h"
-#include "library.h"
+#include "../core/entity_collection.h"
+#include "../core/entity_helper.h"
+#include "../library.h"
 
 namespace afterhours::prefabs {
 
-// Builder/override: add or mutate components on the entity you are handed.
 using ApplyFn = std::function<void(Entity &)>;
 
-// Named component bundles. Registration order is preserved (see names());
-// that order is the documented composition/serialize order for callers that
-// walk names() themselves -- this header defines no file format.
 struct Registry {
   void define(std::string name, ApplyFn builder) {
     if (!builder) return;
@@ -41,7 +37,6 @@ struct Registry {
     order.clear();
   }
 
-  // Unknown name returns empty OptEntity and creates nothing.
   OptEntity spawn(EntityCollection &collection, std::string_view name) const {
     return spawn(collection, name, nullptr);
   }
