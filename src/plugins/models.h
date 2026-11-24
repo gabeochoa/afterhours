@@ -747,7 +747,7 @@ private:
       std::vector<float> flat(cap * 16);
       to_float16(g.transforms, flat.data());
       g.instance_vbo = raylib::rlLoadVertexBuffer(
-          flat.data(), static_cast<int>(cap * sizeof(raylib::float16)), true);
+          flat.data(), static_cast<int>(cap * 16 * sizeof(float)), true);
       if (g.instance_vbo != 0) render_counters::note_create();
       g.instance_capacity = cap;
       g.uploaded = g.transforms;
@@ -759,7 +759,7 @@ private:
       std::vector<float> flat(want * 16);
       to_float16(g.transforms, flat.data());
       raylib::rlUpdateVertexBuffer(g.instance_vbo, flat.data(),
-                                   static_cast<int>(want * sizeof(raylib::float16)), 0);
+                                   static_cast<int>(want * 16 * sizeof(float)), 0);
       g.uploaded = g.transforms;
       g.buffer_uploads++;
     }

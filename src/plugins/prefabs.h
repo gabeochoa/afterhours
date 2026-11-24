@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "../core/entity_collection.h"
-#include "../core/entity_helper.h"
+#include "../ecs.h"
 #include "../library.h"
 
 namespace afterhours::prefabs {

@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <map>
 #include <variant>
+#include <functional>
 #include "../../vendor/magic_enum/magic_enum.hpp"
 
 #include "../core/base_component.h"
@@ -101,20 +102,11 @@ struct input : developer::Plugin {
     }
     static bool is_mouse_button_down(const MouseButton button) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
-        if (button == 0 && testing::test_input::detail::test_mode &&
-            testing::input_injector::detail::mouse.active) {
-            return testing::input_injector::detail::mouse.left_down;
-        }
-        if (button == 1 && testing::test_input::detail::test_mode &&
-            testing::input_injector::detail::mouse.active) {
-            return testing::input_injector::detail::mouse.right_down;
-        }
-        if (button == 2 && testing::test_input::detail::test_mode &&
-            testing::input_injector::detail::mouse.active) {
-            return testing::input_injector::detail::mouse.middle_down;
-        }
-#endif
+        return testing::test_input::is_mouse_button_down(
+            button, [](int b) { return raylib::IsMouseButtonDown(b); });
+#else
         return raylib::IsMouseButtonDown(button);
+#endif
     }
     static bool is_mouse_button_pressed(const MouseButton button) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
