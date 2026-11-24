@@ -265,6 +265,7 @@ lighting_zones_test \
 	measure_config_test \
 	scroll_anchor_test \
 	widget_retirement_test \
+	scroll_to_test \
 	text_line_edit_test \
 	grapheme_edit_test \
 	entity_mapping_test \
@@ -344,6 +345,7 @@ lighting_zones_test \
 	draw_over_test \
 	imm_draw_order_test \
 	scroll_smoothing_test \
+	scroll_to_test \
 	scrollbar_gutter_test \
 	setup_test \
 	slot_at_creation_test \
