@@ -666,36 +666,32 @@ template <typename InputAction>
 struct EndUIContextManager : System<UIContext<InputAction>> {
   virtual void for_each_with(Entity &, UIContext<InputAction> &context,
                              float) override {
-    if (context.focus_id != context.ROOT &&
-        context.focus_id != context.FAKE) {
-      if (context.mouse.left_down) {
-        if (context.is_active(context.ROOT)) {
-          context.set_active(context.FAKE);
-        }
-      } else {
-        context.set_active(context.ROOT);
+    if (context.focus_id == context.ROOT || context.focus_id == context.FAKE)
+      return;
+
+    if (context.mouse.left_down) {
+      if (context.is_active(context.ROOT)) {
+        context.set_active(context.FAKE);
       }
-      if (!context.focused_ids.contains(context.focus_id)) {
-        const EntityID dead = context.focus_id;
-        EntityID target = context.ROOT;
-        const auto &order = context.last_focus_order;
-        const auto at = std::find(order.begin(), order.end(), dead);
-        if (at != order.end()) {
-          for (auto it = at + 1; it != order.end() && target == context.ROOT;
-               ++it)
-            if (context.focused_ids.contains(*it))
-              target = *it;
-          for (auto it = at; it != order.begin() && target == context.ROOT;) {
-            --it;
-            if (context.focused_ids.contains(*it))
-              target = *it;
-          }
-        }
-        context.set_focus(target, FocusSource::Grab);
-      }
+    } else {
+      context.set_active(context.ROOT);
     }
-    context.last_focus_order = std::move(context.this_focus_order);
-    context.this_focus_order.clear();
+    if (!context.focused_ids.contains(context.focus_id)) {
+      EntityID target = context.ROOT;
+      if (context.prev_focus_index >= 0 && !context.focus_order.empty()) {
+        const auto slot = std::min(
+            static_cast<std::size_t>(context.prev_focus_index),
+            context.focus_order.size() - 1);
+        target = context.focus_order[slot];
+      }
+      context.set_focus(target, FocusSource::Grab);
+    }
+    const auto it = std::find(context.focus_order.begin(),
+                              context.focus_order.end(), context.focus_id);
+    context.prev_focus_index =
+        context.focus_id == context.ROOT || it == context.focus_order.end()
+            ? -1
+            : static_cast<int>(it - context.focus_order.begin());
     context.focused_ids.clear();
 
     if (auto *text_cache =

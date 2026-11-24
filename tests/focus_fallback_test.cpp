@@ -19,6 +19,9 @@ std::vector<Entity *> build_rows(ImmTestHarness &h, int slots, int skip) {
   h.layout_only();
   HandleTabbing<ui_test::TestInputAction> tabbing;
   tabbing.context = &h.context();
+  h.context().focus_order.clear();
+  for (Entity *e : rows)
+    h.context().focus_order.push_back(e->id);
   for (Entity *e : rows)
     tabbing.for_each_with(*e, e->get<UIComponent>(), .016f);
   return rows;
