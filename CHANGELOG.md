@@ -6,6 +6,7 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+- **Tier 3 `src/` root cleanup:** moved `skeletal.h`, `model_library.h`, `polyline.h`, `attachment.h`, `log_file.h`, `incremental_loader.h`, `tunable.h`, and `byte_cache.h` from `src/` to `src/plugins/`; old `src/<name>.h` paths remain as forwarding shims, so no call sites change.
 - **UTF-8 ingest sanitization (`ui::is_valid_utf8`, `ui::sanitize_utf8`).** Paste (`insert_pasted_text`) and external text replacement (`replace_text_externally`) normalize invalid UTF-8 sequences to `U+FFFD` (RFC 3629 / WHATWG maximal subpart) while passing valid UTF-8 through unchanged. Covered by `utf8_sanitize_test`.
 - **Versioned storage codecs (`src/plugins/storage_codec.h`).** `storage::Codec<T>` stamps a version envelope, runs ordered migrations, and returns `DecodeStatus` (`Ok`, `Migrated`, `Corrupt`, `TooNew`). Includes `peek_version` and `make_string_codec`. Covered by `storage_codec_test`.
 - **Styled labels honor `TextOverflow::Ellipsis`.** `detail::ellipsize_runs` truncates styled `TextSpan` runs at a grapheme boundary with `...` in the cut run's style in both immediate and batched renderers, sharing `detail::JoinedRuns` with `wrap_runs_to_width`. Covered by `styled_ellipsis_test`.
