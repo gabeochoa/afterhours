@@ -442,6 +442,8 @@ ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
             .with_text_overflow(TextOverflow::Ellipsis)
             .with_border_bottom(underline_color, pixels(underline_h));
 
+    if (config.rounded_corners)
+      tab_config.with_rounded_corners(*config.rounded_corners);
     if (is_active)
       tab_config.apply_overrides_from(active_config);
 

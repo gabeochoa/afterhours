@@ -66,6 +66,22 @@ static inline Color resolve_image_tint(const Entity &entity, float opacity) {
   return colors::opacity_pct(tint, opacity);
 }
 
+// Dotted and mixed-side borders use the per-side renderer below.
+static inline std::optional<std::pair<BorderEdge, BorderSide>> border_stroke(
+    const Border &border, float roundness, std::bitset<4> corners) {
+  if (border.is_uniform() && border.top.style == BorderStyle::Solid)
+    return std::pair{BorderEdge::All, border.top};
+  if (roundness <= 0.f || corners.none()) return {};
+  std::optional<std::pair<BorderEdge, BorderSide>> edge;
+  const std::array sides{border.top, border.right, border.bottom, border.left};
+  for (size_t i = 0; i < sides.size(); ++i) {
+    if (!sides[i].has_border()) continue;
+    if (edge || sides[i].style != BorderStyle::Solid) return {};
+    edge.emplace(static_cast<BorderEdge>(i), sides[i]);
+  }
+  return edge;
+}
+
 static inline RectangleType fill_rect_for(const Entity &entity,
                                           const RectangleType &draw_rect) {
   if (!entity.has<HasColor>())
@@ -1951,15 +1967,10 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
               draw_rectangle(RectangleType{sx, sy + pos, sw, seg}, c);
           }
         };
-        bool uniform_dotted =
-            border.is_uniform() && border.top.style == BorderStyle::Dotted;
-        if (border.is_uniform() && !uniform_dotted) {
-          Color border_col = border.uniform_color();
-          if (effective_opacity < 1.0f) {
-            border_col = colors::opacity_pct(border_col, effective_opacity);
-          }
+        if (auto stroke = detail::border_stroke(border, roundness, corner_settings)) {
+          const auto &[edge, side] = *stroke;
           draw_uniform_border(draw_rect, roundness, segments, corner_settings,
-                              border.uniform_thickness().value, border_col);
+                              side.thickness.value, colors::opacity_pct(side.color, effective_opacity), edge);
         } else {
           // Per-side (and uniform-dotted) border rendering
           float x = draw_rect.x, y = draw_rect.y;
@@ -2589,15 +2600,10 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                                          entity.id, 0.f);
           }
         };
-        bool uniform_dotted =
-            border.is_uniform() && border.top.style == BorderStyle::Dotted;
-        if (border.is_uniform() && !uniform_dotted) {
-          Color border_col = border.uniform_color();
-          if (effective_opacity < 1.0f) {
-            border_col = colors::opacity_pct(border_col, effective_opacity);
-          }
-          buffer.add_border(draw_rect, border_col, roundness, segments, corner_settings,
-                            border.uniform_thickness().value, layer, entity.id);
+        if (auto stroke = detail::border_stroke(border, roundness, corner_settings)) {
+          const auto &[edge, side] = *stroke;
+          buffer.add_border(draw_rect, colors::opacity_pct(side.color, effective_opacity), roundness,
+                            segments, corner_settings, side.thickness.value, layer, entity.id, edge);
         } else {
           // Per-side (and uniform-dotted) border rendering (filled rectangles)
           float x = draw_rect.x, y = draw_rect.y;

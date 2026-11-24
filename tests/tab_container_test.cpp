@@ -194,7 +194,8 @@ TEST(tab_container_custom_active_overrides_top_edge_and_selects) {
         h.context(), mk(h.root(), 0), tabs, active,
         ComponentConfig{}
             .with_size(ComponentSize{pixels(600), pixels(44)})
-            .with_debug_name("tabs"),
+            .with_debug_name("tabs")
+            .with_rounded_corners(RoundedCorners().bottom_round()),
         ComponentConfig{}
             .with_border_top(h.context().theme.accent, pixels(1.0f))
             .with_rounded_corners(RoundedCorners().top_round()));
@@ -216,6 +217,8 @@ TEST(tab_container_custom_active_overrides_top_edge_and_selects) {
   CHECK(!b0.border.bottom.has_border());
   CHECK(e0->template get<HasRoundedCorners>().get() ==
         RoundedCorners().top_round().get());
+  CHECK(e1->template get<HasRoundedCorners>().get() ==
+        RoundedCorners().bottom_round().get());
   auto &b1 = e1->template get<HasBorder>();
   CHECK(!b1.border.top.has_border());
   CHECK(b1.border.bottom.has_border());
