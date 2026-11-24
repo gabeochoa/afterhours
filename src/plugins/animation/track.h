@@ -46,10 +46,12 @@ namespace detail {
 inline float srgb_to_linear(float u) {
   return u <= 0.04045f ? u / 12.92f : std::pow((u + 0.055f) / 1.055f, 2.4f);
 }
+
 inline float linear_to_srgb(float u) {
   u = std::clamp(u, 0.f, 1.f);
   return u <= 0.0031308f ? u * 12.92f : 1.055f * std::pow(u, 1.f / 2.4f) - 0.055f;
 }
+
 inline std::array<float, 3> srgb_to_oklab(float r, float g, float b) {
   const float lr = srgb_to_linear(r), lg = srgb_to_linear(g), lb = srgb_to_linear(b);
   const float l = std::cbrt(0.4122214708f * lr + 0.5363325363f * lg + 0.0514459929f * lb);
@@ -59,6 +61,7 @@ inline std::array<float, 3> srgb_to_oklab(float r, float g, float b) {
           1.9779984951f * l - 2.4285922050f * m + 0.4505937099f * s,
           0.0259040371f * l + 0.7827717662f * m - 0.8086757660f * s};
 }
+
 inline std::array<float, 3> oklab_to_srgb(float L, float a, float b) {
   const float l0 = L + 0.3963377774f * a + 0.2158037573f * b;
   const float m0 = L - 0.1055613458f * a - 0.0638541728f * b;
@@ -109,6 +112,7 @@ template <typename T> struct Track {
     return C::from(has_step ? step.target : pos);
   }
   bool active() const { return is_active; }
+  bool reversed() const { return dir < 0.f; }
 
   Track &from(T v) {
     has_started = true;
@@ -119,6 +123,7 @@ template <typename T> struct Track {
     chain.clear();
     is_active = false;
     repeating = false;
+    dir = 1.f;
     return *this;
   }
 
@@ -176,6 +181,33 @@ template <typename T> struct Track {
     return *this;
   }
 
+  Track &reverse() {
+    if (!std::holds_alternative<Timeline>(step.mode))
+      return *this;
+    dir = -dir;
+    if (!is_active && has_step) {
+      const auto &tl = std::get<Timeline>(step.mode);
+      if (tl.repeat == Timeline::Repeat::Once) {
+        time = dir < 0.f ? tl.length() : 0.f;
+        settle_at = tl.length();
+        is_active = true;
+        sample();
+      }
+    }
+    return *this;
+  }
+
+  void seek(float t) {
+    if (!std::holds_alternative<Timeline>(step.mode))
+      return;
+    const auto &tl = std::get<Timeline>(step.mode);
+    if (tl.repeat == Timeline::Repeat::Once)
+      t = std::clamp(t, 0.f, tl.length());
+    time = t;
+    sample();
+    notify();
+  }
+
   Track &on_change(std::function<int(float)> quantize,
                    std::function<void(int)> cb)
     requires(N == 1)
@@ -206,6 +238,21 @@ template <typename T> struct Track {
       return;
     }
     dt = std::max(dt, 0.f);
+    if (dir < 0.f) {
+      const bool looping = std::holds_alternative<Timeline>(step.mode) &&
+                           std::get<Timeline>(step.mode).repeat !=
+                               Timeline::Repeat::Once;
+      time -= dt;
+      if (!looping && time <= 0.f) {
+        time = 0.f;
+        sample();
+        finish();
+      } else {
+        sample();
+        notify();
+      }
+      return;
+    }
     std::optional<float> cycle_budget;
     while (true) {
       if (delay_left > 0.f) {
@@ -262,6 +309,7 @@ private:
 
   void begin(const Step &s) {
     has_step = true;
+    dir = 1.f;
     if (!is_active)
       chain_start = pos;
     step = s;
@@ -337,6 +385,7 @@ private:
   float time = 0.f;
   float settle_at = 0.f;
   float delay_left = 0.f;
+  float dir = 1.f;
   bool is_active = false;
   bool repeating = false;
   bool has_started = false;
