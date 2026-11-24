@@ -241,23 +241,31 @@ wrap_ranges(const std::string &text, float max_width,
   }
 }
 
-template <typename MeasureFn>
-static inline std::vector<TextRunLine>
-wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
-                   MeasureFn &&measure) {
+struct JoinedRuns {
+  const std::vector<TextSpan> &runs;
   std::string text;
   std::vector<size_t> run_ends;
-  for (const auto &run : runs) {
-    text += run.text;
-    run_ends.push_back(text.size());
+
+  explicit JoinedRuns(const std::vector<TextSpan> &source) : runs(source) {
+    run_ends.reserve(runs.size());
+    for (const auto &run : runs) {
+      text += run.text;
+      run_ends.push_back(text.size());
+    }
   }
-  const auto run_at = [&](size_t pos) {
+
+  [[nodiscard]] size_t run_at(size_t pos) const {
     return static_cast<size_t>(
         std::upper_bound(run_ends.begin(), run_ends.end(), pos) -
         run_ends.begin());
-  };
+  }
 
-  const auto measure_range = [&](size_t begin, size_t end) {
+  [[nodiscard]] colors::FontWeight weight_at(size_t pos) const {
+    return runs[std::min(run_at(pos), runs.size() - 1)].weight;
+  }
+
+  template <typename MeasureFn>
+  float measure_range(size_t begin, size_t end, MeasureFn &&measure) const {
     float total = 0.f;
     size_t seg = begin;
     for (size_t r = run_at(begin); seg < end; r++) {
@@ -270,31 +278,44 @@ wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
       }
     }
     return total;
-  };
+  }
 
-  const auto same_style = [](const TextSpan &a, const TextSpan &b) {
-    return a.color.r == b.color.r && a.color.g == b.color.g &&
-           a.color.b == b.color.b && a.color.a == b.color.a &&
-           a.weight == b.weight;
-  };
-
-  std::vector<TextRunLine> lines;
-  for (const WrappedLine &range : wrap_ranges(text, max_width, measure_range)) {
-    TextRunLine line;
-    for (size_t pos = range.begin, r = run_at(range.begin); pos < range.end;
-         r++) {
-      const size_t stop = std::min(range.end, run_ends[r]);
+  [[nodiscard]] std::vector<TextSpan> slice(size_t begin, size_t end,
+                                            bool merge_same_style) const {
+    const auto same_style = [](const TextSpan &a, const TextSpan &b) {
+      return a.color.r == b.color.r && a.color.g == b.color.g &&
+             a.color.b == b.color.b && a.color.a == b.color.a &&
+             a.weight == b.weight;
+    };
+    std::vector<TextSpan> out;
+    for (size_t pos = begin, r = run_at(begin); pos < end; r++) {
+      const size_t stop = std::min(end, run_ends[r]);
       if (stop == pos)
         continue;
-      const TextSpan part{text.substr(pos, stop - pos), runs[r].color,
-                          runs[r].weight};
-      if (!line.empty() && same_style(line.back(), part))
-        line.back().text += part.text;
+      TextSpan part{text.substr(pos, stop - pos), runs[r].color,
+                    runs[r].weight};
+      if (merge_same_style && !out.empty() && same_style(out.back(), part))
+        out.back().text += part.text;
       else
-        line.push_back(part);
+        out.push_back(std::move(part));
       pos = stop;
     }
-    lines.push_back(std::move(line));
+    return out;
+  }
+};
+
+template <typename MeasureFn>
+static inline std::vector<TextRunLine>
+wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
+                   MeasureFn &&measure) {
+  const JoinedRuns joined(runs);
+  const auto measure_range = [&](size_t begin, size_t end) {
+    return joined.measure_range(begin, end, measure);
+  };
+  std::vector<TextRunLine> lines;
+  for (const WrappedLine &range :
+       wrap_ranges(joined.text, max_width, measure_range)) {
+    lines.push_back(joined.slice(range.begin, range.end, true));
   }
   return lines;
 }
@@ -305,50 +326,17 @@ ellipsize_runs(const std::vector<TextSpan> &runs, float max_width,
                MeasureFn &&measure) {
   if (runs.empty() || max_width <= 0.f)
     return runs;
-  std::string text;
-  std::vector<size_t> run_ends;
-  for (const auto &run : runs) {
-    text += run.text;
-    run_ends.push_back(text.size());
-  }
-  const auto run_at = [&](size_t pos) {
-    return static_cast<size_t>(
-        std::upper_bound(run_ends.begin(), run_ends.end(), pos) - run_ends.begin());
-  };
-  const auto measure_range = [&](size_t begin, size_t end) {
-    float total = 0.f;
-    size_t seg = begin;
-    for (size_t r = run_at(begin); seg < end; r++) {
-      const size_t stop = std::min(end, run_ends[r]);
-      const colors::FontWeight weight = runs[run_at(seg)].weight;
-      if (stop > seg &&
-          (stop == end || runs[run_at(stop)].weight != weight)) {
-        total += measure(text.substr(seg, stop - seg), weight);
-        seg = stop;
-      }
-    }
-    return total;
-  };
-  if (measure_range(0, text.size()) <= max_width)
+  const JoinedRuns joined(runs);
+  if (joined.measure_range(0, joined.text.size(), measure) <= max_width)
     return runs;
-  const auto weight_at = [&](size_t pos) {
-    return runs[std::min(run_at(pos), runs.size() - 1)].weight;
-  };
   const size_t keep = fit_text_prefix(
-      text, max_width, [&](const std::string &s) {
-        return measure_range(0, s.size()) + measure("...", weight_at(s.size()));
+      joined.text, max_width, [&](const std::string &s) {
+        return joined.measure_range(0, s.size(), measure) +
+               measure("...", joined.weight_at(s.size()));
       });
   if (keep == 0)
     return {TextSpan{"...", runs.front().color, runs.front().weight}};
-  std::vector<TextSpan> out;
-  for (size_t pos = 0, r = run_at(0); pos < keep; r++) {
-    const size_t stop = std::min(keep, run_ends[r]);
-    if (stop == pos)
-      continue;
-    out.push_back(TextSpan{text.substr(pos, stop - pos), runs[r].color,
-                           runs[r].weight});
-    pos = stop;
-  }
+  std::vector<TextSpan> out = joined.slice(0, keep, false);
   out.back().text += "...";
   return out;
 }
