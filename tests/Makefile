@@ -99,6 +99,7 @@ ALL_TESTS := \
 	parent_gesture_test \
 	label_clip_test \
 	label_test \
+	batched_text_overflow_test \
 	scroll_clip_decoration_test \
 	animation_test \
 	reveal_test \
@@ -108,6 +109,7 @@ ALL_TESTS := \
 	appearance_test \
 	frame_loop_test \
 	headless_cadence_test \
+	timer_test \
 	jobs_test \
 	frame_phases_test \
 	color_value_test \
@@ -253,6 +255,7 @@ lighting_zones_test \
 	dump_ui_test \
 	accessibility_test \
 	scroll_anchor_test \
+	scroll_absolute_content_test \
 	measure_config_test \
 	scroll_anchor_test \
 	widget_retirement_test \
