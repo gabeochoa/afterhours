@@ -601,8 +601,13 @@ struct EntityQuery {
     }
 
     [[nodiscard]] size_t gen_count() const {
-        if (!ran_query) return values_ignore_cache({}).size();
-        return ents.size();
+        if (ran_query) return ents.size();
+        // Ordered queries keep the materializing path: post-sort mods are
+        // stateful and order-sensitive.
+        if (orderby) return values_ignore_cache({}).size();
+        size_t n = 0;
+        for_each_stream([&n](const Entity &) { ++n; });
+        return n;
     }
 
     [[nodiscard]] std::vector<int> gen_ids() const {
