@@ -17,6 +17,10 @@
 #include "../../developer.h"
 #include "metal_state.h"
 
+namespace afterhours::graphics::metal_detail {
+inline void ensure_sokol_gl_and_fonts();
+}
+
 namespace afterhours {
 
 // Font is an int (fontstash font ID). We wrap it so the type is distinct.
@@ -75,6 +79,9 @@ inline Font register_loaded_font(FONScontext *ctx, int id,
 
 inline Font load_font_from_memory(const unsigned char *data, int size,
                                   const char *name, int = 0) {
+#ifdef AFTERHOURS_FONT_HELPER_HAS_ENSURE
+  graphics::metal_detail::ensure_sokol_gl_and_fonts();
+#endif
   auto *ctx = graphics::metal_detail::g_fons_ctx;
   if (!ctx) {
     log_warn("fontstash context not ready yet (load_font_from_memory)");
@@ -106,6 +113,9 @@ inline Font load_font_from_memory(const unsigned char *data, int size,
 }
 
 inline Font load_font_from_file(const char *file, int = 0) {
+#ifdef AFTERHOURS_FONT_HELPER_HAS_ENSURE
+  graphics::metal_detail::ensure_sokol_gl_and_fonts();
+#endif
   auto *ctx = graphics::metal_detail::g_fons_ctx;
   if (!ctx) {
     log_warn("fontstash context not ready yet (load_font_from_file)");
@@ -268,7 +278,7 @@ inline void prewarm_text(const Font font, const char *text,
 // Advance width, same as measure_text.
 
 inline Vector2Type measure_text(const Font font, const char *text,
-                                const float size, const float /*spacing*/) {
+                                const float size, const float spacing) {
   if (!std::isfinite(size) || size <= 0.f)
     return Vector2Type{0, 0};
   auto *ctx = graphics::metal_detail::g_fons_ctx;
@@ -282,8 +292,8 @@ inline Vector2Type measure_text(const Font font, const char *text,
   const float dpi_now = graphics::metal_detail::dpi_scale();
   const std::uint64_t font_id = (static_cast<std::uint64_t>(fid) << 32) ^
                                 static_cast<std::uint64_t>(dpi_now * 1024.f);
-  const auto key =
-      measure_memo::key_for(text ? text : "", size, 1.f, font_id);
+  const auto key = measure_memo::key_for(text ? text : "", size, spacing,
+                                          font_id);
   Vector2Type cached{};
   if (measure_memo::lookup(key, cached))
     return cached;
@@ -292,6 +302,8 @@ inline Vector2Type measure_text(const Font font, const char *text,
   float dpi = graphics::metal_detail::dpi_scale();
   fonsSetSize(ctx, size * dpi);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
+  // Only excess over raylib's 1px gap counts; negatives tighten, dpi-scaled.
+  fonsSetSpacing(ctx, (spacing - 1.f) * dpi);
   // Advance, not the ink box: ink drops the side bearings, so text sized from
   // it comes up short and clips.
   std::string shown;

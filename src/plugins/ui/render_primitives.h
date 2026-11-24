@@ -13,6 +13,8 @@
 #include <optional>
 
 #include "../../memory/arena.h"
+#include "../../render_counters.h"
+#include "../profiling.h"
 #include "components.h"
 #include "border_rendering.h"
 #include "text_stroke.h"
@@ -669,12 +671,17 @@ public:
     size_t scissor_operations = 0;
     size_t blend_operations = 0;
     size_t shader_operations = 0;
+    // Draw submissions issued, texture binds implied by them, and
+    // texture/RT creates drained from render_counters since the last render.
+    size_t draws = 0;
+    size_t binds = 0;
+    size_t creates = 0;
   };
 
   void render(const RenderCommandBuffer &buffer, FontManager &fonts) {
-    stats_data = {}; // Reset stats
+    statistics = {}; // Reset stats
     const auto &commands = buffer.commands();
-    stats_data.total_commands = commands.size();
+    statistics.total_commands = commands.size();
 
     std::optional<std::array<int, 4>> active_clip;
     blend::Mode active_blend = blend::current();
@@ -689,19 +696,21 @@ public:
         const auto &border = cmd.data.outline;
         draw_uniform_border(border.rect, border.roundness, border.segments,
                             border.corners, border.thickness, border.color);
+        note_draw();
         ++i;
         break;
       }
       case RenderPrimitiveType::Line:
         draw_line_ex(cmd.data.line.start, cmd.data.line.end,
                      cmd.data.line.thickness, cmd.data.line.color);
+        note_draw();
         ++i;
         break;
 
       case RenderPrimitiveType::Rectangle: {
         size_t batch_end = find_batch_end(commands, i);
         render_rectangle_batch(commands, i, batch_end);
-        stats_data.rectangle_batches++;
+        statistics.rectangle_batches++;
         i = batch_end;
         break;
       }
@@ -709,7 +718,7 @@ public:
       case RenderPrimitiveType::RoundedRectangle: {
         size_t batch_end = find_batch_end(commands, i);
         render_rounded_rectangle_batch(commands, i, batch_end);
-        stats_data.rectangle_batches++;
+        statistics.rectangle_batches++;
         i = batch_end;
         break;
       }
@@ -730,19 +739,19 @@ public:
 
       case RenderPrimitiveType::Text:
         render_text(cmd, fonts);
-        stats_data.text_commands++;
+        statistics.text_commands++;
         i++;
         break;
 
       case RenderPrimitiveType::TextUnits:
         render_text_units(cmd, fonts);
-        stats_data.text_commands++;
+        statistics.text_commands++;
         i++;
         break;
 
       case RenderPrimitiveType::Image:
         render_image(cmd);
-        stats_data.image_commands++;
+        statistics.image_commands++;
         i++;
         break;
 
@@ -755,7 +764,7 @@ public:
         }
         active_clip = clip;
         begin_scissor_mode(clip[0], clip[1], clip[2], clip[3]);
-        stats_data.scissor_operations++;
+        statistics.scissor_operations++;
         i++;
         break;
       }
@@ -775,7 +784,7 @@ public:
         }
         active_clip.reset();
         end_scissor_mode();
-        stats_data.scissor_operations++;
+        statistics.scissor_operations++;
         i++;
         break;
 
@@ -788,7 +797,7 @@ public:
         }
         active_shader = *shader;
         ::afterhours::begin_shader_mode(*shader);
-        stats_data.shader_operations++;
+        statistics.shader_operations++;
         i++;
         break;
       }
@@ -807,7 +816,7 @@ public:
         }
         active_shader.reset();
         ::afterhours::end_shader_mode();
-        stats_data.shader_operations++;
+        statistics.shader_operations++;
         i++;
         break;
 
@@ -816,7 +825,7 @@ public:
         if (cmd.data.blend.mode != active_blend) {
           set_blend_mode(cmd.data.blend.mode);
           active_blend = cmd.data.blend.mode;
-          stats_data.blend_operations++;
+          statistics.blend_operations++;
         }
         i++;
         break;
@@ -831,29 +840,34 @@ public:
         if (active_blend != blend::Mode::Alpha) {
           set_blend_mode(blend::Mode::Alpha);
           active_blend = blend::Mode::Alpha;
-          stats_data.blend_operations++;
+          statistics.blend_operations++;
         }
         i++;
         break;
 
       case RenderPrimitiveType::Ring:
         render_ring(cmd);
+        note_draw();
         i++;
         break;
 
       case RenderPrimitiveType::RingSegment:
         render_ring_segment(cmd);
+        note_draw();
         i++;
         break;
 
       case RenderPrimitiveType::NineSlice:
         render_nine_slice(cmd);
+        note_draw(true);
         i++;
         break;
 
       case RenderPrimitiveType::Custom:
-        if (cmd.data.custom.fn && *cmd.data.custom.fn)
+        if (cmd.data.custom.fn && *cmd.data.custom.fn) {
           (*cmd.data.custom.fn)(cmd.data.custom.rect);
+          note_draw();
+        }
         i++;
         break;
 
@@ -862,12 +876,35 @@ public:
         break;
       }
     }
+#if AFTERHOURS_ENABLE_PROFILING
+    statistics.creates =
+        static_cast<size_t>(render_counters::take_creates());
+    auto &collector = profiling::default_collector();
+    AFTERHOURS_PROFILE_COUNTER(collector, "render.draws", "count",
+                               static_cast<double>(statistics.draws));
+    AFTERHOURS_PROFILE_COUNTER(collector, "render.binds", "count",
+                               static_cast<double>(statistics.binds));
+    AFTERHOURS_PROFILE_COUNTER(collector, "render.creates", "count",
+                               static_cast<double>(statistics.creates));
+#endif
   }
 
-  [[nodiscard]] const Stats &stats() const { return stats_data; }
+  [[nodiscard]] const Stats &stats() const { return statistics; }
 
 private:
-  Stats stats_data;
+  Stats statistics;
+
+  // A bind is the texture a draw samples; text draws bind the font texture.
+  // Compiled out when profiling is off (same pattern as
+  // render_counters::note_create), so disabled builds pay nothing per draw.
+  void note_draw(bool binds_texture = false) {
+#if AFTERHOURS_ENABLE_PROFILING
+    ++statistics.draws;
+    if (binds_texture) ++statistics.binds;
+#else
+    (void)binds_texture;
+#endif
+  }
 
   // Find the end of a batch of commands with same type and layer
   static size_t find_batch_end(const ArenaVector<RenderPrimitive> &cmds,
@@ -890,6 +927,7 @@ private:
       const auto &rect = cmds[i].data.rectangle;
       draw_rectangle_rounded_rotated(rect.rect, 0.0f, 0, rect.fill_color,
                                      std::bitset<4>().reset(), rect.rotation);
+      note_draw();
     }
   }
 
@@ -901,6 +939,7 @@ private:
       draw_rectangle_rounded_rotated(rect.rect, rect.roundness, rect.segments,
                                      rect.fill_color, rect.corners,
                                      rect.rotation);
+      note_draw();
     }
   }
 
@@ -916,9 +955,11 @@ private:
                                      outline.rect.width + t * 2.0f,
                                      outline.rect.height + t * 2.0f};
           draw_rectangle_outline(thickRect, outline.color);
+          note_draw();
         }
       } else {
         draw_rectangle_outline(outline.rect, outline.color);
+        note_draw();
       }
     }
   }
@@ -950,11 +991,13 @@ private:
                   : std::clamp(2.f * (r0 + t) / shorter, 0.f, 1.f);
           draw_rectangle_rounded_lines(thickRect, rn, outline.segments,
                                        outline.color, outline.corners);
+          note_draw();
         }
       } else {
         draw_rectangle_rounded_lines(outline.rect, outline.roundness,
                                      outline.segments, outline.color,
                                      outline.corners);
+        note_draw();
       }
       pop_rotation();
     }
@@ -1005,17 +1048,20 @@ private:
                                startPos.y + cmd.data.text.shadow_offset_y};
       draw_text_ex(font, cmd.data.text.text, shadowPos, fontSize, spacing,
                    cmd.data.text.shadow_color, rotation, rot_cx, rot_cy);
+      note_draw(true);
     }
 
     if (cmd.data.text.has_stroke) {
       text_stroke::draw(font, cmd.data.text.text, startPos, fontSize, spacing,
                          cmd.data.text.stroke_thickness, cmd.data.text.stroke_color,
                          rotation, rot_cx, rot_cy);
+      note_draw(true);
     }
 
     // Draw main text
     draw_text_ex(font, cmd.data.text.text, startPos, fontSize, spacing,
                  cmd.data.text.color, rotation, rot_cx, rot_cy);
+    note_draw(true);
   }
 
   void render_text_units(const RenderPrimitive &cmd, FontManager &fonts) {
@@ -1035,14 +1081,19 @@ private:
       const float rotation = tu.rotation + u.rotation;
       const float center_x = u.rotation != 0.f ? pos.x + size.x / 2.f : tu.rot_center_x;
       const float center_y = u.rotation != 0.f ? pos.y + size.y / 2.f : tu.rot_center_y;
-      if (tu.has_shadow)
+      if (tu.has_shadow) {
         draw_text_ex(font, u.text, {pos.x + tu.shadow_offset_x, pos.y + tu.shadow_offset_y},
                      u.font_size, spacing, tu.shadow_color, rotation, center_x, center_y);
-      if (tu.has_stroke)
+        note_draw(true);
+      }
+      if (tu.has_stroke) {
         text_stroke::draw(font, u.text, pos, u.font_size, spacing, tu.stroke_thickness,
                           tu.stroke_color, rotation, center_x, center_y);
+        note_draw(true);
+      }
       draw_text_ex(font, u.text, pos, u.font_size, spacing, u.color, rotation,
                    center_x, center_y);
+      note_draw(true);
     }
   }
 
@@ -1052,6 +1103,7 @@ private:
         cmd.data.image.dest_rect,
         {cmd.data.image.dest_rect.width, cmd.data.image.dest_rect.height}, 0.f,
         cmd.data.image.tint, cmd.data.image.filter);
+    note_draw(true);
   }
 
   void render_ring(const RenderPrimitive &cmd) {

@@ -113,8 +113,9 @@ constexpr std::array<std::string_view, 7> coord_commands = {
     "middle_click", "middle_down"
 };
 
-constexpr std::array<std::string_view, 18> single_arg_commands = {
-    "key", "select_all", "screenshot", "screenshot_presented",
+constexpr std::array<std::string_view, 19> single_arg_commands = {
+    "key", "select_all", "screenshot", "screenshot_fresh",
+    "screenshot_presented",
     "expect_screenshot", "arrow",
     "action", "hold", "release", "click_ui",
     "click_text", "click_button", "focus_ui",
@@ -296,7 +297,8 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
             cmd.args.push_back(name);
             cmd.args.push_back(args.rest());
             cmd.wait_seconds = 1 * frame;
-        } else if (cmd.name == "screenshot") {
+        } else if (cmd.name == "screenshot" ||
+                   cmd.name == "screenshot_fresh") {
             std::string name = args.next();
             cmd.args.push_back(name);
             cmd.wait_seconds = 1 * frame;
@@ -406,10 +408,21 @@ class E2ERunner {
                  script_results_.size(), commands_.size());
     }
 
+    void fail_unread_presses() {
+        for (const auto &label : input_injector::take_unread_presses()) {
+            failed_ = true;
+            current_script_errors_++;
+            log_warn("[E2E ERROR] {} (line {}): injected press {} was never "
+                     "read by any system",
+                     current_script_name(), last_dispatched_line, label);
+        }
+    }
+
     void reset() {
         test_input::reset_all();
         key_release_detail::reset();
         index_ = 0;
+        last_dispatched_line = 0;
         wait_time_ = 0.0f;
         wait_ticks_ = 0;
         wall_deadline.reset();
@@ -445,6 +458,7 @@ class E2ERunner {
     /// Call each frame with delta time (preferred)
     void tick(float dt) {
         if (finished_ || commands_.empty()) return;
+        resolve_fresh_screenshots();
 
         // Handle wait between commands - don't count explicit wait time
         // against the per-script timeout so that `wait 5` doesn't eat into
@@ -457,6 +471,8 @@ class E2ERunner {
             wait_time_ -= dt;
             return;
         }
+
+        fail_unread_presses();
 
         if (!wall_deadline || std::chrono::steady_clock::now() >= *wall_deadline)
             elapsed_time_ += dt;
@@ -557,10 +573,19 @@ class E2ERunner {
         return failed_ || get_command_error_count() > 0;
     }
     bool has_timed_out() const { return timed_out_; }
+    bool needs_render() const {
+        for (const auto &e : pending_cmds_) {
+            if (!e) continue;
+            const auto &cmd = e->get<PendingE2ECommand>();
+            if (!cmd.is_consumed() && cmd.is("screenshot_fresh")) return true;
+        }
+        return false;
+    }
     /// True when the next tick will still sit inside a plain `wait` with no
     /// command pending, so nothing reads this frame's render. Hosts can skip
     /// rendering those frames; the last frame of each wait reports false.
     bool is_idle_waiting() const {
+        if (needs_render()) return false;
         if (index_ == 0 || index_ > commands_.size()) return false;
         if (commands_[index_ - 1].name != "wait") return false;
         if (wait_time_ <= 0) return false;
@@ -703,6 +728,7 @@ class E2ERunner {
 
    private:
     void dispatch_command(const ParsedCommand &cmd) {
+        last_dispatched_line = cmd.line_number;
         wall_deadline.reset();
         if (!cmd.parse_error.empty()) {
             log_warn("[E2E ERROR] {}:{}: {}: {}", current_script_name(),
@@ -746,6 +772,13 @@ class E2ERunner {
         // Handle screenshot if callback set
         if (cmd.name == "screenshot" && screenshot_fn_ && !cmd.args.empty())
             take_screenshot(screenshot_fn_, pending);
+        if (cmd.name == "screenshot_fresh") {
+            if (cmd.args.empty() || cmd.args[0].empty())
+                pending.fail("screenshot_fresh requires a name");
+            else if (!screenshot_fn_ && !presented_screenshot_fn_)
+                pending.fail("screenshot_fresh: no screenshot callback "
+                             "registered");
+        }
         if (cmd.name == "screenshot_presented" && !cmd.args.empty()) {
             if (!presented_screenshot_fn_)
                 pending.fail("screenshot_presented: no presented-frame "
@@ -765,6 +798,29 @@ class E2ERunner {
             current_script_idx_++;
             current_script_errors_ = 0;
             elapsed_time_ = 0.0f;
+        }
+    }
+
+    void resolve_fresh_screenshots() {
+        const long long gen = static_cast<long long>(
+            VisibleTextRegistry::instance().generation());
+        for (auto &e : pending_cmds_) {
+            if (!e) continue;
+            auto &cmd = e->get<PendingE2ECommand>();
+            if (cmd.is_consumed() || !cmd.is("screenshot_fresh")) continue;
+            if (cmd.seen_render < 0) {
+                cmd.seen_render = gen;
+                continue;
+            }
+            if (cmd.seen_render == gen) continue;
+            const ScreenshotFn &fn = presented_screenshot_fn_
+                                         ? presented_screenshot_fn_
+                                         : screenshot_fn_;
+            if (!fn)
+                cmd.fail("screenshot_fresh: no screenshot callback "
+                         "registered");
+            else
+                take_screenshot(fn, cmd);
         }
     }
 
@@ -897,6 +953,7 @@ class E2ERunner {
     std::vector<ScriptResult> script_results_;
     std::size_t current_script_idx_ = 0;
     int current_script_errors_ = 0;
+    int last_dispatched_line = 0;
 
     ScreenshotFn screenshot_fn_;
     ScreenshotFn presented_screenshot_fn_;
