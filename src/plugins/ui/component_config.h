@@ -90,6 +90,7 @@ struct ComponentConfig {
   // + scroll)
   Overflow overflow_x = Overflow::Visible;
   Overflow overflow_y = Overflow::Visible;
+  bool scrollbar_gutter = false;
 
   // Background color settings
   Theme::Usage color_usage = Theme::Usage::Default;
@@ -886,6 +887,11 @@ struct ComponentConfig {
     return *this;
   }
 
+  ComponentConfig &with_scrollbar_gutter(bool enabled = true) {
+    scrollbar_gutter = enabled;
+    return *this;
+  }
+
   /// Enable drag-and-drop reordering of this container's children.
   /// Equivalent to what drag_group() used to do.
   ComponentConfig &with_draggable_children(bool enabled = true) {
@@ -1407,6 +1413,8 @@ if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.deb
       merged.overflow_x = overrides.overflow_x;
     if (overrides.overflow_y != Overflow::Visible)
       merged.overflow_y = overrides.overflow_y;
+    if (overrides.scrollbar_gutter)
+      merged.scrollbar_gutter = true;
 
     // Colour and corner detail
     if (overrides.hover_color.has_value())

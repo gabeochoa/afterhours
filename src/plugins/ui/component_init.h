@@ -506,6 +506,7 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
                              config.overflow_y == Overflow::Auto);
       sv.auto_overflow = (config.overflow_x == Overflow::Auto ||
                           config.overflow_y == Overflow::Auto);
+      sv.scrollbar_gutter = config.scrollbar_gutter;
     } else if (entity.has<HasScrollView>() &&
                entity.get<HasScrollView>().config_owned) {
       entity.removeComponentIfExists<HasScrollView>();
