@@ -88,6 +88,7 @@ struct RenderPrimitive {
       float roundness;
       int segments;
       std::bitset<4> corners;
+      BorderEdge edge;
       float thickness; // Line thickness for outline (0 = default thin line)
       float rotation;
     } outline;
@@ -436,10 +437,11 @@ public:
   }
 
   void add_border(RectangleType rect, Color color, float roundness, int segments,
-                  std::bitset<4> corners, float thickness, int layer, EntityID id) {
+                  std::bitset<4> corners, float thickness, int layer, EntityID id, BorderEdge edge = BorderEdge::All) {
     auto command = RenderPrimitive::rounded_rectangle_outline(
         rect, color, roundness, segments, corners, layer, id, thickness);
     command.type = RenderPrimitiveType::Border;
+    command.data.outline.edge = edge;
     commands_.push_back(command);
   }
 
@@ -695,7 +697,7 @@ public:
       case RenderPrimitiveType::Border: {
         const auto &border = cmd.data.outline;
         draw_uniform_border(border.rect, border.roundness, border.segments,
-                            border.corners, border.thickness, border.color);
+                            border.corners, border.thickness, border.color, border.edge);
         note_draw();
         ++i;
         break;

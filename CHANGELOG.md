@@ -6,6 +6,8 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+- **`tab_container(..., active_config)`** applies overrides only to the selected tab. Set a shared corner mask on the bar to round every tab, then use `active_config` for a distinct selected edge. Omitting both keeps the default underline.
+
 ### Behaviour
 
 - **E2E bus-aware volume commands.** With `AFTER_HOURS_ENABLE_E2E_TESTING`, `register_audio_commands` now also handles `set_volume <bus|master> <0..1>` (clamped) and `expect_volume <bus|master> <min> [max]`; bus names resolve through `sound_system::known_buses()` and an unknown bus is a command failure, never a crash. Without the macro the handlers and `known_buses()`/`has_bus()` compile out entirely. Covered by `e2e_audio_volume_test` (enabled) and `e2e_audio_volume_disabled_test` (compile-out).
