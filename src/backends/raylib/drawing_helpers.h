@@ -781,6 +781,11 @@ inline TextureType load_texture(const char *path) {
   return texture;
 }
 
+// Uploading needs a live GL context: a window, or the headless session.
+inline bool texture_is_usable() {
+  return raylib::IsWindowReady() || graphics::is_headless();
+}
+
 inline TextureType load_texture_from_rgba(const std::uint8_t *rgba, int w,
                                           int h,
                                           int filter = TEXTURE_FILTER_BILINEAR) {
