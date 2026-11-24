@@ -2070,7 +2070,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                                             .width = size.x,
                                             .height = size.y,
                                         },
-                                        size, 0.f, img_col);
+                                        size, 0.f, img_col,
+                                        img.filter.value_or(-1));
     }
 
     // Custom draw (on top): drawn after all of the widget's own primitives.
@@ -2904,7 +2905,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       const Color img_col = detail::resolve_image_tint(entity, effective_opacity);
 
       RectangleType dest = {location.x, location.y, size.x, size.y};
-      buffer.add_image(dest, src, img.texture, img_col, layer, entity.id);
+      buffer.add_image(dest, src, img.texture, img_col, layer, entity.id,
+                       img.filter.value_or(-1));
     }
 
     // Custom draw (on top): enqueued after all of the widget's own primitives.

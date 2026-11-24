@@ -260,6 +260,9 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
       row.with_background(config.color_usage);
     if (config.hover_color.has_value())
       row.with_custom_hover_bg(*config.hover_color);
+    if (config.text_color_usage != Theme::Usage::Default &&
+        config.text_color_usage != Theme::Usage::Custom)
+      row.with_text_color(config.text_color_usage);
     // Labels default to centred, which walks straight into the gutter.
     if (gutter > 0.f || any_marks)
       row.with_alignment(TextAlignment::Left);
@@ -300,9 +303,16 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
                                       -row_pad_y)
               .with_label(item.shortcut)
               .with_alignment(TextAlignment::Right)
-              .with_custom_text_color(ctx.theme.from_usage(
-                  highlighted ? Theme::Usage::Font
-                              : Theme::Usage::FontMuted))
+              .with_custom_text_color(
+                  highlighted
+                      ? ctx.theme.from_usage(Theme::Usage::Font)
+                      : config.custom_text_color.has_value()
+                            ? *config.custom_text_color
+                            : config.text_color_usage != Theme::Usage::Default
+                                  ? ctx.theme.from_usage(
+                                        config.text_color_usage)
+                                  : ctx.theme.from_usage(
+                                        Theme::Usage::FontMuted))
               .with_ignore_pointer_events()
               .with_skip_tabbing(true)
               .with_render_layer(config.render_layer + 2));
