@@ -43,6 +43,7 @@
 #include "../developer.h"
 #include "../drawing_helpers_3d.h"
 #include "../logging.h"
+#include "eye_position.h"
 #include "models.h"
 
 namespace afterhours::house_of_cards {
@@ -601,6 +602,16 @@ inline void draw_instanced(Cards &cards, ShaderType shader,
   set("steps", &parallax_steps, raylib::SHADER_UNIFORM_INT);
   cards.material.shader = shader;
   raylib::DrawMeshInstanced(cards.quad, cards.material, transforms, count);
+}
+
+// Eye-position-only form: draw_instanced reads nothing else from the camera,
+// so a default Camera3D carrying eye_position::get() is the whole camera.
+inline void draw_instanced(Cards &cards, ShaderType shader,
+                           const MatrixType *transforms, int count,
+                           int parallax_steps = 2) {
+  Camera3D camera{};
+  camera.position = eye_position::get();
+  draw_instanced(cards, shader, transforms, count, camera, parallax_steps);
 }
 
 } // namespace afterhours::house_of_cards

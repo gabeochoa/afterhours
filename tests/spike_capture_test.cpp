@@ -9,7 +9,7 @@ auto record_fn(profiling::Collector &collector) {
     return [&collector](std::string_view name, double ms) {
         for (const auto &observer : profiling::detail::observers) {
             if (observer.context != &collector) continue;
-            observer.callback(observer.context, name, SystemPhase::Update, ms);
+            observer.callback(observer.context, name, SystemPhase::Update, ms, 0);
         }
     };
 }

@@ -102,6 +102,23 @@ TEST(toggle_on_forwards_ctor_args_and_preserves_existing) {
   EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
 }
 
+enum class ToggleTag : TagId { Alpha = 4, Beta = 5 };
+
+TEST(toggle_tag_sets_and_clears) {
+  Entity &e = EntityHelper::createEntity();
+  e.toggleTag(ToggleTag::Alpha, true);
+  CHECK(e.hasTag(ToggleTag::Alpha));
+  e.toggleTag(ToggleTag::Alpha, true);
+  CHECK(e.hasTag(ToggleTag::Alpha));
+  e.toggleTag(ToggleTag::Alpha, false);
+  CHECK(!e.hasTag(ToggleTag::Alpha));
+  e.toggleTag(TagId{5}, true);
+  CHECK(e.hasTag(ToggleTag::Beta));
+  e.toggleTag(TagId{5}, false);
+  CHECK(!e.hasTag(ToggleTag::Beta));
+  EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+}
+
 TEST(toggle_back_on_readds_default) {
   Entity &e = EntityHelper::createEntity();
   e.toggleComponent<ToggleProbe>(true)->value = 42;
