@@ -254,6 +254,7 @@ lighting_zones_test \
 	dump_ui_test \
 	accessibility_test \
 	scroll_anchor_test \
+	scroll_absolute_content_test \
 	measure_config_test \
 	scroll_anchor_test \
 	widget_retirement_test \
@@ -287,6 +288,7 @@ lighting_zones_test \
 	focus_origin_test \
 	tab_order_test \
 	reset_focus_test \
+	focus_fallback_test \
 	focus_shortcuts_test \
 	cleanup_order_test \
 	attachment_test \

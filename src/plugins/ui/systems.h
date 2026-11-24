@@ -511,6 +511,8 @@ inline Vector2Type measure_scroll_content(const UIComponent &cmp, const HasScrol
 
   float first = std::numeric_limits<float>::max();
   float last = std::numeric_limits<float>::lowest();
+  float cross_first = std::numeric_limits<float>::max();
+  float cross_last = std::numeric_limits<float>::lowest();
   float out_of_flow = 0.f;
   float span = 0.f;
   for (EntityID child_id : cmp.children) {
@@ -522,13 +524,29 @@ inline Vector2Type measure_scroll_content(const UIComponent &cmp, const HasScrol
       continue;
     const UIComponent &c = child.get<UIComponent>();
     span = std::max(span, c.computed[cross] + c.computed_margin[cross]);
-    if (c.absolute || c.should_hide) {
+    if (c.should_hide) {
       out_of_flow += c.computed[main] + c.computed_margin[main];
       continue;
     }
     first = std::min(first, c.computed_rel[main]);
     last = std::max(last, c.computed_rel[main] + c.computed[main] +
                               c.computed_margin[main]);
+    cross_first = std::min(cross_first, c.computed_rel[cross]);
+    cross_last = std::max(cross_last, c.computed_rel[cross] +
+                                          c.computed[cross] +
+                                          c.computed_margin[cross]);
+  }
+  if (last > first) {
+    const Axis main_start = main == Axis::X ? Axis::left : Axis::top;
+    const Axis cross_start = cross == Axis::X ? Axis::left : Axis::top;
+    first = std::min(first, cmp.computed_rel[main] +
+                                cmp.computed_margin[main_start] +
+                                cmp.computed_padd[main_start]);
+    cross_first = std::min(cross_first, cmp.computed_rel[cross] +
+                                            cmp.computed_margin[cross_start] +
+                                            cmp.computed_padd[cross_start]);
+    if (cross_last > cross_first)
+      span = cross_last - cross_first;
   }
   const float extent = (last > first ? last - first : 0.f) + out_of_flow;
 
@@ -691,8 +709,22 @@ struct EndUIContextManager : System<UIContext<InputAction>> {
     } else {
       context.set_active(context.ROOT);
     }
-    if (!context.focused_ids.contains(context.focus_id))
-      context.focus_id = context.ROOT;
+    if (!context.focused_ids.contains(context.focus_id)) {
+      EntityID target = context.ROOT;
+      if (context.prev_focus_index >= 0 && !context.focus_order.empty()) {
+        const auto slot = std::min(
+            static_cast<std::size_t>(context.prev_focus_index),
+            context.focus_order.size() - 1);
+        target = context.focus_order[slot];
+      }
+      context.set_focus(target, FocusSource::Grab);
+    }
+    const auto it = std::find(context.focus_order.begin(),
+                              context.focus_order.end(), context.focus_id);
+    context.prev_focus_index =
+        context.focus_id == context.ROOT || it == context.focus_order.end()
+            ? -1
+            : static_cast<int>(it - context.focus_order.begin());
     context.focused_ids.clear();
 
     if (auto *text_cache =
