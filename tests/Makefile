@@ -155,6 +155,7 @@ ALL_TESTS := \
 	render_capture_test \
 	presented_frame_test \
 	triangle_winding_test \
+	bug_note_test \
 	charts_test \
 	system_profile_test \
 	allocation_counters_test \
@@ -448,6 +449,7 @@ RAYLIB_TESTS := \
 	render_capture_test \
 	presented_frame_test \
 	triangle_winding_test \
+	bug_note_test \
 	blur_shader_test \
 	rounded_outline_mask_test \
 	clipboard_test \
