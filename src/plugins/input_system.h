@@ -12,8 +12,8 @@
 
 #include "../core/base_component.h"
 #include "../core/entity_query.h"
-#include "../core/key_codes.h"
-#include "../core/wheel_delta.h"
+#include "key_codes.h"
+#include "wheel_delta.h"
 #include "../core/system.h"
 #include "../developer.h"
 #include "../drawing_helpers.h"

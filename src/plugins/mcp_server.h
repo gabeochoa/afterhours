@@ -22,7 +22,7 @@
 
 #include <nlohmann/json.hpp>
 
-#include "../core/key_codes.h"
+#include "key_codes.h"
 
 namespace afterhours {
 namespace mcp {

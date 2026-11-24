@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "../../core/text_cache.h"
+#include "text_cache.h"
 #include "../../ecs.h"
 #include "../../font_helper.h"
 #include "../../measure_memo.h"

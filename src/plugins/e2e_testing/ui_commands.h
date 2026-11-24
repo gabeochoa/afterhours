@@ -5,7 +5,7 @@
 
 #include <algorithm>
 
-#include "../../core/key_codes.h"
+#include "../key_codes.h"
 #include "command_handlers.h"
 #include "draw_commands.h"
 #include "e2e_testing.h"

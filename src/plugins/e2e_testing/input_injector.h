@@ -2,9 +2,9 @@
 // Synthetic key/mouse state for testing
 #pragma once
 
-#include "../../core/key_codes.h"
+#include "../key_codes.h"
 #include "../../logging.h"
-#include "../../core/wheel_delta.h"
+#include "../wheel_delta.h"
 #include "concepts.h"
 
 #include <array>

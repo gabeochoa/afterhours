@@ -2,7 +2,7 @@
 // ECS component for command dispatch
 #pragma once
 
-#include "../../core/key_codes.h"
+#include "../key_codes.h"
 
 #include "../../ecs.h"
 

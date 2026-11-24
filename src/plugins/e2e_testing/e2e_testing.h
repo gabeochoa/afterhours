@@ -32,7 +32,7 @@
 //   2) call perf_commands::register_perf_commands(sm)
 #pragma once
 
-#include "../../core/key_codes.h"
+#include "../key_codes.h"
 #include "command_handlers.h"
 #include "concepts.h"
 
