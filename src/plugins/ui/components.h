@@ -767,6 +767,8 @@ struct HasVirtualListIndex : BaseComponent {
   std::vector<float> heights;
   // double: a float32 prefix sum drifts by hundreds of px at 100k rows
   std::vector<double> prefix; // prefix[i] = height of rows [0, i)
+  float uniform_height = 0.f;
+  size_t row_count = 0;
   // The pending re-measure range [dirty_from, dirty_to). Its empty value is
   // the union identity [kDirtyEmpty, 0), so invalidate is an unconditional
   // min/max with no empty case to branch on.
