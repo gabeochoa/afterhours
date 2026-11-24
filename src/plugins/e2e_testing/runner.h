@@ -314,8 +314,47 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
             cmd.args.push_back(dir);
             cmd.wait_seconds = 2 * frame;
         } else if (detail::contains(detail::single_arg_commands, cmd.name)) {
-            if (!args.empty()) cmd.args.push_back(args.rest());
-            cmd.wait_seconds = 2 * frame;
+            const bool scoped_ui =
+                cmd.name == "click_ui" || cmd.name == "click_text" ||
+                cmd.name == "click_button" || cmd.name == "focus_ui" ||
+                cmd.name == "toggle_checkbox" || cmd.name == "expect_focused" ||
+                cmd.name == "right_click_ui" || cmd.name == "right_click_text";
+            if (scoped_ui && !args.empty()) {
+                std::vector<std::string> tokens;
+                const bool starts_quoted =
+                    args.input.peek() == '"';
+                while (!args.empty()) tokens.push_back(args.next());
+                std::vector<std::string> scopes;
+                while (tokens.size() > 1 &&
+                       (tokens.back().starts_with("under=") ||
+                        tokens.back().starts_with("in="))) {
+                    scopes.push_back(std::move(tokens.back()));
+                    tokens.pop_back();
+                }
+                if (starts_quoted) {
+                    for (auto &t : tokens) cmd.args.push_back(std::move(t));
+                } else if (!tokens.empty()) {
+                    std::string joined = tokens[0];
+                    for (size_t i = 1; i < tokens.size(); ++i)
+                        joined += " " + tokens[i];
+                    cmd.args.push_back(std::move(joined));
+                }
+                for (auto it = scopes.rbegin(); it != scopes.rend(); ++it)
+                    cmd.args.push_back(std::move(*it));
+            } else if (!args.empty()) {
+                cmd.args.push_back(args.rest());
+            }
+            if (cmd.name == "click_ui" || cmd.name == "click_text" ||
+                cmd.name == "click_button" || cmd.name == "right_click_ui" ||
+                cmd.name == "right_click_text" ||
+                cmd.name == "toggle_checkbox") {
+                // simulate_click holds for press_frames=1 and auto-releases on
+                // the following frame, so settle needs 1 tick after consumption
+                // regardless of --time-scale.
+                cmd.wait_ticks = 1;
+            } else {
+                cmd.wait_seconds = 2 * frame;
+            }
         } else if (detail::contains(detail::two_arg_commands, cmd.name) ||
                    detail::contains(detail::three_arg_commands, cmd.name)) {
             const size_t count = detail::contains(detail::two_arg_commands, cmd.name) ? 2 : 3;
@@ -462,14 +501,21 @@ class E2ERunner {
 
         // Handle wait between commands - don't count explicit wait time
         // against the per-script timeout so that `wait 5` doesn't eat into
-        // the timeout budget.
-        if (wait_ticks_ > 0) {
-            wait_ticks_--;
-            return;
-        }
-        if (wait_time_ > 0) {
-            wait_time_ -= dt;
-            return;
+        // the timeout budget. Don't burn the post-command settle wait while
+        // the command itself is still pending (e.g. waiting on a render
+        // checkpoint).
+        if (wait_ticks_ > 0 || wait_time_ > 0) {
+            EntityHelper::get_default_collection().merge_entity_arrays();
+            if (!has_pending_commands()) {
+                if (wait_ticks_ > 0) {
+                    wait_ticks_--;
+                    return;
+                }
+                if (wait_time_ > 0) {
+                    wait_time_ -= dt;
+                    return;
+                }
+            }
         }
 
         fail_unread_presses();

@@ -129,6 +129,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   state.copy_disabled = config.text_copy_disabled;
   state.cut_disabled = config.text_cut_disabled;
   state.paste_disabled = config.text_paste_disabled;
+  state.escape_blurs = config.text_escape_blurs;
 
   // Disabled: skip focus entirely, render with reduced opacity
   if (state.disabled) {

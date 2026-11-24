@@ -138,7 +138,7 @@ struct toast : developer::Plugin {
             const std::string label =
                 icon.empty() ? msg : icon + " " + msg;
 
-            for (Entity &entity : EntityQuery()
+            for (Entity &entity : EntityQuery({.force_merge = true})
                                       .whereHasComponent<Toast>()
                                       .gen()) {
                 Toast &existing = entity.get<Toast>();

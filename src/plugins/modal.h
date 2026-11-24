@@ -265,7 +265,8 @@ struct modal : developer::Plugin {
                 if (e.get_or_default(&ui::HasDropdownState::was_open_last_frame,
                                      false))
                     return true;
-                if (e.template has<text_input::HasTextInputState>())
+                if (e.get_or_default(&text_input::HasTextInputState::escape_blurs,
+                                     false))
                     return true;
                 if (!e.template has<ui::UIComponent>()) return false;
                 cur = e.template get<ui::UIComponent>().parent;
@@ -816,6 +817,7 @@ struct modal : developer::Plugin {
                         .with_background(Theme::Usage::Background)
                         .with_rounded_corners(RoundedCorners().all_round())
                         .with_corner_radius(ctx.theme.corner_radius.value_or(8.f))
+                        .with_escape_blurs(false)
                         .with_render_layer(content_layer));
 
                 auto row =
