@@ -193,6 +193,11 @@ struct EntityQuery {
     TReturn &whereLambda(const std::function<bool(const Entity &)> &fn) {
         return add_mod(new WhereLambda(fn));
     }
+    TReturn &whereLambdaIf(const bool cond,
+                           const std::function<bool(const Entity &)> &fn) {
+        if (cond) return whereLambda(fn);
+        return static_cast<TReturn &>(*this);
+    }
 
     struct WhereHasTag : Modification {
         TagId id;
@@ -310,6 +315,11 @@ struct EntityQuery {
 
     TReturn &whereLambda(const std::function<bool(const Entity &)> &fn) {
         return add_filter(fn);
+    }
+    TReturn &whereLambdaIf(const bool cond,
+                           const std::function<bool(const Entity &)> &fn) {
+        if (cond) return whereLambda(fn);
+        return static_cast<TReturn &>(*this);
     }
 
     TReturn &whereHasTag(const TagId id) {

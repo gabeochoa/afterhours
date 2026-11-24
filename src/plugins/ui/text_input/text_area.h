@@ -6,10 +6,14 @@
 #include "../entity_management.h"
 #include "../rendering.h"
 #include "../rounded_corners.h"
+#include "../text_measure.h"
 #include "text_area_state.h"
 #include "utils.h"
 #include <algorithm>
+#include <bit>
 #include <cmath>
+#include <format>
+#include <functional>
 
 namespace afterhours {
 namespace text_input {
@@ -200,6 +204,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
           // Lines past the bottom of a fixed-height field must not paint
           // over whatever sits below it.
           .with_overflow(Overflow::Hidden)
+          .with_select_on_focus(false)
           .with_render_layer(config.render_layer + 1);
   // A caller's background (with_custom_background / with_transparent_bg)
   // replaces the default fill, as it does on text_input; the hardcoded
@@ -267,17 +272,20 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
   auto line_width = [&](std::string_view s) -> float {
     if (!font_manager)
       return static_cast<float>(s.size()) * resolved_font_size * 0.5f;
-    return measure_text(font_manager->get_font(font_name),
-                        std::string(s).c_str(), resolved_font_size, 1.f)
+    return measure_text_line(std::string(s), font_name, resolved_font_size,
+                             1.f)
         .x;
   };
+  const uint64_t measure_key = TextMeasureCache::compute_hash(
+      std::format("{}", measure_memo::generation()), font_name,
+      resolved_font_size, 1.f);
   // The 6px horizontal padding each side is already out of viewport_width.
   const float wrap_width = (config.text_area_word_wrap &&
                             !config.text_area_single_line)
                                ? viewport_width
                                : 0.f;
   state.layout_cache.rebuild(display_text, wrap_width, line_height,
-                             line_width);
+                             line_width, measure_key);
   const auto &vlines = state.layout_cache.lines();
 
   // Rows are VISUAL from here down: with wrapping on, one source line can
@@ -375,7 +383,8 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
                            : config.font_name,
                        config.font_size)
             .with_custom_text_color(placeholder_row
-                                        ? ctx.theme.font_muted
+                                        ? config.placeholder_color.value_or(
+                                              ctx.theme.font_muted)
                                         : config.custom_text_color.value_or(
                                               ctx.theme.font))
             .with_alignment(TextAlignment::Left)
@@ -422,7 +431,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Render cursor when focused
   if (state.is_focused) {
-    bool show_cursor = update_blink(state, 0.016f);
+    bool show_cursor = update_blink(state, ctx.dt > 0.f ? ctx.dt : (1.f / 60.f));
 
     // Use computed padding for positioning
     float pad_left = field_cmp.computed_padd[Axis::left];
@@ -614,9 +623,15 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       const bool wants_newline = !config.text_area_single_line &&
                                  (!config.text_area_submit_on_enter || shift);
       if (wants_newline) {
-        if (editable && insert_newline(state)) {
-          reset_blink(state);
-          text_changed = true;
+        if (editable) {
+          state.push_undo_snapshot();
+          if (state.has_selection())
+            delete_selection(state);
+          if (insert_newline(state)) {
+            state.clear_selection();
+            reset_blink(state);
+            text_changed = true;
+          }
         }
       } else {
         submit_state.submitted = true;
@@ -754,7 +769,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
     // Ensure cursor stays visible after any input
     if (text_changed) {
       state.layout_cache.rebuild(state.text(), wrap_width, line_height,
-                                 line_width);
+                                 line_width, measure_key);
       state.ensure_cursor_visible_at_row(
           state.layout_cache.line_at_offset(state.cursor_position),
           viewport_height, state.layout_cache.line_count());
