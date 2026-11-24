@@ -13,14 +13,27 @@ namespace afterhours {
 
 using Font = FontType;
 
-inline Font load_font_from_file(const char *, int = 0) { return Font(); }
+inline float font_display_scale() { return 1.f; }
+
+inline int display_scaled_size(int nominal) { return nominal; }
+
+inline Font load_font_at_display_size(const char *, int = 32) { return Font(); }
+
+inline Font load_font_from_file(const char *, int = 0) {
+  warn_once(0, "@notimplemented load_font_from_file on the none backend; "
+               "returning an empty font");
+  return Font();
+}
+
 inline Font load_font_from_file_with_codepoints(const char *, int *, int,
-                                                int = 32) {
+                                                int = 0) {
   log_warn("Codepoint-based font loading not supported without a backend");
   return Font();
 }
 inline Font load_font_from_memory(const unsigned char *, int, const char *,
                                   int = 0) {
+  warn_once(0, "@notimplemented load_font_from_memory on the none backend; "
+               "returning an empty font");
   return Font();
 }
 
@@ -35,6 +48,8 @@ inline void unload_font(Font &font) { font = Font(); }
 
 inline Font load_font_for_string(const std::string &, const std::string &,
                                  int = 96) {
+  warn_once(0, "@notimplemented load_font_for_string on the none backend; "
+               "returning an empty font");
   return Font();
 }
 // Text measurement seam.

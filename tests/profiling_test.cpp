@@ -10,7 +10,7 @@ using namespace afterhours;
 TEST(collector_coexists_with_hook_and_separates_phases) {
     profiling::Collector collector({3, 4, 1});
     int begins = 0, ends = 0;
-    SystemManager::set_profile_hook({[&](auto, auto) { ++begins; }, [&](auto, auto) { ++ends; }});
+    SystemManager::set_profile_hook({[&](auto, auto) { ++begins; }, [&](auto, auto, auto) { ++ends; }});
     SystemManager manager;
     manager.register_update_system([](float) { std::this_thread::sleep_for(std::chrono::milliseconds(2)); });
     manager.register_render_system([](float) {});
@@ -50,7 +50,7 @@ TEST(frame_averages_include_idle_frames_and_expire_old_work) {
     const auto record = [&](std::string_view name, double ms) {
         for (const auto &observer : profiling::detail::observers) {
             if (observer.context != &collector) continue;
-            observer.callback(observer.context, name, SystemPhase::Update, ms);
+            observer.callback(observer.context, name, SystemPhase::Update, ms, 0);
         }
     };
     record("work", 2);
@@ -212,7 +212,7 @@ TEST(selected_frames_use_matching_system_history_after_ring_wrap) {
     for (int i = 1; i <= 5; ++i) {
         for (const auto &observer : profiling::detail::observers)
             if (observer.context == &collector)
-                observer.callback(observer.context, "work", SystemPhase::Update, i * 2.);
+                observer.callback(observer.context, "work", SystemPhase::Update, i * 2., 0);
         collector.end_frame(i * 10.);
     }
     CHECK(collector.snapshot().systems[0].frame_history.empty());
@@ -306,6 +306,38 @@ TEST(selected_system_rows_can_sort_by_peak_instead_of_average) {
     CHECK(state.sort_by_overall);
     CHECK(state.selection_snapshot.systems.front().name == "spike");
     CHECK(control.get<ui::HasLabel>().label == "Sort: peak");
+}
+
+TEST(nested_scoped_zones_record_parent_and_child_durations) {
+    profiling::Collector collector;
+    CHECK(collector.start());
+    {
+        AFTERHOURS_PROFILE_ZONE("outer");
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        { AFTERHOURS_PROFILE_ZONE("inner"); std::this_thread::sleep_for(std::chrono::milliseconds(1)); }
+        { profiling::ScopedZone direct("direct"); std::this_thread::sleep_for(std::chrono::milliseconds(1)); }
+        { profiling::ScopedZone render("render-zone", SystemPhase::Render); }
+    }
+    collector.end_frame(16);
+    const auto snapshot = collector.snapshot();
+    const auto find = [&](const char *name) -> const profiling::SystemSample * {
+        for (const auto &s : snapshot.systems) if (s.name == name) return &s;
+        return nullptr;
+    };
+    const auto *outer = find("outer");
+    const auto *inner = find("inner");
+    const auto *direct = find("direct");
+    CHECK(outer && inner && direct);
+    if (!outer || !inner || !direct) return;
+    CHECK(outer->calls == 1 && inner->calls == 1 && direct->calls == 1);
+    CHECK(outer->last_frame_ms > 0 && inner->last_frame_ms > 0);
+    CHECK(inner->last_frame_ms <= outer->last_frame_ms);
+    CHECK(direct->last_frame_ms <= outer->last_frame_ms);
+    const auto *render = find("render-zone");
+    CHECK(render && render->phase == SystemPhase::Render);
+    CHECK(outer->phase == SystemPhase::Update);
+    collector.stop();
+    { AFTERHOURS_PROFILE_ZONE("unrecorded"); }
 }
 
 int main() { return ui_test::run_registered_tests("profiling collector"); }

@@ -134,6 +134,10 @@ inline void simulate_right_click(float x, float y) {
   m.auto_release = true;
 }
 
+inline void set_right_button_down(bool down) {
+  input_injector::set_right_button_down(down);
+}
+
 // Middle click. Same one-frame hold and auto-release as the other two.
 inline void simulate_middle_click(float x, float y) {
   set_mouse_position(x, y);
@@ -157,6 +161,13 @@ inline void reset_frame() {
   const bool press_seen = m.press_read;
   const bool middle_press_seen = m.middle_press_read;
   const bool right_press_seen = m.right_press_read;
+  if (m.just_pressed && !press_seen && !(pf > 0 && m.left_down))
+    input_injector::detail::note_unread_press("left mouse button");
+  if (m.right_just_pressed && !right_press_seen && !(pf > 0 && m.right_down))
+    input_injector::detail::note_unread_press("right mouse button");
+  if (m.middle_just_pressed && !middle_press_seen &&
+      !(pf > 0 && m.middle_down))
+    input_injector::detail::note_unread_press("middle mouse button");
   m.press_read = false;
   m.middle_press_read = false;
   m.right_press_read = false;
@@ -266,6 +277,43 @@ inline bool is_key_released(int key, BackendFn backend_fn) {
   return backend_fn(key);
 }
 
+template <typename BackendFn>
+inline bool is_gamepad_available(int id, BackendFn backend_fn) {
+  if (input_injector::is_gamepad_available(id))
+    return true;
+  if (detail::test_mode)
+    return false;
+  return backend_fn(id);
+}
+
+template <typename BackendFn>
+inline bool is_gamepad_button_pressed(int id, int button,
+                                      BackendFn backend_fn) {
+  if (input_injector::is_gamepad_available(id))
+    return input_injector::consume_gamepad_press(id, button);
+  if (detail::test_mode)
+    return false;
+  return backend_fn(id, button);
+}
+
+template <typename BackendFn>
+inline bool is_gamepad_button_down(int id, int button, BackendFn backend_fn) {
+  if (input_injector::is_gamepad_available(id))
+    return input_injector::is_gamepad_button_down(id, button);
+  if (detail::test_mode)
+    return false;
+  return backend_fn(id, button);
+}
+
+template <typename BackendFn>
+inline float get_gamepad_axis(int id, int axis, BackendFn backend_fn) {
+  if (input_injector::is_gamepad_available(id))
+    return input_injector::get_gamepad_axis(id, axis);
+  if (detail::test_mode)
+    return 0.f;
+  return backend_fn(id, axis);
+}
+
 // Get next character (wraps backend call)
 // Note: The queue approach naturally prevents re-reading (chars are popped)
 // so we don't use char_consumed flag here - that's for non-queue scenarios
@@ -288,6 +336,15 @@ inline int get_char_pressed(BackendFn backend_fn) {
     return 0;
   }
 
+  return backend_fn();
+}
+
+// Test mode: injector FIFO only, never the hardware queue.
+template <typename BackendFn> inline int get_key_pressed(BackendFn backend_fn) {
+  if (int key = input_injector::pop_key_pressed())
+    return key;
+  if (detail::test_mode)
+    return 0;
   return backend_fn();
 }
 

@@ -18,6 +18,7 @@
 #endif
 #include "../logging.h"
 #include "../warn_once.h"
+#include "../window_helpers.h"
 
 // Forward declarations: sapp_* from sokol_app.h, and the Cocoa resize
 // helper defined in the app's .mm translation unit (Metal only).
@@ -217,13 +218,14 @@ struct window_manager : developer::Plugin {
   static Resolution fetch_maximum_resolution() {
     return Resolution{.width = 1280, .height = 720};
   }
-  static Resolution fetch_current_resolution() {
-    return Resolution{.width = 1280, .height = 720};
+  static Resolution fetch_current_resolution() { return headless_resolution; }
+  static Resolution fetch_raw_window_size() { return headless_resolution; }
+  static void set_window_size(const int width, const int height) {
+    if (width > 0 && height > 0)
+      headless_resolution = Resolution{width, height};
+    warn_once(0, "@notimplemented window_manager::set_window_size on this "
+                 "backend");
   }
-  static Resolution fetch_raw_window_size() {
-    return Resolution{.width = 1280, .height = 720};
-  }
-  static void set_window_size(const int, const int) {}
 #endif
 
   static std::vector<Resolution> fetch_available_resolutions() {
@@ -272,21 +274,21 @@ struct window_manager : developer::Plugin {
     if (pcr == nullptr || window_w <= 0 || window_h <= 0)
       return vp;
 
-    const float content_w = static_cast<float>(pcr->current_resolution.width);
-    const float content_h = static_cast<float>(pcr->current_resolution.height);
+    const Resolution effective = pcr->should_refetch
+                                     ? fetch_current_resolution()
+                                     : pcr->current_resolution;
+    const float content_w = static_cast<float>(effective.width);
+    const float content_h = static_cast<float>(effective.height);
     if (content_w <= 0.f || content_h <= 0.f)
       return vp;
 
-    int dest_w = window_w;
-    int dest_h = static_cast<int>(
-        std::round((double)dest_w * content_h / content_w));
-    if (dest_h > window_h) {
-      dest_h = window_h;
-      dest_w = static_cast<int>(
-          std::round((double)dest_h * content_w / content_h));
-    }
-    vp.dest = RectangleType{static_cast<float>((window_w - dest_w) / 2),
-                            static_cast<float>((window_h - dest_h) / 2),
+    const auto [dest_w, dest_h] = graphics::letterbox_content_size(
+        static_cast<int>(content_w), static_cast<int>(content_h), window_w,
+        window_h);
+    const auto [dest_x, dest_y] = graphics::window_centre_position(
+        0, 0, window_w, window_h, dest_w, dest_h);
+    vp.dest = RectangleType{static_cast<float>(dest_x),
+                            static_cast<float>(dest_y),
                             static_cast<float>(dest_w),
                             static_cast<float>(dest_h)};
     vp.scale = dest_w > 0 ? content_w / static_cast<float>(dest_w) : 1.f;
@@ -314,6 +316,22 @@ struct window_manager : developer::Plugin {
                        vp.dest.y + p.y / vp.scale};
   }
 
+  struct PresentedFrame {
+    int window_w = 0;
+    int window_h = 0;
+    Viewport viewport{};
+  };
+
+  static PresentedFrame presented_frame(int window_w, int window_h) {
+    return PresentedFrame{window_w, window_h,
+                          content_viewport(window_w, window_h)};
+  }
+
+  static Vector2Type present_logical(Vector2Type p, int window_w,
+                                     int window_h) {
+    return content_to_window(p, window_w, window_h);
+  }
+
   struct ProvidesCurrentResolution : public BaseComponent {
     bool should_refetch = true;
     Resolution current_resolution;
@@ -328,10 +346,8 @@ struct window_manager : developer::Plugin {
   struct CollectCurrentResolution : System<ProvidesCurrentResolution> {
     virtual void for_each_with(Entity &, ProvidesCurrentResolution &pCR,
                                const float) override {
-      const Resolution latest = fetch_current_resolution();
-      if (pCR.should_refetch || !(latest == pCR.current_resolution)) {
-        pCR.current_resolution = latest;
-        pCR.should_refetch = false;
+      if (pCR.should_refetch) {
+        pCR.current_resolution = fetch_current_resolution();
       }
     }
   };

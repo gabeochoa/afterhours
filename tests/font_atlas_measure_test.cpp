@@ -5,6 +5,7 @@
 #include <fmt/format.h>
 #include <cmath>
 #include <chrono>
+#include <array>
 #include <vector>
 #include <cstdio>
 #include <cstdlib>
@@ -58,7 +59,7 @@ static void parity() {
           CHECK(ctx->fonts[0]->nglyphs == count);
           const float expected = fonsTextBounds(ctx, 0, 0, text.c_str(), nullptr, nullptr);
           CHECK(actual == expected);
-          CHECK(afterhours::measure_text(afterhours::Font{0}, text.c_str(), size, 1).x == expected / dpi);
+          CHECK(afterhours::measure_text(afterhours::Font{0}, text.c_str(), size, 1.f + spacing / dpi).x == expected / dpi);
         }
       }
     }
@@ -253,9 +254,80 @@ static void atlas_expands_automatically() {
   fonsDeleteInternal(big);
 }
 
+static std::vector<std::array<float, 8>> draw_quads(FONScontext *ctx,
+                                                    const char *text) {
+  std::vector<std::array<float, 8>> out;
+  FONStextIter iter;
+  FONSquad quad{};
+  CHECK(fonsTextIterInit(ctx, &iter, 0, 0, text, nullptr));
+  while (fonsTextIterNext(ctx, &iter, &quad))
+    out.push_back({quad.x0, quad.y0, quad.x1, quad.y1, quad.s0, quad.t0,
+                   quad.s1, quad.t1});
+  return out;
+}
+
+static void atlas_shrinks() {
+  namespace md = afterhours::graphics::metal_detail;
+  const char *text = "AVATAR wide words 0123456789";
+  auto *ctx = context(4096);
+  md::g_fons_ctx = ctx;
+  md::g_active_font = 0;
+  test_dpi = 1;
+  fonsSetFont(ctx, 0);
+  fonsSetSize(ctx, 32);
+  afterhours::measure_memo::clear();
+  const auto measured_before = afterhours::measure_text(afterhours::Font{0}, text, 32, 1);
+  const auto quads_before = draw_quads(ctx, text);
+  CHECK(measured_before.x > 100);
+  CHECK(!quads_before.empty());
+  CHECK(afterhours::font_atlas_bytes(ctx) == 4096u * 4096u);
+  CHECK(afterhours::font_atlas_bytes() == 4096u * 4096u);
+  CHECK(ctx->fonts[0]->nglyphs > 0);
+
+  CHECK(afterhours::shrink_font_atlas());
+  CHECK(afterhours::font_atlas_bytes(ctx) == 2048u * 2048u);
+  CHECK(ctx->fonts[0]->nglyphs == 0);
+  CHECK(!afterhours::shrink_font_atlas(ctx));
+
+  afterhours::measure_memo::clear();
+  CHECK(afterhours::measure_text(afterhours::Font{0}, text, 32, 1) ==
+        measured_before);
+  fonsSetFont(ctx, 0);
+  fonsSetSize(ctx, 32);
+  const auto quads_after = draw_quads(ctx, text);
+  CHECK(ctx->fonts[0]->nglyphs > 0);
+  CHECK(quads_after.size() == quads_before.size());
+  if (quads_after.size() == quads_before.size()) {
+    for (size_t i = 0; i < quads_after.size(); ++i) {
+      CHECK(quads_after[i][0] == quads_before[i][0]);
+      CHECK(quads_after[i][1] == quads_before[i][1]);
+      CHECK(quads_after[i][2] == quads_before[i][2]);
+      CHECK(quads_after[i][3] == quads_before[i][3]);
+      // UVs may move in the rebuilt atlas; geometry must not.
+    }
+  }
+  fonsDeleteInternal(ctx);
+  md::g_fons_ctx = nullptr;
+  afterhours::measure_memo::clear();
+
+  auto *small = context(64);
+  fonsSetFont(small, 0);
+  fonsSetSize(small, 32);
+  fonsDrawText(small, 0, 0, "A", nullptr);
+  const int glyphs = small->fonts[0]->nglyphs;
+  CHECK(glyphs > 0);
+  CHECK(!afterhours::shrink_font_atlas(small));
+  CHECK(afterhours::font_atlas_bytes(small) == 64u * 64u);
+  CHECK(small->fonts[0]->nglyphs == glyphs);
+  CHECK(!afterhours::shrink_font_atlas(nullptr));
+  CHECK(afterhours::font_atlas_bytes(nullptr) == 0);
+  fonsDeleteInternal(small);
+}
+
 int main(int argc, char **argv) {
   if (argc == 2 && std::strcmp(argv[1], "--benchmark") == 0) return benchmark();
   cell_advance();
+  atlas_shrinks();
   coverage();
   fallback_mesh();
   atlas_expands_automatically();

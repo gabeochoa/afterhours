@@ -1,18 +1,13 @@
 #include "ui_test_harness.h"
-
 #include <afterhours/src/plugins/e2e_testing/runner.h>
 #include <afterhours/src/plugins/ui/text_input/state.h>
 #include <afterhours/src/plugins/ui/text_input/text_area_state.h>
-
 #include <string>
 #include <vector>
-
 using namespace afterhours;
 using namespace afterhours::testing;
 namespace inj = afterhours::testing::input_injector;
-
 using ui_test::ImmTestHarness;
-
 static PendingE2ECommand pending_for(std::string name,
                                      std::vector<std::string> args) {
   PendingE2ECommand pending;
@@ -20,11 +15,6 @@ static PendingE2ECommand pending_for(std::string name,
   pending.args = std::move(args);
   return pending;
 }
-
-// Two panels, each holding a row named "row" labelled "Same" with a
-// different width, so scope picks the element and the click point proves it.
-// Left row: (0,0)-(100,40), centre (50,20). Right row: (0,120)-(220,160),
-// centre (110,140).
 static void build_two_panels(ImmTestHarness &h) {
   h.begin_frame();
   auto left = ui::imm::div(h.context(), ui::imm::mk(h.root(), 0),
@@ -48,7 +38,6 @@ static void build_two_panels(ImmTestHarness &h) {
                    .with_debug_name("row"));
   h.layout_only();
 }
-
 TEST(click_ui_unscoped_single_match_unchanged) {
   ImmTestHarness h;
   h.begin_frame();
@@ -66,7 +55,6 @@ TEST(click_ui_unscoped_single_match_unchanged) {
   CHECK_APPROX(inj::detail::mouse.pos.y, 70.f);
   test_input::reset_all();
 }
-
 TEST(click_ui_ambiguous_fails_loudly_with_candidates) {
   ImmTestHarness h;
   build_two_panels(h);
@@ -80,11 +68,9 @@ TEST(click_ui_ambiguous_fails_loudly_with_candidates) {
   CHECK(cmd.error_message.find("candidates") != std::string::npos);
   CHECK(cmd.error_message.find("left_panel") != std::string::npos);
   CHECK(cmd.error_message.find("right_panel") != std::string::npos);
-  // Nothing was clicked.
   CHECK(!inj::detail::mouse.left_down);
   test_input::reset_all();
 }
-
 TEST(click_ui_under_scope_picks_the_in_scope_row) {
   ImmTestHarness h;
   build_two_panels(h);
@@ -102,7 +88,6 @@ TEST(click_ui_under_scope_picks_the_in_scope_row) {
   CHECK_APPROX(inj::detail::mouse.pos.y, 140.f);
   test_input::reset_all();
 }
-
 TEST(click_ui_in_alias_still_works) {
   ImmTestHarness h;
   build_two_panels(h);
@@ -114,7 +99,6 @@ TEST(click_ui_in_alias_still_works) {
   CHECK_APPROX(inj::detail::mouse.pos.y, 140.f);
   test_input::reset_all();
 }
-
 TEST(click_ui_unknown_scope_fails_like_missing_target) {
   ImmTestHarness h;
   build_two_panels(h);
@@ -125,7 +109,6 @@ TEST(click_ui_unknown_scope_fails_like_missing_target) {
   CHECK(cmd.error_message.find("scope 'no_such_panel' not found") != std::string::npos);
   test_input::reset_all();
 }
-
 TEST(ambiguous_scope_name_fails) {
   ImmTestHarness h;
   h.begin_frame();
@@ -141,8 +124,6 @@ TEST(ambiguous_scope_name_fails) {
   h.layout_only();
   auto cmd = pending_for("click_ui", {"pool"});
   ui_commands::HandleClickUICommand<ui_test::TestInputAction>{}.for_each_with(h.root(), cmd, 0.f);
-  // Even the scope lookup itself is first-match today; targeting 'pool'
-  // directly must fail rather than pick one.
   CHECK(cmd.is_consumed() && !cmd.succeeded());
   CHECK(cmd.error_message.find("2 elements match") != std::string::npos);
   auto scoped = pending_for("assert_ui", {"pool", "w=300", "under=pool"});
@@ -150,7 +131,6 @@ TEST(ambiguous_scope_name_fails) {
   CHECK(scoped.is_consumed() && !scoped.succeeded());
   CHECK(scoped.error_message.find("scope 'pool' matches 2 elements") != std::string::npos);
 }
-
 TEST(click_text_scoped_and_ambiguous) {
   ImmTestHarness h;
   build_two_panels(h);
@@ -188,7 +168,6 @@ TEST(assert_ui_with_under_scope) {
 TEST(expect_point_in_with_under_scope) {
   ImmTestHarness h;
   build_two_panels(h);
-  // (50,20) is inside the LEFT row; only visible in that scope.
   auto good = pending_for("expect_point_in", {"row", "50", "20", "under=left_panel"});
   ui_commands::HandleExpectPointInCommand{}.for_each_with(h.root(), good, 0.f);
   CHECK(good.is_consumed() && good.succeeded());
@@ -200,7 +179,6 @@ TEST(expect_point_in_with_under_scope) {
   CHECK(amb.is_consumed() && !amb.succeeded());
   CHECK(amb.error_message.find("2 elements match") != std::string::npos);
 }
-
 TEST(mouse_move_ui_with_under_scope) {
   ImmTestHarness h;
   build_two_panels(h);
@@ -217,7 +195,6 @@ TEST(mouse_move_ui_with_under_scope) {
   CHECK(amb.error_message.find("2 elements match") != std::string::npos);
   test_input::reset_all();
 }
-
 TEST(double_click_ui_ambiguous_fails) {
   ImmTestHarness h;
   build_two_panels(h);
@@ -321,5 +298,4 @@ TEST(single_match_unchanged_across_assertions) {
   ui_commands::HandleAssertUICommand{}.for_each_with(h.root(), notfound, 0.f);
   CHECK(notfound.is_retry());
 }
-
 int main() { return ui_test::run_registered_tests("E2E name lookup"); }

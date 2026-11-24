@@ -75,9 +75,9 @@ int main(int argc, char **argv) {
     std::fprintf(stderr, "FAIL: Metal headless initialization failed\n");
     return 1;
   }
-  const auto initial = g::get_render_texture();
   g::begin_frame();
   paint();
+  const auto initial = g::get_render_texture();
   g::set_window_size(120, 90);
   check(g::get_render_texture().color_img_id == initial.color_img_id,
         "request inside active pass preserves target");
@@ -152,6 +152,27 @@ int main(int argc, char **argv) {
           "repeated resizes reuse drawing context");
     check_capture(width, height, scale);
   }
+  check(!g::window_resize_pending(), "no resize pending at rest");
+  const int applied_w = g::get_screen_width();
+  const int applied_h = g::get_screen_height();
+  g::set_window_size(140, 105);
+  check(g::window_resize_pending(), "queued resize reads as pending");
+  check(g::get_screen_width() == applied_w &&
+            g::get_screen_height() == applied_h,
+        "pending resize has not changed the applied size yet");
+  g::begin_frame();
+  check(!g::window_resize_pending(), "applying frame clears pending");
+  paint();
+  g::end_frame();
+  check_capture(140, 105, scale);
+
+  g::set_window_min_size(150, 110);
+  g::set_window_size(100, 100);
+  g::begin_frame();
+  paint();
+  g::end_frame();
+  check_capture(150, 110, scale);
+
   g::set_window_size(100, 100);
   g::shutdown();
   check(!g::metal_detail::g_pending_headless_size.has_value(), "shutdown clears pending resize");

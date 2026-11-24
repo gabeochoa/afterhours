@@ -127,6 +127,7 @@ struct MotionTarget {
   bool set = false;
   float value = 0.f;
   std::optional<float> reset_to;
+  std::optional<float> pulse_rest;
   motion::Mode mode = motion::Spring::smooth();
   float delay = 0.f;
 };
@@ -137,6 +138,7 @@ struct MotionColorTarget {
   ColorType value{};
   std::optional<ColorType> rest;
   std::optional<ColorType> reset_to;
+  std::optional<ColorType> pulse_rest;
   motion::Mode mode = motion::Spring::smooth();
   float delay = 0.f;
 };
@@ -245,8 +247,17 @@ inline MotionTargets resolve_motion(const std::vector<MotionRule> &rules,
     std::optional<size_t> &seen = st.stamps[idx];
     const bool fired = seen.has_value() && *seen != r.stamp;
     seen = r.stamp;
-    if (fired)
+    if (fired) {
       assign(r, [](const MotionProp &p, size_t) { return p.to; }, false, true);
+      for (size_t i = 0; i < kMotionProperties; ++i) {
+        const MotionProp &p = motion_prop(r.props, i);
+        if (p.set && !p.has_from)
+          out[i].pulse_rest = st.rest[i];
+      }
+      if (r.props.background.set && !r.props.background.has_from &&
+          st.background_rest.has_value())
+        out.background.pulse_rest = st.background_rest;
+    }
   }
 
   for (size_t i = 0; i < kMotionProperties; ++i) {
@@ -300,11 +311,19 @@ inline MotionValues apply_motion(Ctx &ctx, Entity &entity,
     const MotionColorTarget &t = targets.background;
     auto &tr = tracks.track<ColorType>(0);
     const ColorType goal = t.set ? t.value : t.rest.value_or(rests.background);
-    if (t.reset_to.has_value())
+    if (t.reset_to.has_value() && !tr.active())
       tr.from(*t.reset_to);
     else if (!tr.started())
       tr.from(rests.background);
-    if (!colors_match(tr.target(), goal)) {
+    if (t.pulse_rest.has_value() && t.set) {
+      if (!tr.active() || (!colors_match(tr.target(), goal) &&
+                           !colors_match(tr.target(), *t.pulse_rest))) {
+        tr.to(goal, t.mode);
+        tr.then(*t.pulse_rest, t.mode);
+        if (t.delay > 0.f)
+          tr.delay(t.delay);
+      }
+    } else if (!colors_match(tr.target(), goal)) {
       tr.to(goal, t.mode);
       if (t.delay > 0.f)
         tr.delay(t.delay);
@@ -317,11 +336,18 @@ inline MotionValues apply_motion(Ctx &ctx, Entity &entity,
     if (!t.set)
       continue;
     auto &tr = tracks.track<float>(i);
-    if (t.reset_to.has_value())
+    if (t.reset_to.has_value() && !tr.active())
       tr.from(*t.reset_to);
     else if (!tr.started())
       tr.from(st.rest[i]);
-    if (tr.target() != t.value) {
+    if (t.pulse_rest.has_value()) {
+      if (!tr.active() || (tr.target() != t.value && tr.target() != *t.pulse_rest)) {
+        tr.to(t.value, t.mode);
+        tr.then(*t.pulse_rest, t.mode);
+        if (t.delay > 0.f)
+          tr.delay(t.delay);
+      }
+    } else if (tr.target() != t.value) {
       tr.to(t.value, t.mode);
       if (t.delay > 0.f)
         tr.delay(t.delay);
@@ -389,6 +415,8 @@ inline std::vector<MotionRule> motion_rules(const ui::imm::ComponentConfig &conf
   std::vector<MotionRule> rules;
   for (const MotionExt *ext : ui::imm::extensions_all<MotionExt>(config))
     rules.push_back(ext->rule);
+  for (const MotionRule *ext : ui::imm::extensions_all<MotionRule>(config))
+    rules.push_back(*ext);
   return rules;
 }
 
@@ -422,9 +450,9 @@ inline void apply_motion_hook(Ctx &ctx, Entity &entity,
     hc.skip_hover_override = true;
   }
   if (mv.blur.has_value())
-    entity.addComponentIfMissing<ui::HasBlur>().radius = *mv.blur;
+    entity.toggleComponent<ui::HasBlur>(true)->radius = *mv.blur;
   else if (config.blur == 0.f)
-    entity.removeComponentIfExists<ui::HasBlur>();
+    entity.toggleComponent<ui::HasBlur>(false);
 }
 
 template <typename Ctx> inline void register_bridge() {

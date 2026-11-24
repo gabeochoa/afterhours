@@ -16,6 +16,7 @@
 #include "../../capture.h"
 #include "../../render_capture.h"
 #include "../../graphics.h"
+#include "../../render_counters.h"
 #include "../../plugins/color.h"
 #include "../../plugins/texture_manager.h"
 #include "font_helper.h"
@@ -34,8 +35,11 @@ inline void draw_circle_v(Vector2Type center, float radius, Color color);
 
 inline void draw_text_ex(const afterhours::Font font, const char *content,
                          const Vector2Type position, const float font_size,
-                         const float, const Color color, const float = 0.0f,
+                         const float spacing, const Color color,
+                         const float = 0.0f,
                          const float = 0.0f, const float = 0.0f) {
+  capture::record("text", RectangleType{position.x, position.y, 0.f, font_size},
+                  color, content ? content : "");
   auto *ctx = graphics::metal_detail::g_fons_ctx;
   if (!ctx)
     return;
@@ -43,8 +47,6 @@ inline void draw_text_ex(const afterhours::Font font, const char *content,
                                       : graphics::metal_detail::g_active_font;
   if (fid == FONS_INVALID)
     return;
-  capture::record("text", RectangleType{position.x, position.y, 0.f, font_size},
-                  color, content ? content : "");
   fonsSetFont(ctx, fid);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
   fonsSetColor(ctx, sfons_rgba(color.r, color.g, color.b, color.a));
@@ -56,6 +58,7 @@ inline void draw_text_ex(const afterhours::Font font, const char *content,
   // space that is 1/dpi_scale, so the resulting quads land at the correct
   // logical pixel position.
   float dpi = graphics::metal_detail::dpi_scale();
+  fonsSetSpacing(ctx, (spacing - 1.f) * dpi);
   if (dpi > 1.01f) {
     float inv = 1.0f / dpi;
     fonsSetSize(ctx, font_size * dpi);
@@ -71,11 +74,11 @@ inline void draw_text_ex(const afterhours::Font font, const char *content,
 
 inline void draw_text(const char *content, const float x, const float y,
                       const float font_size, const Color color) {
+  capture::record("text", RectangleType{x, y, 0.f, font_size}, color,
+                  content ? content : "");
   auto *ctx = graphics::metal_detail::g_fons_ctx;
   if (!ctx || graphics::metal_detail::g_active_font == FONS_INVALID)
     return;
-  capture::record("text", RectangleType{x, y, 0.f, font_size}, color,
-                  content ? content : "");
   fonsSetFont(ctx, graphics::metal_detail::g_active_font);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
   fonsSetColor(ctx, sfons_rgba(color.r, color.g, color.b, color.a));
@@ -84,6 +87,7 @@ inline void draw_text(const char *content, const float x, const float y,
                                       content, shown);
 
   float dpi = graphics::metal_detail::dpi_scale();
+  fonsSetSpacing(ctx, 0.f);
   if (dpi > 1.01f) {
     float inv = 1.0f / dpi;
     fonsSetSize(ctx, font_size * dpi);
@@ -108,15 +112,26 @@ inline void draw_rectangle(const RectangleType rect, const Color color) {
   sgl_end();
 }
 
+namespace metal_draw_detail {
+inline void fill_rect(const RectangleType rect, const Color color) {
+  sgl_begin_quads();
+  set_color(color);
+  sgl_v2f(rect.x, rect.y);
+  sgl_v2f(rect.x + rect.width, rect.y);
+  sgl_v2f(rect.x + rect.width, rect.y + rect.height);
+  sgl_v2f(rect.x, rect.y + rect.height);
+  sgl_end();
+}
+}
+
 inline void draw_rectangle_outline(const RectangleType rect, const Color color,
                                    const float thickness) {
-  // Draw 4 thin rects to form an outline
   capture::record("rectangle_outline", rect, color);
   float x = rect.x, y = rect.y, w = rect.width, h = rect.height, t = thickness;
-  draw_rectangle(RectangleType{x, y, w, t}, color);             // top
-  draw_rectangle(RectangleType{x, y + h - t, w, t}, color);     // bottom
-  draw_rectangle(RectangleType{x, y + t, t, h - 2 * t}, color); // left
-  draw_rectangle(RectangleType{x + w - t, y + t, t, h - 2 * t}, color); // right
+  metal_draw_detail::fill_rect(RectangleType{x, y, w, t}, color);
+  metal_draw_detail::fill_rect(RectangleType{x, y + h - t, w, t}, color);
+  metal_draw_detail::fill_rect(RectangleType{x, y + t, t, h - 2 * t}, color);
+  metal_draw_detail::fill_rect(RectangleType{x + w - t, y + t, t, h - 2 * t}, color);
 }
 
 inline void draw_rectangle_outline(const RectangleType rect,
@@ -143,7 +158,7 @@ inline void draw_rectangle_rounded(
     r = h * 0.5f;
 
   const int segs = (segments > 0) ? segments : 8;
-  const float PI_HALF = 3.14159265f * 0.5f;
+  const float PI_HALF = PI * 0.5f;
 
   // Bit layout: 3=TL, 2=TR, 1=BL, 0=BR
   float rTL = corners.test(3) ? r : 0.0f;
@@ -182,7 +197,7 @@ inline void draw_rectangle_rounded(
 
   // Build rounded rect as triangles from center to perimeter
   // Top-left corner arc (center at x+rTL, y+rTL), angles PI to 1.5*PI
-  emit_corner_arc(x + rTL, y + rTL, rTL, 3.14159265f);
+  emit_corner_arc(x + rTL, y + rTL, rTL, PI);
 
   // Top edge: TL arc end -> TR arc start
   sgl_begin_triangles();
@@ -264,7 +279,7 @@ inline void draw_rectangle_rounded_lines(
     r = h * 0.5f;
 
   const int segs = (segments > 0) ? segments : 8;
-  const float PI_HALF = 3.14159265f * 0.5f;
+  const float PI_HALF = PI * 0.5f;
 
   float rTL = corners.test(3) ? r : 0.0f;
   float rTR = corners.test(2) ? r : 0.0f;
@@ -309,7 +324,7 @@ inline void draw_rectangle_rounded_lines(
 
   // Top-left arc
   for (int i = 0; i <= segs; i++) {
-    float a = 3.14159265f +
+    float a = PI +
               PI_HALF * static_cast<float>(i) / static_cast<float>(segs);
     sgl_v2f(x + rTL + rTL * cosf(a), y + rTL + rTL * sinf(a));
   }
@@ -387,8 +402,8 @@ inline void draw_circle_gradient(int centerX, int centerY, float radius,
   sgl_begin_triangles();
   for (int i = 0; i < SEGMENTS; ++i) {
     const float a0 =
-        static_cast<float>(i) * 2.0f * 3.14159265f / static_cast<float>(SEGMENTS);
-    const float a1 = static_cast<float>(i + 1) * 2.0f * 3.14159265f /
+        static_cast<float>(i) * 2.0f * PI / static_cast<float>(SEGMENTS);
+    const float a1 = static_cast<float>(i + 1) * 2.0f * PI /
                      static_cast<float>(SEGMENTS);
     sgl_c4b(inner.r, inner.g, inner.b, inner.a);
     sgl_v2f(cx, cy);
@@ -540,6 +555,7 @@ inline void draw_ring(float centerX, float centerY, float innerRadius,
 // sokol has no rlSetBlendMode, so each mode is its own pipeline. Skipped when
 // already active: a pipeline swap breaks the batch.
 inline void set_blend_mode(blend::Mode mode) {
+  graphics::metal_detail::ensure_sokol_gl_and_fonts();
   if (mode == blend::detail::current_mode())
     return;
   blend::detail::current_mode() = mode;
@@ -709,7 +725,7 @@ inline void draw_circle_filled(float cx, float cy, float radius,
   sgl_begin_triangle_strip();
   metal_draw_detail::set_color(color);
   for (int i = 0; i <= SEGMENTS; i++) {
-    float angle = static_cast<float>(i) * 2.0f * 3.14159265f /
+    float angle = static_cast<float>(i) * 2.0f * PI /
                   static_cast<float>(SEGMENTS);
     sgl_v2f(cx, cy);
     sgl_v2f(cx + radius * cosf(angle), cy + radius * sinf(angle));
@@ -735,7 +751,7 @@ inline void draw_circle_lines(int centerX, int centerY, float radius,
   float cx = static_cast<float>(centerX);
   float cy = static_cast<float>(centerY);
   for (int i = 0; i <= SEGMENTS; i++) {
-    float angle = static_cast<float>(i) * 2.0f * 3.14159265f /
+    float angle = static_cast<float>(i) * 2.0f * PI /
                   static_cast<float>(SEGMENTS);
     sgl_v2f(cx + radius * cosf(angle), cy + radius * sinf(angle));
   }
@@ -841,9 +857,9 @@ inline void draw_ellipse(int centerX, int centerY, float radiusH,
   metal_draw_detail::set_color(color);
   sgl_begin_triangles();
   for (int i = 0; i < SEGMENTS; i++) {
-    const float a0 = static_cast<float>(i) * 2.0f * 3.14159265f /
+    const float a0 = static_cast<float>(i) * 2.0f * PI /
                      static_cast<float>(SEGMENTS);
-    const float a1 = static_cast<float>(i + 1) * 2.0f * 3.14159265f /
+    const float a1 = static_cast<float>(i + 1) * 2.0f * PI /
                      static_cast<float>(SEGMENTS);
     sgl_v2f(cx, cy);
     sgl_v2f(cx + cosf(a1) * radiusH, cy + sinf(a1) * radiusV);
@@ -860,7 +876,7 @@ inline void draw_ellipse_lines(int centerX, int centerY, float radiusH,
   metal_draw_detail::set_color(color);
   sgl_begin_line_strip();
   for (int i = 0; i <= SEGMENTS; i++) {
-    const float a = static_cast<float>(i) * 2.0f * 3.14159265f /
+    const float a = static_cast<float>(i) * 2.0f * PI /
                     static_cast<float>(SEGMENTS);
     sgl_v2f(cx + cosf(a) * radiusH, cy + sinf(a) * radiusV);
   }
@@ -868,13 +884,15 @@ inline void draw_ellipse_lines(int centerX, int centerY, float radiusH,
 }
 
 inline void draw_texture_pro(TextureType tex, RectangleType src, RectangleType dest,
-                             Vector2Type origin, float rotation, Color tint);
+                             Vector2Type origin, float rotation, Color tint,
+                             int filter = -1);
 inline void draw_quad(const Vector2Type (&p)[4], Color color) {
   const float min_x = std::min({p[0].x, p[1].x, p[2].x, p[3].x}), max_x = std::max({p[0].x, p[1].x, p[2].x, p[3].x});
   const float min_y = std::min({p[0].y, p[1].y, p[2].y, p[3].y}), max_y = std::max({p[0].y, p[1].y, p[2].y, p[3].y});
   capture::record("quad", RectangleType{min_x, min_y, max_x - min_x, max_y - min_y}, color, "");
   draw_rectangle(RectangleType{min_x, min_y, max_x - min_x, max_y - min_y}, color);
 }
+
 inline void draw_texture_quad(TextureType tex, const Vector2Type (&p)[4], Color tint) {
   const float min_x = std::min({p[0].x, p[1].x, p[2].x, p[3].x}), max_x = std::max({p[0].x, p[1].x, p[2].x, p[3].x});
   const float min_y = std::min({p[0].y, p[1].y, p[2].y, p[3].y}), max_y = std::max({p[0].y, p[1].y, p[2].y, p[3].y});
@@ -1004,10 +1022,12 @@ inline afterhours::Font &default_font_override() {
 inline void set_default_font(afterhours::Font font) {
   detail::default_font_override() = font;
 }
+
 inline void clear_default_font() { detail::default_font_override() = {}; }
 inline afterhours::Font get_default_font() {
   return detail::default_font_override();
 }
+
 inline afterhours::Font get_unset_font() { return get_default_font(); }
 
 // Reused across render textures. Not destroyed on unload: sokol_gl's pipeline
@@ -1038,7 +1058,14 @@ inline sgl_context sgl_context_for(sg_pixel_format color_fmt,
   return ctx;
 }
 
-inline graphics::RenderTextureType load_render_texture(int w, int h) {
+inline uint32_t render_texture_capture_image_id(
+    const graphics::RenderTextureType &rt) {
+  return rt.resolve_img_id ? rt.resolve_img_id : rt.color_img_id;
+}
+
+inline graphics::RenderTextureType load_render_texture_with_samples(int w,
+                                                                      int h,
+                                                                      int samples) {
   graphics::RenderTextureType rt;
   rt.width = w;
   rt.height = h;
@@ -1051,9 +1078,10 @@ inline graphics::RenderTextureType load_render_texture(int w, int h) {
   sg_pixel_format depth_fmt = env.depth_format;
   if (depth_fmt == _SG_PIXELFORMAT_DEFAULT)
     depth_fmt = SG_PIXELFORMAT_DEPTH_STENCIL;
-  int sc = env.sample_count;
+  int sc = samples > 1 ? samples : env.sample_count;
   if (sc <= 0)
     sc = 1;
+  rt.sample_count = sc;
 
   sg_image_desc cd{};
   cd.usage.color_attachment = true;
@@ -1111,13 +1139,53 @@ inline graphics::RenderTextureType load_render_texture(int w, int h) {
     return rt;
   }
 
+  // sokol validates that pairing: tex/capture read the 1x resolve image.
+  sg_image resolve{};
+  sg_view resolve_view{};
+  if (sc > 1) {
+    sg_image_desc rd{};
+    rd.usage.resolve_attachment = true;
+    rd.usage.immutable = true;
+    rd.width = w;
+    rd.height = h;
+    rd.pixel_format = color_fmt;
+    rd.sample_count = 1;
+    rd.label = "rt-resolve";
+    resolve = sg_make_image(&rd);
+    if (sg_query_image_state(resolve) != SG_RESOURCESTATE_VALID) {
+      log_error("load_render_texture: resolve image creation failed");
+      sg_destroy_image(resolve);
+      sg_destroy_view(depth_view);
+      sg_destroy_view(color_view);
+      sg_destroy_image(depth);
+      sg_destroy_image(color);
+      return rt;
+    }
+    sg_view_desc rvd{};
+    rvd.resolve_attachment.image = resolve;
+    rvd.label = "rt-resolve-view";
+    resolve_view = sg_make_view(&rvd);
+    if (sg_query_view_state(resolve_view) != SG_RESOURCESTATE_VALID) {
+      log_error("load_render_texture: resolve view creation failed");
+      sg_destroy_view(resolve_view);
+      sg_destroy_image(resolve);
+      sg_destroy_view(depth_view);
+      sg_destroy_view(color_view);
+      sg_destroy_image(depth);
+      sg_destroy_image(color);
+      return rt;
+    }
+  }
+
   sg_view_desc tvd{};
-  tvd.texture.image = color;
+  tvd.texture.image = sc > 1 ? resolve : color;
   tvd.label = "rt-tex-view";
   sg_view tex_view = sg_make_view(&tvd);
   if (sg_query_view_state(tex_view) != SG_RESOURCESTATE_VALID) {
     log_error("load_render_texture: texture view creation failed");
     sg_destroy_view(tex_view);
+    if (resolve_view.id) sg_destroy_view(resolve_view);
+    if (resolve.id) sg_destroy_image(resolve);
     sg_destroy_view(depth_view);
     sg_destroy_view(color_view);
     sg_destroy_image(depth);
@@ -1136,23 +1204,8 @@ inline graphics::RenderTextureType load_render_texture(int w, int h) {
     log_error("load_render_texture: sampler creation failed");
     sg_destroy_sampler(smp);
     sg_destroy_view(tex_view);
-    sg_destroy_view(depth_view);
-    sg_destroy_view(color_view);
-    sg_destroy_image(depth);
-    sg_destroy_image(color);
-    return rt;
-  }
-
-  // An sgl context depends on the pixel formats and sample count, never on the
-  // size, so a resize does not need a new one. It used to get one anyway, and
-  // sgl_destroy_context does not release the five render pipelines the context
-  // made, so every resize leaked them: 4.8 MB per 1000 frames of a resize
-  // loop. Keyed and reused instead, so a resize makes none.
-  sgl_context sgl_ctx = sgl_context_for(color_fmt, depth_fmt, sc);
-  if (sgl_ctx.id == SG_INVALID_ID) {
-    log_error("load_render_texture: sgl context creation failed");
-    sg_destroy_sampler(smp);
-    sg_destroy_view(tex_view);
+    if (resolve_view.id) sg_destroy_view(resolve_view);
+    if (resolve.id) sg_destroy_image(resolve);
     sg_destroy_view(depth_view);
     sg_destroy_view(color_view);
     sg_destroy_image(depth);
@@ -1165,15 +1218,34 @@ inline graphics::RenderTextureType load_render_texture(int w, int h) {
   rt.color_view_id = color_view.id;
   rt.depth_view_id = depth_view.id;
   rt.tex_view_id = tex_view.id;
+  rt.resolve_img_id = resolve.id;
+  rt.resolve_view_id = resolve_view.id;
   rt.sampler_id = smp.id;
-  rt.sgl_ctx_id = sgl_ctx.id;
+  // One create per successful render target, as on raylib: the sokol
+  // images/views/sampler above are the creation. The sgl context is made
+  // lazily in begin_texture_mode and shared/cached per format, so it is
+  // not counted separately.
+  render_counters::note_create();
   return rt;
+}
+
+inline graphics::RenderTextureType load_render_texture(int w, int h) {
+  return load_render_texture_with_samples(w, h, 1);
+}
+
+inline graphics::RenderTextureType load_msaa_render_texture(int w, int h,
+                                                             int samples) {
+  return load_render_texture_with_samples(w, h, samples);
 }
 
 inline void unload_render_texture(graphics::RenderTextureType &rt) {
   // The sgl context is shared and outlives this texture, see sgl_context_for.
   if (rt.tex_view_id)
     sg_destroy_view({rt.tex_view_id});
+  if (rt.resolve_view_id)
+    sg_destroy_view({rt.resolve_view_id});
+  if (rt.resolve_img_id)
+    sg_destroy_image({rt.resolve_img_id});
   if (rt.depth_view_id)
     sg_destroy_view({rt.depth_view_id});
   if (rt.color_view_id)
@@ -1188,6 +1260,18 @@ inline void unload_render_texture(graphics::RenderTextureType &rt) {
 }
 
 inline void begin_texture_mode(graphics::RenderTextureType &rt) {
+  graphics::metal_detail::ensure_sokol_gl_and_fonts();
+  if (rt.sgl_ctx_id == 0) {
+    const auto cdesc = sg_query_image_desc({rt.color_img_id});
+    const auto ddesc = sg_query_image_desc({rt.depth_img_id});
+    const sgl_context ctx =
+        sgl_context_for(cdesc.pixel_format, ddesc.pixel_format, cdesc.sample_count);
+    if (ctx.id == SG_INVALID_ID) {
+      log_error("begin_texture_mode: sgl context creation failed");
+      return;
+    }
+    rt.sgl_ctx_id = ctx.id;
+  }
   auto unwind_camera_stack = []() {
     if (graphics::metal_detail::g_camera_mode_depth <= 0)
       return;
@@ -1224,13 +1308,34 @@ inline void begin_texture_mode(graphics::RenderTextureType &rt) {
   pass.action.depth.load_action = SG_LOADACTION_CLEAR;
   pass.action.depth.clear_value = 1.0f;
   pass.attachments.colors[0] = {rt.color_view_id};
+  if (rt.resolve_view_id) {
+    pass.attachments.resolves[0] = {rt.resolve_view_id};
+    pass.action.colors[0].store_action = SG_STOREACTION_DONTCARE;
+  }
   pass.attachments.depth_stencil = {rt.depth_view_id};
   sg_begin_pass(&pass);
   graphics::metal_detail::g_pass_active = true;
   graphics::metal_detail::g_active_rt_color_view_id = rt.color_view_id;
 
   sgl_defaults();
-  sgl_load_pipeline(graphics::metal_detail::g_blend_pip);
+  if (rt.sample_count > 1) {
+    // sokol checks sample counts: blend here, not g_blend_pip.
+    static std::unordered_map<uint32_t, uint32_t> msaa_blend_pips;
+    auto it = msaa_blend_pips.find(rt.sgl_ctx_id);
+    if (it == msaa_blend_pips.end()) {
+      sg_pipeline_desc bd{};
+      bd.colors[0].blend.enabled = true;
+      bd.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
+      bd.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+      bd.colors[0].blend.src_factor_alpha = SG_BLENDFACTOR_ONE;
+      bd.colors[0].blend.dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+      const sgl_pipeline pip = sgl_make_pipeline(&bd);
+      it = msaa_blend_pips.emplace(rt.sgl_ctx_id, pip.id).first;
+    }
+    sgl_load_pipeline({it->second});
+  } else {
+    sgl_load_pipeline(graphics::metal_detail::g_blend_pip);
+  }
   sgl_matrix_mode_projection();
   // Apply GL→Metal clip-space Z fixup before the ortho projection.
   // clang-format off
@@ -1277,7 +1382,8 @@ inline void end_texture_mode() {
   // Restore the default sgl context (swapchain format).
   // The caller is responsible for starting the next pass
   // (via begin_drawing or another begin_texture_mode).
-  sgl_set_context(sgl_default_context());
+  if (graphics::metal_detail::g_sgl_ready)
+    sgl_set_context(sgl_default_context());
   graphics::metal_detail::g_in_texture_mode = false;
 }
 
@@ -1462,9 +1568,13 @@ inline void draw_render_texture(const graphics::RenderTextureType &rt, float x,
   }
 }
 
+namespace metal_texture_detail {
+inline sg_sampler make_sampler_for_filter(int filter, sg_wrap wrap);
+} // namespace metal_texture_detail
+
 inline void draw_texture_pro(TextureType tex, RectangleType src,
                              RectangleType dest, Vector2Type origin,
-                             float rotation, Color tint) {
+                             float rotation, Color tint, int filter) {
   if (tex.view_id == 0 || tex.width <= 0.0f || tex.height <= 0.0f)
     return;
 
@@ -1485,6 +1595,14 @@ inline void draw_texture_pro(TextureType tex, RectangleType src,
 
   sg_view tv = {tex.view_id};
   sg_sampler smp = {tex.sampler_id};
+  if (filter >= 0) {
+    static sg_sampler cache[3] = {};
+    const int slot = filter > 2 ? 2 : filter;
+    if (cache[slot].id == 0)
+      cache[slot] = metal_texture_detail::make_sampler_for_filter(
+          filter, SG_WRAP_CLAMP_TO_EDGE);
+    smp = cache[slot];
+  }
 
   push_rotation(dest.x, dest.y, rotation);
   sgl_enable_texture();
@@ -1508,6 +1626,8 @@ inline void draw_texture_rec(TextureType tex, RectangleType src,
   draw_texture_pro(tex, src, dest, Vector2Type{0.0f, 0.0f}, 0.0f, tint);
 }
 
+// Provided by capture_impl.h, compiled only under SOKOL_METAL.
+#if defined(SOKOL_METAL)
 extern "C" bool metal_capture_render_texture(uint32_t color_img_id,
                                              int width, int height,
                                              const char *path);
@@ -1517,6 +1637,7 @@ extern "C" int metal_capture_render_texture_to_memory(
 extern "C" int metal_capture_render_texture_png_to_memory(
     uint32_t color_img_id, int width, int height,
     uint8_t **out_data, int *out_size);
+#endif
 
 #ifdef AFTER_HOURS_USE_VULKAN
 extern "C" bool vulkan_capture_render_texture(uint32_t color_img_id,
@@ -1535,22 +1656,24 @@ inline bool capture_render_texture(const graphics::RenderTextureType &rt,
   if (rt.color_img_id == 0)
     return false;
 #ifdef AFTER_HOURS_USE_VULKAN
-  return vulkan_capture_render_texture(rt.color_img_id, rt.width, rt.height,
+  return vulkan_capture_render_texture(render_texture_capture_image_id(rt), rt.width, rt.height,
                                        path.string().c_str());
-#else
-  return metal_capture_render_texture(rt.color_img_id, rt.width, rt.height,
+#elif defined(SOKOL_METAL)
+  return metal_capture_render_texture(render_texture_capture_image_id(rt), rt.width, rt.height,
                                       path.c_str());
+#else
+  return false;
 #endif
 }
 
-inline std::optional<RgbaCapture>
+inline std::optional<RGBACapture>
 capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
   if (rt.color_img_id == 0)
     return {};
 #ifdef AFTER_HOURS_USE_VULKAN
   uint8_t *data = nullptr;
   int size = 0;
-  if (!vulkan_capture_render_texture_to_memory(rt.color_img_id, rt.width,
+  if (!vulkan_capture_render_texture_to_memory(render_texture_capture_image_id(rt), rt.width,
                                                rt.height, &data, &size)) {
     return {};
   }
@@ -1559,13 +1682,13 @@ capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
     free(data);
     return std::nullopt;
   }
-  RgbaCapture result{rt.width, rt.height, {data, data + size}};
+  RGBACapture result{rt.width, rt.height, {data, data + size}};
   free(data);
   return result;
-#else
+#elif defined(SOKOL_METAL)
   uint8_t *data = nullptr;
   int size = 0;
-  if (!metal_capture_render_texture_to_memory(rt.color_img_id, rt.width,
+  if (!metal_capture_render_texture_to_memory(render_texture_capture_image_id(rt), rt.width,
                                               rt.height, &data, &size)) {
     return {};
   }
@@ -1574,41 +1697,45 @@ capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
     free(data);
     return std::nullopt;
   }
-  RgbaCapture result{rt.width, rt.height, {data, data + size}};
+  RGBACapture result{rt.width, rt.height, {data, data + size}};
   free(data);
   return result;
+#else
+  return std::nullopt;
 #endif
 }
 
-inline std::optional<PngCapture>
+inline std::optional<PNGCapture>
 capture_render_texture_png(const graphics::RenderTextureType &rt) {
   if (rt.color_img_id == 0) return std::nullopt;
 #ifdef AFTER_HOURS_USE_VULKAN
   uint8_t *data = nullptr;
   int size = 0;
-  if (!vulkan_capture_render_texture_png_to_memory(rt.color_img_id, rt.width,
+  if (!vulkan_capture_render_texture_png_to_memory(render_texture_capture_image_id(rt), rt.width,
                                                    rt.height, &data, &size))
     return std::nullopt;
   if (!data || size <= 0) {
     free(data);
     return std::nullopt;
   }
-  PngCapture result{{data, data + size}};
+  PNGCapture result{{data, data + size}};
   free(data);
   return result;
-#else
+#elif defined(SOKOL_METAL)
   uint8_t *data = nullptr;
   int size = 0;
-  if (!metal_capture_render_texture_png_to_memory(rt.color_img_id, rt.width,
+  if (!metal_capture_render_texture_png_to_memory(render_texture_capture_image_id(rt), rt.width,
                                                  rt.height, &data, &size))
     return std::nullopt;
   if (!data || size <= 0) {
     free(data);
     return std::nullopt;
   }
-  PngCapture result{{data, data + size}};
+  PNGCapture result{{data, data + size}};
   free(data);
   return result;
+#else
+  return std::nullopt;
 #endif
 }
 
@@ -1759,6 +1886,7 @@ inline TextureType load_texture_from_pixels(const unsigned char *rgba, int w,
   tex.img_id = img.id;
   tex.view_id = view.id;
   tex.sampler_id = smp.id;
+  render_counters::note_create();
   return tex;
 }
 
@@ -1776,6 +1904,11 @@ inline TextureType load_texture(const char *path) {
   TextureType tex = metal_texture_detail::load_texture_from_pixels(pixels, w, h);
   stbi_image_free(pixels);
   return tex;
+}
+
+// sg_make_* is only valid once the backend is initialized.
+inline bool texture_is_usable() {
+  return graphics::metal_detail::g_initialized;
 }
 
 inline TextureType load_texture_from_rgba(const std::uint8_t *rgba, int w,

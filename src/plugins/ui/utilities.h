@@ -245,7 +245,7 @@ inline void run_systems_on_ui_entities(
     ui_coll.merge_entity_arrays();
 
     for (auto &system : systems) {
-        if (!system->should_run(dt)) continue;
+        if (!system->advance_lifecycle(dt)) continue;
 
         auto &entities = ui_coll.get_entities_for_mod();
 
@@ -292,6 +292,81 @@ struct UIPluginPreUpdateBridge : System<> {
     }
 };
 
+// Layout half of the post-build pass, split out as its own bridge.
+template<typename InputAction>
+inline std::vector<std::unique_ptr<SystemBase>> make_layout_systems() {
+    std::vector<std::unique_ptr<SystemBase>> systems;
+    systems.push_back(
+        std::make_unique<ui::UpdateDropdownOptions<InputAction>>());
+    systems.push_back(std::make_unique<ui::ClearVisibity>());
+    systems.push_back(
+        std::make_unique<ui::HandleDragGroupsPreLayout<InputAction>>());
+    systems.push_back(std::make_unique<ui::BuildUIEntityMapping>());
+    systems.push_back(
+        std::make_unique<ui::PublishContextTheme<InputAction>>());
+    systems.push_back(std::make_unique<ui::RunAutoLayout>());
+    systems.push_back(std::make_unique<ui::MeasureScrollViews>());
+    return systems;
+}
+
+// The input/finish half: everything after layout, ending the context.
+template<typename InputAction>
+inline std::vector<std::unique_ptr<SystemBase>> make_post_layout_systems() {
+    std::vector<std::unique_ptr<SystemBase>> systems;
+    systems.push_back(std::make_unique<
+                  ui::TrackIfComponentWillBeRendered<InputAction>>());
+    systems.push_back(std::make_unique<ui::HandleTabbing<InputAction>>());
+    systems.push_back(
+        std::make_unique<ui::DispatchShortcuts<InputAction>>());
+    systems.push_back(
+        std::make_unique<ui::InputExclusivitySystem<InputAction>>());
+    systems.push_back(
+        std::make_unique<ui::ResolveHitTarget<InputAction>>());
+    systems.push_back(
+        std::make_unique<ui::HandleScrollbarDrag<InputAction>>());
+    systems.push_back(std::make_unique<ui::HandleClicks<InputAction>>());
+    systems.push_back(
+        std::make_unique<ui::HandleTrayNavigation<InputAction>>());
+    systems.push_back(
+        std::make_unique<ui::HandleScrollInput<InputAction>>());
+    systems.push_back(std::make_unique<ui::SyncScrollViews>());
+    systems.push_back(
+        std::make_unique<ui::CloseDropdownOnClickOutside<InputAction>>());
+    systems.push_back(std::make_unique<ui::HandleDrags<InputAction>>());
+    systems.push_back(
+        std::make_unique<ui::HandleDragGroupsPostLayout<InputAction>>());
+    systems.push_back(std::make_unique<ui::HandleLeftRight<InputAction>>());
+    systems.push_back(
+        std::make_unique<ui::HandleSelectOnFocus<InputAction>>());
+    systems.push_back(
+        std::make_unique<ui::ComputeVisualFocusId<InputAction>>());
+    systems.push_back(
+        std::make_unique<ui::RevealKeyboardFocus<InputAction>>());
+    systems.push_back(
+    std::make_unique<ui::EndUIContextManager<InputAction>>());
+    return systems;
+}
+
+template<typename InputAction>
+struct UIPluginLayoutBridge : System<> {
+    std::vector<std::unique_ptr<SystemBase>> systems =
+        make_layout_systems<InputAction>();
+    bool should_iterate() const override { return false; }
+    void once(float dt) override { run_systems_on_ui_entities(systems, dt); }
+};
+
+template<typename InputAction>
+struct UIPluginPostLayoutBridge : System<> {
+    std::vector<std::unique_ptr<SystemBase>> systems =
+        make_post_layout_systems<InputAction>();
+    bool should_iterate() const override { return false; }
+    void once(float dt) override {
+        run_systems_on_ui_entities(systems, dt);
+        imm::retire_unbuilt_ui_elements();
+        UICollectionHolder::get().collection.cleanup();
+    }
+};
+
 // Bridge system: runs all post-user-code UI update systems on UI collection
 // entities.
 template<typename InputAction>
@@ -299,61 +374,14 @@ struct UIPluginPostUpdateBridge : System<> {
     std::vector<std::unique_ptr<SystemBase>> systems;
 
     UIPluginPostUpdateBridge() {
-        systems.push_back(
-            std::make_unique<ui::UpdateDropdownOptions<InputAction>>());
-        systems.push_back(std::make_unique<ui::ClearVisibity>());
-        // Pre-layout drag handling: hide dragged entity + insert spacer before
-        // BuildUIEntityMapping so the spacer is included in the mapping cache
-        // and processed by RunAutoLayout.
-        systems.push_back(
-            std::make_unique<ui::HandleDragGroupsPreLayout<InputAction>>());
-        systems.push_back(std::make_unique<ui::BuildUIEntityMapping>());
-        // Before layout, so the screen's theme reaches the metrics readers.
-        systems.push_back(
-            std::make_unique<ui::PublishContextTheme<InputAction>>());
-        systems.push_back(std::make_unique<ui::RunAutoLayout>());
-        systems.push_back(std::make_unique<ui::MeasureScrollViews>());
-        systems.push_back(std::make_unique<
-                          ui::TrackIfComponentWillBeRendered<InputAction>>());
-        systems.push_back(std::make_unique<ui::HandleTabbing<InputAction>>());
-        systems.push_back(
-            std::make_unique<ui::InputExclusivitySystem<InputAction>>());
-        // After InputExclusivitySystem so the input gates it installs are in
-        // place, and before every consumer of hot/active.
-        systems.push_back(
-            std::make_unique<ui::ResolveHitTarget<InputAction>>());
-        // Before HandleClicks: a press on the bar must not also click the row
-        // behind it.
-        systems.push_back(
-            std::make_unique<ui::HandleScrollbarDrag<InputAction>>());
-        systems.push_back(std::make_unique<ui::HandleClicks<InputAction>>());
-        systems.push_back(
-            std::make_unique<ui::HandleTrayNavigation<InputAction>>());
-        systems.push_back(
-            std::make_unique<ui::HandleScrollInput<InputAction>>());
-        // After it: the view that moved drives its sync_group.
-        systems.push_back(std::make_unique<ui::SyncScrollViews>());
-        systems.push_back(
-            std::make_unique<ui::CloseDropdownOnClickOutside<InputAction>>());
-        systems.push_back(std::make_unique<ui::HandleDrags<InputAction>>());
-        // Post-layout drag handling: detect drag start, compute hover position,
-        // create floating overlay.
-        systems.push_back(
-            std::make_unique<ui::HandleDragGroupsPostLayout<InputAction>>());
-        systems.push_back(std::make_unique<ui::HandleLeftRight<InputAction>>());
-        systems.push_back(
-            std::make_unique<ui::HandleSelectOnFocus<InputAction>>());
-        systems.push_back(
-            std::make_unique<ui::ComputeVisualFocusId<InputAction>>());
-        systems.push_back(
-            std::make_unique<ui::RevealKeyboardFocus<InputAction>>());
-        systems.push_back(
-            std::make_unique<ui::EndUIContextManager<InputAction>>());
+        systems = make_layout_systems<InputAction>();
+        auto rest = make_post_layout_systems<InputAction>();
+        for (auto &s : rest) systems.push_back(std::move(s));
     }
 
     bool should_iterate() const override { return false; }
 
-    virtual void once(float dt) override {
+    void once(float dt) override {
         run_systems_on_ui_entities(systems, dt);
         // Before cleanup(), which is what actually frees what this marks.
         imm::retire_unbuilt_ui_elements();
@@ -413,6 +441,26 @@ template<typename InputAction>
 static void register_before_ui_updates(SystemManager &sm) {
     sm.register_update_system(
         std::make_unique<ui::UIPluginPreUpdateBridge<InputAction>>());
+}
+
+// Custom-loop split: register these two around host systems, not the bridge.
+template<typename InputAction>
+static void register_layout_systems(SystemManager &sm) {
+    sm.register_update_system(
+        std::make_unique<ui::UIPluginLayoutBridge<InputAction>>());
+}
+
+template<typename InputAction>
+static void register_post_layout_systems(SystemManager &sm) {
+    sm.register_update_system(
+        std::make_unique<ui::UIPluginPostLayoutBridge<InputAction>>());
+    if (!EntityHelper::has_singleton<ui::TooltipState>()) {
+        Entity &e = EntityHelper::createPermanentEntity();
+        e.addComponent<ui::TooltipState>();
+        EntityHelper::registerSingleton<ui::TooltipState>(e);
+    }
+    sm.register_update_system(
+        std::make_unique<ui::UpdateTooltips<InputAction>>());
 }
 
 template<typename InputAction>

@@ -105,12 +105,9 @@ ElementResult toggle_button(HasUIContext auto &ctx, EntityParent ep_pair,
 
   entity.get<UIComponent>().flex_direction = config.flex_direction;
 
-  if (config.disabled) {
-    entity.removeComponentIfExists<HasClickListener>();
+  if (!entity.toggleComponent<HasClickListener>(!config.disabled,
+                                                [](Entity &) {}))
     return ElementResult{false, entity, value};
-  }
-
-  entity.addComponentIfMissing<HasClickListener>([](Entity &) {});
 
   bool clicked = entity.get<HasClickListener>().down;
   if (clicked) {
@@ -135,6 +132,40 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
   init_component(ctx, ep_pair, config, ComponentType::Div);
 
   return {true, entity};
+}
+
+namespace detail {
+inline ElementResult label_impl(HasUIContext auto &ctx, EntityParent ep_pair,
+                                const std::string &text,
+                                ComponentConfig config, Theme::Usage usage) {
+  config.with_label(text);
+  if (!config.has_font_override())
+    config.font_name = UIStylingDefaults::get().resolved_font_name();
+  if (config.font_size_is_default)
+    config.font_size = UIStylingDefaults::get().default_font_size;
+  if (config.label_alignment == TextAlignment::None)
+    config.with_alignment(TextAlignment::Left);
+  if (!config.has_text_color_override())
+    config.with_text_color(usage);
+  config.with_ignore_pointer_events();
+  return div(ctx, ep_pair, config);
+}
+} // namespace detail
+
+/// Static text label; ignores pointer events. Font/size fall back to
+/// UIStylingDefaults; an explicit config value wins.
+ElementResult label(HasUIContext auto &ctx, EntityParent ep_pair,
+                    const std::string &text,
+                    ComponentConfig config = ComponentConfig()) {
+  return detail::label_impl(ctx, ep_pair, text, config, Theme::Usage::Font);
+}
+
+/// label() in the theme's muted font colour.
+ElementResult label_muted(HasUIContext auto &ctx, EntityParent ep_pair,
+                          const std::string &text,
+                          ComponentConfig config = ComponentConfig()) {
+  return detail::label_impl(ctx, ep_pair, text, config,
+                            Theme::Usage::FontMuted);
 }
 
 
@@ -171,6 +202,7 @@ ElementResult sprite(HasUIContext auto &ctx, EntityParent ep_pair,
   img.texture = texture;
   img.source_rect = source_rect;
   img.alignment = alignment;
+  img.filter = config.image_filter;
 
   return {false, entity};
 }
@@ -192,6 +224,7 @@ image_button(HasUIContext auto &ctx, EntityParent ep_pair,
   img.texture = texture;
   img.source_rect = source_rect;
   img.alignment = alignment;
+  img.filter = config.image_filter;
 
   entity.addComponentIfMissing<HasClickListener>([](Entity &) {});
   return ElementResult{entity.get<HasClickListener>().down, entity};

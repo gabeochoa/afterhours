@@ -51,8 +51,11 @@ namespace raylib {
 #endif // AFTER_HOURS_USE_RAYLIB
 
 namespace afterhours {
+#ifndef PI
+constexpr float PI = 3.14159265358979323846f;
+#endif
 #ifndef DEG2RAD
-constexpr float DEG2RAD = 0.017453292519943295f; // PI / 180
+constexpr float DEG2RAD = PI / 180.0f;
 #endif
 #ifndef RAD2DEG
 constexpr float RAD2DEG = 57.29577951308232f; // 180 / PI
@@ -71,6 +74,12 @@ struct MyTexture {
   uint32_t img_id = 0;
   uint32_t view_id = 0;
   uint32_t sampler_id = 0;
+};
+#elif defined(AFTER_HOURS_USE_PSX)
+struct MyTexture {
+  float width = 0;
+  float height = 0;
+  uint64_t budget_id = 0;
 };
 #else
 // Fallback / "none" backend: no GPU, so a texture is just its dimensions.
@@ -122,9 +131,6 @@ struct MyVec2 {
   }
 };
 using Vector2Type = MyVec2;
-constexpr float distance_sq(const Vector2Type a, const Vector2Type b) {
-  return (a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y);
-}
 #endif
 
 #ifndef Vector3Type
@@ -220,6 +226,13 @@ using afterhours::Vector3Type;
 using afterhours::Vector4Type;
 using afterhours::MatrixType;
 #endif // AFTER_HOURS_USE_RAYLIB
+
+namespace afterhours {
+constexpr float distance_sq(const Vector2Type a, const Vector2Type b) {
+  return (a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y);
+}
+} // namespace afterhours
+using afterhours::distance_sq;
 
 namespace afterhours {
 

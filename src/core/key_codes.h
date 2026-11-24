@@ -178,10 +178,60 @@ inline std::string to_upper(const std::string &s) {
 
 } // namespace detail
 
+namespace detail {
+
+// clang-format off
+inline constexpr std::array<std::pair<std::string_view, int>, 85> key_names{{
+      {"F1", keys::F1}, {"F2", keys::F2}, {"F3", keys::F3}, {"F4", keys::F4},
+      {"F5", keys::F5}, {"F6", keys::F6}, {"F7", keys::F7}, {"F8", keys::F8},
+      {"F9", keys::F9}, {"F10", keys::F10}, {"F11", keys::F11}, {"F12", keys::F12},
+
+      {"UP", keys::UP}, {"DOWN", keys::DOWN}, {"LEFT", keys::LEFT}, {"RIGHT", keys::RIGHT},
+      {"HOME", keys::HOME}, {"END", keys::END}, {"INSERT", keys::INSERT},
+      {"PAGE_UP", keys::PAGE_UP}, {"PAGEUP", keys::PAGE_UP},
+      {"PAGE_DOWN", keys::PAGE_DOWN}, {"PAGEDOWN", keys::PAGE_DOWN},
+
+      {"ENTER", keys::ENTER}, {"RETURN", keys::ENTER},
+      {"TAB", keys::TAB},
+      {"BACKSPACE", keys::BACKSPACE},
+      {"DELETE", keys::DELETE_KEY}, {"DEL", keys::DELETE_KEY},
+      {"SPACE", keys::SPACE},
+      {"ESCAPE", keys::ESCAPE}, {"ESC", keys::ESCAPE},
+
+      {"SHIFT", keys::LEFT_SHIFT}, {"LSHIFT", keys::LEFT_SHIFT}, {"LEFT_SHIFT", keys::LEFT_SHIFT},
+      {"RSHIFT", keys::RIGHT_SHIFT}, {"RIGHT_SHIFT", keys::RIGHT_SHIFT},
+      {"CTRL", keys::LEFT_CONTROL}, {"CONTROL", keys::LEFT_CONTROL},
+      {"LCTRL", keys::LEFT_CONTROL}, {"LEFT_CONTROL", keys::LEFT_CONTROL},
+      {"RCTRL", keys::RIGHT_CONTROL}, {"RIGHT_CONTROL", keys::RIGHT_CONTROL},
+      {"ALT", keys::LEFT_ALT}, {"LALT", keys::LEFT_ALT}, {"LEFT_ALT", keys::LEFT_ALT},
+      {"RALT", keys::RIGHT_ALT}, {"RIGHT_ALT", keys::RIGHT_ALT},
+      {"SUPER", keys::LEFT_SUPER}, {"WIN", keys::LEFT_SUPER}, {"CMD", keys::LEFT_SUPER},
+
+      {"APOSTROPHE", keys::APOSTROPHE}, {"COMMA", keys::COMMA},
+      {"MINUS", keys::MINUS}, {"PERIOD", keys::PERIOD}, {"SLASH", keys::SLASH},
+      {"SEMICOLON", keys::SEMICOLON}, {"EQUAL", keys::EQUAL},
+      {"LEFT_BRACKET", keys::LEFT_BRACKET}, {"RIGHT_BRACKET", keys::RIGHT_BRACKET},
+      {"BACKSLASH", keys::BACKSLASH}, {"GRAVE", keys::GRAVE},
+
+      {"CAPS_LOCK", keys::CAPS_LOCK}, {"CAPSLOCK", keys::CAPS_LOCK},
+      {"SCROLL_LOCK", keys::SCROLL_LOCK}, {"NUM_LOCK", keys::NUM_LOCK},
+      {"PRINT_SCREEN", keys::PRINT_SCREEN}, {"PAUSE", keys::PAUSE},
+
+      {"KP_0", keys::KP_0}, {"KP_1", keys::KP_1}, {"KP_2", keys::KP_2},
+      {"KP_3", keys::KP_3}, {"KP_4", keys::KP_4}, {"KP_5", keys::KP_5},
+      {"KP_6", keys::KP_6}, {"KP_7", keys::KP_7}, {"KP_8", keys::KP_8},
+      {"KP_9", keys::KP_9}, {"KP_DECIMAL", keys::KP_DECIMAL},
+      {"KP_DIVIDE", keys::KP_DIVIDE}, {"KP_MULTIPLY", keys::KP_MULTIPLY},
+      {"KP_SUBTRACT", keys::KP_SUBTRACT}, {"KP_ADD", keys::KP_ADD},
+      {"KP_ENTER", keys::KP_ENTER}, {"KP_EQUAL", keys::KP_EQUAL},
+}};
+// clang-format on
+
+} // namespace detail
+
 // Map string name to key code (case-insensitive)
 // Accepts: "A", "a", "ENTER", "enter", "CTRL", etc.
 inline int key_from_name(const std::string &name) {
-  // Handle single-char symbols directly (before uppercasing)
   if (name.length() == 1) {
     char c = name[0];
     if (c >= 'a' && c <= 'z')
@@ -190,7 +240,6 @@ inline int key_from_name(const std::string &name) {
       return keys::A + (c - 'A');
     if (c >= '0' && c <= '9')
       return keys::ZERO + (c - '0');
-    // Punctuation symbols
     switch (c) {
     case ' ':
       return keys::SPACE;
@@ -219,68 +268,68 @@ inline int key_from_name(const std::string &name) {
     }
   }
 
-  // Normalize to uppercase for consistent lookup
   std::string key = detail::to_upper(name);
 
-  // clang-format off
-  static constexpr std::array<std::pair<std::string_view, int>, 85> key_map = {{
-      // Function keys
-      {"F1", keys::F1}, {"F2", keys::F2}, {"F3", keys::F3}, {"F4", keys::F4},
-      {"F5", keys::F5}, {"F6", keys::F6}, {"F7", keys::F7}, {"F8", keys::F8},
-      {"F9", keys::F9}, {"F10", keys::F10}, {"F11", keys::F11}, {"F12", keys::F12},
-
-      // Navigation
-      {"UP", keys::UP}, {"DOWN", keys::DOWN}, {"LEFT", keys::LEFT}, {"RIGHT", keys::RIGHT},
-      {"HOME", keys::HOME}, {"END", keys::END}, {"INSERT", keys::INSERT},
-      {"PAGE_UP", keys::PAGE_UP}, {"PAGEUP", keys::PAGE_UP},
-      {"PAGE_DOWN", keys::PAGE_DOWN}, {"PAGEDOWN", keys::PAGE_DOWN},
-
-      // Editing
-      {"ENTER", keys::ENTER}, {"RETURN", keys::ENTER},
-      {"TAB", keys::TAB},
-      {"BACKSPACE", keys::BACKSPACE},
-      {"DELETE", keys::DELETE_KEY}, {"DEL", keys::DELETE_KEY},
-      {"SPACE", keys::SPACE},
-      {"ESCAPE", keys::ESCAPE}, {"ESC", keys::ESCAPE},
-
-      // Modifiers
-      {"SHIFT", keys::LEFT_SHIFT}, {"LSHIFT", keys::LEFT_SHIFT}, {"LEFT_SHIFT", keys::LEFT_SHIFT},
-      {"RSHIFT", keys::RIGHT_SHIFT}, {"RIGHT_SHIFT", keys::RIGHT_SHIFT},
-      {"CTRL", keys::LEFT_CONTROL}, {"CONTROL", keys::LEFT_CONTROL},
-      {"LCTRL", keys::LEFT_CONTROL}, {"LEFT_CONTROL", keys::LEFT_CONTROL},
-      {"RCTRL", keys::RIGHT_CONTROL}, {"RIGHT_CONTROL", keys::RIGHT_CONTROL},
-      {"ALT", keys::LEFT_ALT}, {"LALT", keys::LEFT_ALT}, {"LEFT_ALT", keys::LEFT_ALT},
-      {"RALT", keys::RIGHT_ALT}, {"RIGHT_ALT", keys::RIGHT_ALT},
-      {"SUPER", keys::LEFT_SUPER}, {"WIN", keys::LEFT_SUPER}, {"CMD", keys::LEFT_SUPER},
-
-      // Punctuation (named)
-      {"APOSTROPHE", keys::APOSTROPHE}, {"COMMA", keys::COMMA},
-      {"MINUS", keys::MINUS}, {"PERIOD", keys::PERIOD}, {"SLASH", keys::SLASH},
-      {"SEMICOLON", keys::SEMICOLON}, {"EQUAL", keys::EQUAL},
-      {"LEFT_BRACKET", keys::LEFT_BRACKET}, {"RIGHT_BRACKET", keys::RIGHT_BRACKET},
-      {"BACKSLASH", keys::BACKSLASH}, {"GRAVE", keys::GRAVE},
-
-      // Lock keys
-      {"CAPS_LOCK", keys::CAPS_LOCK}, {"CAPSLOCK", keys::CAPS_LOCK},
-      {"SCROLL_LOCK", keys::SCROLL_LOCK}, {"NUM_LOCK", keys::NUM_LOCK},
-      {"PRINT_SCREEN", keys::PRINT_SCREEN}, {"PAUSE", keys::PAUSE},
-
-      // Keypad
-      {"KP_0", keys::KP_0}, {"KP_1", keys::KP_1}, {"KP_2", keys::KP_2},
-      {"KP_3", keys::KP_3}, {"KP_4", keys::KP_4}, {"KP_5", keys::KP_5},
-      {"KP_6", keys::KP_6}, {"KP_7", keys::KP_7}, {"KP_8", keys::KP_8},
-      {"KP_9", keys::KP_9}, {"KP_DECIMAL", keys::KP_DECIMAL},
-      {"KP_DIVIDE", keys::KP_DIVIDE}, {"KP_MULTIPLY", keys::KP_MULTIPLY},
-      {"KP_SUBTRACT", keys::KP_SUBTRACT}, {"KP_ADD", keys::KP_ADD},
-      {"KP_ENTER", keys::KP_ENTER}, {"KP_EQUAL", keys::KP_EQUAL},
-  }};
-  // clang-format on
-
-  for (const auto &[name_sv, code] : key_map) {
+  for (const auto &[name_sv, code] : detail::key_names) {
     if (name_sv == key)
       return code;
   }
   return 0;
+}
+
+inline int gamepad_button_from_name(const std::string &name) {
+  static constexpr std::array<std::pair<std::string_view, int>, 17> names = {{
+      {"LEFT_FACE_UP", gamepad_buttons::LEFT_FACE_UP},
+      {"LEFT_FACE_RIGHT", gamepad_buttons::LEFT_FACE_RIGHT},
+      {"LEFT_FACE_DOWN", gamepad_buttons::LEFT_FACE_DOWN},
+      {"LEFT_FACE_LEFT", gamepad_buttons::LEFT_FACE_LEFT},
+      {"RIGHT_FACE_UP", gamepad_buttons::RIGHT_FACE_UP},
+      {"RIGHT_FACE_RIGHT", gamepad_buttons::RIGHT_FACE_RIGHT},
+      {"RIGHT_FACE_DOWN", gamepad_buttons::RIGHT_FACE_DOWN},
+      {"RIGHT_FACE_LEFT", gamepad_buttons::RIGHT_FACE_LEFT},
+      {"LEFT_TRIGGER_1", gamepad_buttons::LEFT_TRIGGER_1},
+      {"LEFT_TRIGGER_2", gamepad_buttons::LEFT_TRIGGER_2},
+      {"RIGHT_TRIGGER_1", gamepad_buttons::RIGHT_TRIGGER_1},
+      {"RIGHT_TRIGGER_2", gamepad_buttons::RIGHT_TRIGGER_2},
+      {"MIDDLE_LEFT", gamepad_buttons::MIDDLE_LEFT},
+      {"MIDDLE", gamepad_buttons::MIDDLE},
+      {"MIDDLE_RIGHT", gamepad_buttons::MIDDLE_RIGHT},
+      {"LEFT_THUMB", gamepad_buttons::LEFT_THUMB},
+      {"RIGHT_THUMB", gamepad_buttons::RIGHT_THUMB}}};
+  const std::string upper = detail::to_upper(name);
+  for (const auto &[button_name, code] : names) {
+    if (button_name == upper)
+      return code;
+  }
+  return -1;
+}
+
+inline int gamepad_axis_from_name(const std::string &name) {
+  static constexpr std::array<std::pair<std::string_view, int>, 6> names = {{
+      {"LEFT_X", gamepad_axes::LEFT_X},
+      {"LEFT_Y", gamepad_axes::LEFT_Y},
+      {"RIGHT_X", gamepad_axes::RIGHT_X},
+      {"RIGHT_Y", gamepad_axes::RIGHT_Y},
+      {"LEFT_TRIGGER", gamepad_axes::LEFT_TRIGGER},
+      {"RIGHT_TRIGGER", gamepad_axes::RIGHT_TRIGGER}}};
+  const std::string upper = detail::to_upper(name);
+  for (const auto &[axis_name, code] : names) {
+    if (axis_name == upper)
+      return code;
+  }
+  return -1;
+}
+
+// Map a key code back to the name key_from_name accepts for it.
+inline std::string key_to_name(int key) {
+  if (key >= keys::A && key <= keys::Z)
+    return std::string(1, static_cast<char>('A' + (key - keys::A)));
+  if (key >= keys::ZERO && key <= keys::NINE)
+    return std::string(1, static_cast<char>('0' + (key - keys::ZERO)));
+  for (const auto &[name, code] : detail::key_names)
+    if (code == key)
+      return std::string(name);
+  return "KEY " + std::to_string(key);
 }
 
 // Key combo with modifiers

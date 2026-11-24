@@ -113,12 +113,50 @@ struct AutoLayout {
                : Axis::X;
   }
 
+  bool is_stretch_child(const UIComponent &widget,
+                        const UIComponent &child, Axis axis) const {
+    const bool is_cross =
+        (widget.flex_direction == FlexDirection::Row && axis == Axis::Y) ||
+        (widget.flex_direction == FlexDirection::Column && axis == Axis::X);
+    return is_cross && widget.align_items == AlignItems::Stretch &&
+           child.self_align == SelfAlign::Auto &&
+           child.desired[axis].dim == Dim::None;
+  }
+
   // Takes the Size, not its .value: for h720(20) that is the 20/720 fraction,
   // so the float overload above resolves the gap to 0.028px.
   float resolve_gap(const Size &gap, const UIComponent &widget, Axis axis) {
     return resolve_to_pixels(gap, fetch_screen_value_(axis),
                              widget.resolved_scaling_mode, ui_scale,
                              fetch_screen_value_(Axis::Y));
+  }
+
+  void resolve_absolute_rel(UIComponent &child, float container_w,
+                            float container_h) {
+    const auto offset = [&](Axis axis, float container) {
+      if (!child.absolute_offset_is_size)
+        return axis == Axis::X ? child.absolute_pos_x : child.absolute_pos_y;
+      const Size &exp = axis == Axis::X ? child.absolute_offset_x
+                                        : child.absolute_offset_y;
+      return exp.dim == Dim::Percent
+                 ? exp.value * container
+                 : resolve_to_pixels(exp, fetch_screen_value_(axis),
+                                     child.resolved_scaling_mode, ui_scale,
+                                     fetch_screen_value_(Axis::Y));
+    };
+    const float ox = offset(Axis::X, container_w);
+    const float oy = offset(Axis::Y, container_h);
+    const bool trail_x = child.absolute_anchor == AbsoluteAnchor::TrailingTop ||
+                         child.absolute_anchor == AbsoluteAnchor::TrailingBottom;
+    const bool trail_y = child.absolute_anchor == AbsoluteAnchor::LeadingBottom ||
+                         child.absolute_anchor == AbsoluteAnchor::TrailingBottom;
+    child.computed_rel[Axis::X] =
+        trail_x ? container_w - ox - snapped_extent(child, Axis::X) : ox;
+    child.computed_rel[Axis::Y] =
+        trail_y ? container_h - oy - snapped_extent(child, Axis::Y) : oy;
+    if (child.rtl_mirrored && !trail_x)
+      child.computed_rel[Axis::X] = container_w - child.computed_rel[Axis::X] -
+                                    snapped_extent(child, Axis::X);
   }
 
   auto &set_grid_snapping(bool enabled) {
@@ -308,12 +346,31 @@ struct AutoLayout {
     return widget.computed[axis];
   }
 
+  float scrollbar_gutter_px(UIComponent &widget, Axis axis) {
+    if (widget.id < 0 || static_cast<size_t>(widget.id) >= mapping.size() ||
+        mapping[static_cast<size_t>(widget.id)] == nullptr)
+      return 0.f;
+    Entity &ent = *mapping[static_cast<size_t>(widget.id)];
+    if (!ent.has<HasScrollView>())
+      return 0.f;
+    const HasScrollView &sv = ent.get<HasScrollView>();
+    if (!sv.scrollbar_gutter)
+      return 0.f;
+    const bool trailing =
+        ((axis == Axis::right || axis == Axis::X) && sv.vertical_enabled) ||
+        ((axis == Axis::bottom || axis == Axis::Y) && sv.horizontal_enabled);
+    if (!trailing)
+      return 0.f;
+    return resolve_to_pixels(sv.scrollbar_thickness,
+                             fetch_screen_value_(Axis::Y),
+                             widget.resolved_scaling_mode, ui_scale);
+  }
   float compute_padding_for_standalone_expectation(UIComponent &widget,
                                                    Axis axis) {
     const float no_change = widget.computed_padd[axis];
     const float screenValue = fetch_screen_value_(axis);
 
-    const auto compute_ = [&](const Size &exp) {
+    const auto compute = [&](const Size &exp) {
       switch (exp.dim) {
       case Dim::Pixels:
         return resolve_pixels(exp.value, widget);
@@ -337,14 +394,16 @@ struct AutoLayout {
     const auto &padd = widget.desired_padding;
     switch (axis) {
     case Axis::X:
-      return compute_(padd[Axis::left]) + compute_(padd[Axis::right]);
+      return compute(padd[Axis::left]) + compute(padd[Axis::right]) +
+             scrollbar_gutter_px(widget, axis);
     case Axis::Y:
-      return compute_(padd[Axis::top]) + compute_(padd[Axis::bottom]);
+      return compute(padd[Axis::top]) + compute(padd[Axis::bottom]) +
+             scrollbar_gutter_px(widget, axis);
     case Axis::top:
     case Axis::left:
     case Axis::right:
     case Axis::bottom:
-      return compute_(padd[axis]);
+      return compute(padd[axis]) + scrollbar_gutter_px(widget, axis);
     }
     return no_change;
   }
@@ -354,7 +413,7 @@ struct AutoLayout {
     const float no_change = widget.computed_margin[axis];
     const float screenValue = fetch_screen_value_(axis);
 
-    const auto compute_ = [&](const Size &exp) {
+    const auto compute = [&](const Size &exp) {
       switch (exp.dim) {
       case Dim::Pixels:
         return resolve_pixels(exp.value, widget);
@@ -377,14 +436,14 @@ struct AutoLayout {
     const auto &margin = widget.desired_margin;
     switch (axis) {
     case Axis::X:
-      return compute_(margin[Axis::left]) + compute_(margin[Axis::right]);
+      return compute(margin[Axis::left]) + compute(margin[Axis::right]);
     case Axis::Y:
-      return compute_(margin[Axis::top]) + compute_(margin[Axis::bottom]);
+      return compute(margin[Axis::top]) + compute(margin[Axis::bottom]);
     case Axis::top:
     case Axis::left:
     case Axis::right:
     case Axis::bottom:
-      return compute_(margin[axis]);
+      return compute(margin[axis]);
     }
     return no_change;
   }
@@ -413,8 +472,10 @@ struct AutoLayout {
       return no_change;
     }
     return exp.dim == Dim::Percent
-               ? exp.value *
-                     (parent.computed[axis] - parent.computed_padd[axis])
+               ? fmaxf(0.f,
+                       exp.value * (parent.computed[axis] -
+                                    parent.computed_padd[axis]) -
+                           widget.computed_margin[axis])
                : no_change;
   }
 
@@ -437,7 +498,8 @@ struct AutoLayout {
       return no_change;
     }
 
-    const auto compute_ = [&](const Size &exp, float parent_value) {
+    const auto compute = [&](const Size &exp, float parent_value,
+                              float gutter) {
       switch (exp.dim) {
       // Unsupported kinds fall through into Percent.
       case Dim::Children:
@@ -447,7 +509,7 @@ struct AutoLayout {
       case Dim::Expand:
         log_error("Padding by expand not supported");
       case Dim::Percent:
-        return exp.value * parent_value;
+        return exp.value * parent_value + gutter;
       case Dim::ScreenPercent:
       case Dim::None:
       case Dim::Pixels:
@@ -459,17 +521,21 @@ struct AutoLayout {
     const auto &padd = widget.desired_padding;
     switch (axis) {
     case Axis::X:
-      return compute_(padd[Axis::left], parent.computed[Axis::X]) +
-             compute_(padd[Axis::right], parent.computed[Axis::X]);
+      return compute(padd[Axis::left], parent.computed[Axis::X], 0.f) +
+             compute(padd[Axis::right], parent.computed[Axis::X],
+                      scrollbar_gutter_px(widget, Axis::right));
     case Axis::Y:
-      return compute_(padd[Axis::top], parent.computed[Axis::Y]) +
-             compute_(padd[Axis::bottom], parent.computed[Axis::Y]);
+      return compute(padd[Axis::top], parent.computed[Axis::Y], 0.f) +
+             compute(padd[Axis::bottom], parent.computed[Axis::Y],
+                      scrollbar_gutter_px(widget, Axis::bottom));
     case Axis::left:
     case Axis::right:
-      return compute_(padd[axis], parent.computed[Axis::X]);
+      return compute(padd[axis], parent.computed[Axis::X],
+                      scrollbar_gutter_px(widget, axis));
     case Axis::top:
     case Axis::bottom:
-      return compute_(padd[axis], parent.computed[Axis::Y]);
+      return compute(padd[axis], parent.computed[Axis::Y],
+                      scrollbar_gutter_px(widget, axis));
     }
     return no_change;
   }
@@ -493,24 +559,24 @@ struct AutoLayout {
       return no_change;
     }
 
-    const auto compute_ = [&](const Size &exp, float parent_value) {
+    const auto compute = [&](const Size &exp, float parent_value) {
       return exp.dim == Dim::Percent ? exp.value * parent_value : no_change;
     };
 
     const auto &margin = widget.desired_margin;
     switch (axis) {
     case Axis::X:
-      return compute_(margin[Axis::left], parent.computed[Axis::X]) +
-             compute_(margin[Axis::right], parent.computed[Axis::X]);
+      return compute(margin[Axis::left], parent.computed[Axis::X]) +
+             compute(margin[Axis::right], parent.computed[Axis::X]);
     case Axis::Y:
-      return compute_(margin[Axis::top], parent.computed[Axis::Y]) +
-             compute_(margin[Axis::bottom], parent.computed[Axis::Y]);
+      return compute(margin[Axis::top], parent.computed[Axis::Y]) +
+             compute(margin[Axis::bottom], parent.computed[Axis::Y]);
     case Axis::left:
     case Axis::right:
-      return compute_(margin[axis], parent.computed[Axis::X]);
+      return compute(margin[axis], parent.computed[Axis::X]);
     case Axis::top:
     case Axis::bottom:
-      return compute_(margin[axis], parent.computed[Axis::Y]);
+      return compute(margin[axis], parent.computed[Axis::Y]);
     }
     return no_change;
   }
@@ -658,7 +724,10 @@ struct AutoLayout {
 
       // Include child margins so Dim::Children parents are sized to fit
       // children including their external spacing.
-      float cs = snapped_extent(child, axis) + child.computed_margin[axis];
+      float cs = is_stretch_child(widget, child, axis)
+                     ? child.computed_margin[axis]
+                     : snapped_extent(child, axis) +
+                           child.computed_margin[axis];
 
       if ( //
           child.desired[axis].dim == Dim::Percent &&
@@ -696,7 +765,9 @@ struct AutoLayout {
       if (child.should_hide)
         continue;
 
-      float cs = child.computed[axis];
+      float cs = is_stretch_child(widget, child, axis)
+                     ? 0.f
+                     : child.computed[axis];
       if (cs == -1) {
         if (child.desired[axis].dim == Dim::Percent &&
             widget.desired[axis].dim == Dim::Children) {
@@ -1144,7 +1215,9 @@ struct AutoLayout {
         const float avail = widget.computed[axis] - widget.computed_padd[axis];
         if (avail <= 0.f)
           continue;
-        child->computed[axis] = child->desired[axis].value * avail;
+        child->computed[axis] =
+            fmaxf(0.f, child->desired[axis].value * avail -
+                           child->computed_margin[axis]);
       }
     }
 
@@ -1188,10 +1261,13 @@ struct AutoLayout {
       const float content =
           fmaxf(0.f, widget.computed[cross] - widget.computed_padd[cross]);
       for (UIComponent *child : layout_children) {
-        if (child->desired[cross].dim != Dim::Expand)
-          continue;
-        child->computed[cross] =
-            fmaxf(0.f, content - child->computed_margin[cross]);
+        if (child->desired[cross].dim == Dim::Expand) {
+          child->computed[cross] =
+              fmaxf(0.f, content - child->computed_margin[cross]);
+        } else if (is_stretch_child(widget, *child, cross)) {
+          child->computed[cross] =
+              fmaxf(0.f, content - child->computed_margin[cross]);
+        }
       }
     }
 
@@ -1628,17 +1704,7 @@ struct AutoLayout {
 
       // Dont worry about any children that are absolutely positioned
       if (child.absolute) {
-        // Set computed_rel from the absolute position stored on UIComponent.
-        // This is set during component init from with_absolute_position(x, y).
-        child.computed_rel[Axis::X] = child.absolute_pos_x;
-        child.computed_rel[Axis::Y] = child.absolute_pos_y;
-        // RTL mirroring swaps the layout order too: an absolute child
-        // anchors from the other side of the parent's content box, so a
-        // column pinned left in LTR stands on the right in RTL -- the
-        // page-level mirror real RTL interfaces perform.
-        if (child.rtl_mirrored)
-          child.computed_rel[Axis::X] = container_w - child.absolute_pos_x -
-                                        snapped_extent(child, Axis::X);
+        resolve_absolute_rel(child, container_w, container_h);
         compute_relative_positions(child);
         continue;
       }
@@ -1981,7 +2047,13 @@ struct AutoLayout {
     al.calculate_those_with_parents(widget);
     al.calculate_those_with_children(widget);
     al.solve_violations(widget);
-    if (widget.absolute) {
+    if (widget.absolute && widget.parent != -1) {
+      UIComponent &parent = al.cmp(widget.parent);
+      al.resolve_absolute_rel(
+          widget,
+          fmaxf(0.f, parent.computed[Axis::X] - parent.computed_padd[Axis::X]),
+          fmaxf(0.f, parent.computed[Axis::Y] - parent.computed_padd[Axis::Y]));
+    } else if (widget.absolute) {
       widget.computed_rel[Axis::X] = widget.absolute_pos_x;
       widget.computed_rel[Axis::Y] = widget.absolute_pos_y;
     }

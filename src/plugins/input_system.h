@@ -4,6 +4,7 @@
 #include <array>
 
 #include <cmath>
+#include <cstdint>
 #include <algorithm>
 #include <map>
 #include <variant>
@@ -12,6 +13,7 @@
 #include "../core/base_component.h"
 #include "../core/entity_query.h"
 #include "../core/key_codes.h"
+#include "../core/wheel_delta.h"
 #include "../core/system.h"
 #include "../developer.h"
 #include "../drawing_helpers.h"
@@ -32,6 +34,9 @@ struct input : developer::Plugin {
     static constexpr float DEADZONE = 0.25f;
     static constexpr float MOUSE_DELTA_SCALE = 40.f;
     static constexpr int MAX_GAMEPAD_ID = 8;
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    static_assert(testing::input_injector::GAMEPAD_COUNT == MAX_GAMEPAD_ID);
+#endif
 
     struct ProvidesInputConfig : BaseComponent {
         float gamepad_deadzone = DEADZONE;
@@ -144,7 +149,12 @@ struct input : developer::Plugin {
 #endif
     }
     static bool is_gamepad_available(const GamepadID id) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        return testing::test_input::is_gamepad_available(
+            id, raylib::IsGamepadAvailable);
+#else
         return raylib::IsGamepadAvailable(id);
+#endif
     }
     static bool is_key_pressed(const KeyCode keycode) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
@@ -195,17 +205,39 @@ struct input : developer::Plugin {
         raylib::Vector2 v = raylib::GetMouseWheelMoveV();
         return {v.x, v.y};
     }
+    static WheelDeltaKind get_mouse_wheel_kind() {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        if (testing::test_input::detail::test_mode)
+            return testing::input_injector::consume_wheel_kind();
+#endif
+        return WheelDeltaKind::Notched;
+    }
     static float get_gamepad_axis_mvt(const GamepadID gamepad_id,
                                       const GamepadAxis axis) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        return testing::test_input::get_gamepad_axis(
+            gamepad_id, axis, raylib::GetGamepadAxisMovement);
+#else
         return raylib::GetGamepadAxisMovement(gamepad_id, axis);
+#endif
     }
     static bool is_gamepad_button_pressed(const GamepadID gamepad_id,
                                           const GamepadButton button) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        return testing::test_input::is_gamepad_button_pressed(
+            gamepad_id, button, raylib::IsGamepadButtonPressed);
+#else
         return raylib::IsGamepadButtonPressed(gamepad_id, button);
+#endif
     }
     static bool is_gamepad_button_down(const GamepadID gamepad_id,
                                        const GamepadButton button) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        return testing::test_input::is_gamepad_button_down(
+            gamepad_id, button, raylib::IsGamepadButtonDown);
+#else
         return raylib::IsGamepadButtonDown(gamepad_id, button);
+#endif
     }
 
     static void draw_text(const std::string &text, const int x, const int y,
@@ -630,6 +662,15 @@ struct input : developer::Plugin {
         auto v = graphics::MetalPlatformAPI::get_mouse_wheel_move_v();
         return {v.x, v.y};
     }
+    static WheelDeltaKind get_mouse_wheel_kind() {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        if (testing::test_input::detail::test_mode)
+            return testing::input_injector::consume_wheel_kind();
+#endif
+        return graphics::MetalPlatformAPI::get_mouse_wheel_precise()
+                   ? WheelDeltaKind::Precise
+                   : WheelDeltaKind::Notched;
+    }
     static int get_char_pressed() {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
         return testing::test_input::get_char_pressed(
@@ -668,6 +709,27 @@ struct input : developer::Plugin {
 
     // Gamepad not yet supported on Metal — return safe defaults silently
     // since the input system polls these every frame.
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    static bool is_gamepad_available(const GamepadID id) {
+        return testing::test_input::is_gamepad_available(
+            id, [](int) { return false; });
+    }
+    static float get_gamepad_axis_mvt(const GamepadID id,
+                                      const GamepadAxis axis) {
+        return testing::test_input::get_gamepad_axis(
+            id, axis, [](int, int) { return 0.f; });
+    }
+    static bool is_gamepad_button_pressed(const GamepadID id,
+                                          const GamepadButton button) {
+        return testing::test_input::is_gamepad_button_pressed(
+            id, button.value, [](int, int) { return false; });
+    }
+    static bool is_gamepad_button_down(const GamepadID id,
+                                       const GamepadButton button) {
+        return testing::test_input::is_gamepad_button_down(
+            id, button.value, [](int, int) { return false; });
+    }
+#else
     static bool is_gamepad_available(const GamepadID) { return false; }
     static float get_gamepad_axis_mvt(const GamepadID, const GamepadAxis) {
         return 0.f;
@@ -679,6 +741,7 @@ struct input : developer::Plugin {
     static bool is_gamepad_button_down(const GamepadID, const GamepadButton) {
         return false;
     }
+#endif
 
     static void draw_text(const std::string &, const int, const int,
                           const int) {
@@ -753,6 +816,9 @@ struct input : developer::Plugin {
         log_error("@notimplemented get_mouse_wheel_move_v");
         return {0, 0};
     }
+    static WheelDeltaKind get_mouse_wheel_kind() {
+        return WheelDeltaKind::Notched;
+    }
     static int get_char_pressed() {
         log_error("@notimplemented get_char_pressed");
         return 0;
@@ -762,6 +828,8 @@ struct input : developer::Plugin {
         return false;
     }
     static bool is_key_pressed_repeat(const KeyCode) {
+        warn_once(0, "@notimplemented is_key_pressed_repeat on this "
+                     "backend (no raylib/sokol)");
         return false;
     }
     static bool is_key_down(const KeyCode) {
@@ -840,6 +908,15 @@ struct input : developer::Plugin {
         return gestures::is_pinching();
     }
 
+    static gestures::Availability gesture_availability() {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        if (testing::test_input::detail::test_mode) {
+            return gestures::Availability::Available;
+        }
+#endif
+        return gestures::gesture_availability();
+    }
+
     enum struct DeviceMedium {
         None,
         Keyboard,
@@ -907,6 +984,20 @@ struct input : developer::Plugin {
         if (is_key_down(keys::LEFT_ALT) || is_key_down(keys::RIGHT_ALT))
             mods |= KeyChord::MOD_ALT;
         if (is_key_down(keys::LEFT_SUPER) || is_key_down(keys::RIGHT_SUPER))
+            mods |= KeyChord::MOD_SUPER;
+        return mods;
+    }
+
+    template <typename KeyCheckFn>
+    static uint8_t modifiers_from(KeyCheckFn key_check) {
+        uint8_t mods = 0;
+        if (key_check(keys::LEFT_SHIFT) || key_check(keys::RIGHT_SHIFT))
+            mods |= KeyChord::MOD_SHIFT;
+        if (key_check(keys::LEFT_CONTROL) || key_check(keys::RIGHT_CONTROL))
+            mods |= KeyChord::MOD_CTRL;
+        if (key_check(keys::LEFT_ALT) || key_check(keys::RIGHT_ALT))
+            mods |= KeyChord::MOD_ALT;
+        if (key_check(keys::LEFT_SUPER) || key_check(keys::RIGHT_SUPER))
             mods |= KeyChord::MOD_SUPER;
         return mods;
     }
@@ -1011,6 +1102,40 @@ struct input : developer::Plugin {
         std::array<std::uint8_t, MAX_GAMEPAD_ID> axes_{}, previous_axes_{};
     };
 
+    class AxisEdges {
+     public:
+        void update(int max_gamepad) {
+            previous = held;
+            held.fill(0);
+            const int ids = max_gamepad < 0 ? 0 : std::min(max_gamepad, MAX_GAMEPAD_ID - 1) + 1;
+            bool available = false;
+            for (int flat = 0; flat < ids * AXIS_COUNT * 2; ++flat) {
+                const int id = flat / (AXIS_COUNT * 2);
+                const int b = flat % (AXIS_COUNT * 2);
+                if (b == 0) available = is_gamepad_available(id);
+                if (!available) continue;
+                const int axis = b / 2;
+                const int dir = (b % 2) ? 1 : -1;
+                if (visit_axis(id, {static_cast<GamepadAxis>(axis), dir}) > 0.f)
+                    held[static_cast<std::size_t>(id)] |= bit(axis, dir);
+            }
+        }
+        bool pressed(GamepadID id, GamepadAxisWithDir a) const {
+            const int axis = static_cast<int>(a.axis);
+            // TODO: compile-time id bound if GamepadID gains a range type.
+            if (id < 0 || id >= MAX_GAMEPAD_ID || axis < 0 || axis >= AXIS_COUNT) return false;
+            const std::uint16_t b = bit(axis, a.dir);
+            const auto i = static_cast<std::size_t>(id);
+            return (held[i] & b) && !(previous[i] & b);
+        }
+     private:
+        static constexpr int AXIS_COUNT = 6;
+        static std::uint16_t bit(int axis, int dir) {
+            return static_cast<std::uint16_t>(1u << (axis * 2 + (dir > 0)));
+        }
+        std::array<std::uint16_t, MAX_GAMEPAD_ID> held{}, previous{};
+    };
+
     struct ActionCheckResult {
         DeviceMedium medium = DeviceMedium::None;
         float value = 0.f;
@@ -1020,12 +1145,12 @@ struct input : developer::Plugin {
         BindingActivity activity;
     };
 
-    template <typename KeyCheckFn, typename ButtonCheckFn>
+    template <typename KeyCheckFn, typename ButtonCheckFn, typename AxisCheckFn>
     static ActionCheckResult check_single_action_impl(
         const GamepadID id, const ValidInputs &valid_inputs,
-        KeyCheckFn key_check, ButtonCheckFn button_check) {
+        KeyCheckFn key_check, ButtonCheckFn button_check, AxisCheckFn axis_check) {
         ActionCheckResult result;
-        uint8_t current_mods = get_current_modifiers();
+        uint8_t current_mods = modifiers_from(key_check);
         for (const auto &inp : valid_inputs) {
             DeviceMedium temp_medium = DeviceMedium::None;
             float temp = 0.f;
@@ -1048,7 +1173,7 @@ struct input : developer::Plugin {
                 }
             } else if (inp.index() == 1) {
                 temp_medium = DeviceMedium::GamepadAxis;
-                temp = visit_axis(id, std::get<1>(inp));
+                temp = axis_check(id, std::get<1>(inp));
             } else if (inp.index() == 2) {
                 temp_medium = DeviceMedium::GamepadButton;
                 temp = button_check(id, std::get<2>(inp));
@@ -1076,19 +1201,22 @@ struct input : developer::Plugin {
     }
 
     static ActionCheckResult check_single_action_down(
-        const GamepadID id, const ValidInputs &vis) {
+        const GamepadID id, const ValidInputs &vis, const AxisEdges &) {
         return check_single_action_impl(id, vis, is_key_down,
-            [](GamepadID gid, auto btn) { return visit_button_down(gid, btn); });
+            [](GamepadID gid, auto btn) { return visit_button_down(gid, btn); },
+            visit_axis);
     }
     static ActionCheckResult check_single_action_pressed(
-        const GamepadID id, const ValidInputs &vis) {
+        const GamepadID id, const ValidInputs &vis, const AxisEdges &edges) {
         return check_single_action_impl(id, vis, is_key_pressed,
-            [](GamepadID gid, auto btn) { return is_gamepad_button_pressed(gid, btn) ? 1.f : 0.f; });
+            [](GamepadID gid, auto btn) { return is_gamepad_button_pressed(gid, btn) ? 1.f : 0.f; },
+            [&](GamepadID gid, GamepadAxisWithDir a) { return edges.pressed(gid, a) ? visit_axis(gid, a) : 0.f; });
     }
     static ActionCheckResult check_single_action_pressed_repeat(
-        const GamepadID id, const ValidInputs &vis) {
+        const GamepadID id, const ValidInputs &vis, const AxisEdges &edges) {
         return check_single_action_impl(id, vis, is_key_pressed_repeat,
-            [](GamepadID gid, auto btn) { return is_gamepad_button_pressed(gid, btn) ? 1.f : 0.f; });
+            [](GamepadID gid, auto btn) { return is_gamepad_button_pressed(gid, btn) ? 1.f : 0.f; },
+            [&](GamepadID gid, GamepadAxisWithDir a) { return edges.pressed(gid, a) ? visit_axis(gid, a) : 0.f; });
     }
 
     // When an exclusive chord matches a key, suppress permissive (bare-key)
@@ -1143,12 +1271,29 @@ struct input : developer::Plugin {
         }
     };
 
+    struct InputActivity {
+        bool any = false;
+        bool pressed = false;
+        std::uint64_t frame = 0;
+        std::uint64_t last_activity_frame = 0;
+    };
+
     struct InputCollector : public BaseComponent {
         DeviceActivity device_activity;
+        InputActivity activity;
+        AxisEdges axis_edges;
         std::vector<input::ActionDone> inputs;
         std::vector<input::ActionDone> inputs_pressed;
         std::vector<input::ActionDone> inputs_pressed_repeat;
         float since_last_input = 0.f;
+
+        void note_activity_frame() {
+            ++activity.frame;
+            activity.pressed = !inputs_pressed.empty() ||
+                               !inputs_pressed_repeat.empty();
+            activity.any = activity.pressed || !inputs.empty();
+            if (activity.any) activity.last_activity_frame = activity.frame;
+        }
     };
 
     using InputCollectorInputAction = InputCollector;
@@ -1217,6 +1362,10 @@ struct input : developer::Plugin {
         [[nodiscard]] float since_last_input() {
             return data.value().get().since_last_input;
         }
+
+        [[nodiscard]] InputActivity input_activity() const {
+            return data.value().get().activity;
+        }
     };
 
     static auto get_input_collector() -> PossibleInputCollector {
@@ -1224,6 +1373,12 @@ struct input : developer::Plugin {
         InputCollector *ic = EntityHelper::get_singleton_cmp<InputCollector>();
         if (ic == nullptr) return {};
         return *ic;
+    }
+
+    static InputActivity input_activity() {
+        auto collector = get_input_collector();
+        if (!collector.has_value()) return {};
+        return collector.input_activity();
     }
 
     template <typename Action>
@@ -1244,6 +1399,12 @@ struct input : developer::Plugin {
                std::ranges::any_of(collector.inputs_pressed(), [&](const ActionDone &done) {
                    return done.action == static_cast<int>(action);
                });
+    }
+
+    static bool is_gamepad_axis_pressed(GamepadID id, GamepadAxis axis, int dir) {
+        const auto *ic = EntityHelper::get_singleton_cmp<InputCollector>();
+        VALIDATE(ic != nullptr, "is_gamepad_axis_pressed needs the input plugin's InputCollector");
+        return ic->axis_edges.pressed(id, {axis, dir});
     }
 
     // TODO i would like to move this out of input namespace
@@ -1274,10 +1435,11 @@ struct input : developer::Plugin {
             collector.inputs_pressed.clear();
             collector.inputs_pressed_repeat.clear();
             collector.device_activity.begin_frame();
+            collector.axis_edges.update(mxGamepadID.max_gamepad_available);
 
             auto collect = [&](auto check_fn, std::vector<ActionDone> &dest,
                                int gid, int action, const ValidInputs &vis) {
-                const auto r = check_fn(gid, vis);
+                const auto r = check_fn(gid, vis, collector.axis_edges);
                 if (&dest == &collector.inputs_pressed) collector.device_activity.observe(gid, r.activity);
                 if (r.value > 0.f)
                     dest.push_back(ActionDone(r.medium, gid, action, r.value,
@@ -1304,6 +1466,7 @@ struct input : developer::Plugin {
             suppress_permissive_duplicates(collector.inputs_pressed);
             suppress_permissive_duplicates(collector.inputs_pressed_repeat);
 
+            collector.note_activity_frame();
             if (collector.inputs.empty()) {
                 collector.since_last_input += dt;
             } else {
@@ -1454,12 +1617,14 @@ struct LayeredInputSystem
         collector.inputs_pressed.clear();
         collector.inputs_pressed_repeat.clear();
         collector.device_activity.begin_frame();
+        collector.axis_edges.update(maxGamepad.max_gamepad_available);
 
         // Get the active layer's mapping
         auto layer_it = mapper.layers.find(mapper.active_layer);
         if (layer_it == mapper.layers.end()) {
             collector.device_activity.end_frame(input::is_mouse_button_down(0) || input::is_mouse_button_down(1));
             // No mapping for this layer, nothing to poll
+            collector.note_activity_frame();
             if (collector.inputs.empty()) {
                 collector.since_last_input += dt;
             }
@@ -1468,7 +1633,7 @@ struct LayeredInputSystem
 
         auto collect = [&](auto check_fn, std::vector<input::ActionDone> &dest,
                            int gid, int action, const input::ValidInputs &vis) {
-            const auto r = check_fn(gid, vis);
+            const auto r = check_fn(gid, vis, collector.axis_edges);
             if (&dest == &collector.inputs_pressed) collector.device_activity.observe(gid, r.activity);
             if (r.value > 0.f)
                 dest.push_back(input::ActionDone(r.medium, gid, action, r.value,
@@ -1491,6 +1656,7 @@ struct LayeredInputSystem
         input::suppress_permissive_duplicates(collector.inputs_pressed);
         input::suppress_permissive_duplicates(collector.inputs_pressed_repeat);
 
+        collector.note_activity_frame();
         if (collector.inputs.empty()) {
             collector.since_last_input += dt;
         } else {

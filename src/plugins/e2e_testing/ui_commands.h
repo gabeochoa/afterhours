@@ -27,6 +27,7 @@
 #include <cstdlib>
 #include <format>
 #include <functional>
+#include <map>
 #include <string_view>
 #include <magic_enum/magic_enum.hpp>
 
@@ -40,9 +41,9 @@ inline EntityQuery<> ui_query() {
 }
 
 // Helper: get the screen-space rect of a UI component, the same way render
-// and hit-test place it.
-inline RectangleType get_screen_rect(Entity &entity) {
-  auto &cmp = entity.get<ui::UIComponent>();
+// and hit-test place it. Read-only, so a const view of the entity is enough.
+inline RectangleType get_screen_rect(const Entity &entity) {
+  const auto &cmp = entity.get<ui::UIComponent>();
   RectangleType rect = cmp.rect();
   if (entity.has<ui::HasUIModifiers>()) {
     rect = entity.get<ui::HasUIModifiers>().apply_modifier(rect);
@@ -52,44 +53,26 @@ inline RectangleType get_screen_rect(Entity &entity) {
 
 // Centre of an element's visible (clipped) rect; nullopt when fully
 // clipped, so clicks land on a point the user could actually hit.
-inline std::optional<Position> visible_center(Entity &entity) {
+inline std::optional<Position> visible_center(const Entity &entity) {
   auto rect = ui::detail::hit_rect(entity, entity.get<ui::UIComponent>());
   if (rect.width <= 0.f || rect.height <= 0.f) return std::nullopt;
   return Position{rect.x + rect.width / 2, rect.y + rect.height / 2};
 }
 
-// ---------------------------------------------------------------------------
-// Unified name/text resolution (decision: decide-e2e-name-lookup).
-//
-// Every name- or text-addressed command resolves through resolve_ui_* so an
-// ambiguous lookup fails loudly with the candidate list instead of silently
-// clicking the first entity in id order (which shifts as ids get reused).
-//
-// Scope: `under=<debug_name>` restricts the search to that element's subtree
-// (a UIComponent::parent walk to a debug-named ancestor). `in=<debug_name>`
-// is accepted as an alias: click_label and assert_ui_text already used it,
-// and they keep it. A scope matching nothing takes each handler's existing
-// not-found path (fail or retry); a scope matching several elements fails,
-// since the scope itself is ambiguous.
-// ---------------------------------------------------------------------------
-
 enum struct UIMatchKind {
-  DebugName,     // UIComponentDebug::name() == needle
-  TextSubstring, // HasLabel::label contains needle
-  TextExact,     // HasLabel::label == needle
+  DebugName,
+  TextSubstring,
+  TextExact,
 };
 
 enum struct UIVisibility {
-  Any,                       // candidates regardless of render state
-  Rendered,                  // was_rendered_to_screen
-  RenderedPartiallyVisible,  // Rendered + is_partially_visible
-  Clickable,                 // Rendered + a visible centre (click target)
+  Any,
+  Rendered,
+  RenderedPartiallyVisible,
+  Clickable,
 };
-
-// Forward declarations of the scope/visibility helpers defined below.
-inline bool is_within_scope(Entity &entity, EntityID scope);
+inline bool is_within_scope(const Entity &entity, EntityID scope);
 inline bool is_partially_visible(const Entity &entity);
-
 inline std::string describe_candidate(Entity &entity) {
   auto rect = get_screen_rect(entity);
   std::string desc = std::format("#{} @({},{})", entity.id,
@@ -114,59 +97,63 @@ inline std::string describe_candidate(Entity &entity) {
   return desc;
 }
 
-inline std::vector<Entity *> resolve_ui_candidates(
+inline RefEntities resolve_ui_candidates(
     const std::string &needle, EntityID scope, UIMatchKind kind,
     UIVisibility vis,
     const std::function<bool(Entity &)> &extra = nullptr) {
-  std::vector<Entity *> out;
+  RefEntities out;
+  // TODO: make kind/visibility first-class query modifiers (whereRendered/whereClickable?) instead of hand-rolled predicates here.
   for (Entity &e : ui_query()
            .whereHasComponent<ui::UIComponent>()
-           .whereLambda([&](const Entity &cand) {
-             if (kind == UIMatchKind::DebugName) {
-               if (!cand.has<ui::UIComponentDebug>()) return false;
-               if (cand.get<ui::UIComponentDebug>().name() != needle)
-                 return false;
-             } else if (kind == UIMatchKind::TextExact) {
-               if (!cand.has<ui::HasLabel>()) return false;
-               if (cand.get<ui::HasLabel>().label != needle) return false;
-             } else {
-               if (!cand.has<ui::HasLabel>()) return false;
-               if (cand.get<ui::HasLabel>().label.find(needle) ==
-                   std::string::npos)
-                 return false;
-             }
-             if (scope != -1 &&
-                 !is_within_scope(const_cast<Entity &>(cand), scope))
-               return false;
-             auto &cmp = cand.get<ui::UIComponent>();
-             switch (vis) {
-               case UIVisibility::Any: break;
-               case UIVisibility::Rendered:
-                 if (!cmp.was_rendered_to_screen) return false;
-                 break;
-               case UIVisibility::RenderedPartiallyVisible:
-                 if (!cmp.was_rendered_to_screen ||
-                     !is_partially_visible(cand))
-                   return false;
-                 break;
-               case UIVisibility::Clickable:
-                 if (!cmp.was_rendered_to_screen) return false;
-                 if (!visible_center(const_cast<Entity &>(cand)))
-                   return false;
-                 break;
-             }
-             return true;
-           })
+           .whereLambdaIf(kind == UIMatchKind::DebugName,
+                          [&](const Entity &cand) {
+                            return cand.has<ui::UIComponentDebug>() &&
+                                   cand.get<ui::UIComponentDebug>().name() ==
+                                       needle;
+                          })
+           .whereLambdaIf(kind == UIMatchKind::TextExact,
+                          [&](const Entity &cand) {
+                            return cand.has<ui::HasLabel>() &&
+                                   cand.get<ui::HasLabel>().label == needle;
+                          })
+           .whereLambdaIf(kind == UIMatchKind::TextSubstring,
+                          [&](const Entity &cand) {
+                            return cand.has<ui::HasLabel>() &&
+                                   cand.get<ui::HasLabel>().label.find(
+                                       needle) != std::string::npos;
+                          })
+           .whereLambdaIf(scope != -1,
+                          [&](const Entity &cand) {
+                            return is_within_scope(cand, scope);
+                          })
+           .whereLambdaIf(vis == UIVisibility::Rendered,
+                          [&](const Entity &cand) {
+                            return cand.get<ui::UIComponent>()
+                                .was_rendered_to_screen;
+                          })
+           .whereLambdaIf(vis == UIVisibility::RenderedPartiallyVisible,
+                          [&](const Entity &cand) {
+                            return cand.get<ui::UIComponent>()
+                                       .was_rendered_to_screen &&
+                                   is_partially_visible(cand);
+                          })
+           .whereLambdaIf(vis == UIVisibility::Clickable,
+                          [&](const Entity &cand) {
+                            return cand.get<ui::UIComponent>()
+                                       .was_rendered_to_screen &&
+                                   visible_center(const_cast<Entity &>(cand))
+                                       .has_value();
+                          })
            .gen()) {
     if (extra && !extra(e)) continue;
-    out.push_back(&e);
+    out.push_back(e);
   }
   return out;
 }
 
 struct UIResolution {
-  Entity *entity = nullptr;
-  std::string ambiguous; // non-empty when >1 candidate: fail, don't guess
+  OptEntity entity;
+  std::string ambiguous;
 };
 
 inline UIResolution resolve_ui_single(
@@ -181,9 +168,9 @@ inline UIResolution resolve_ui_single(
   }
   if (candidates.empty()) return out;
   std::string list;
-  for (Entity *e : candidates) {
+  for (Entity &e : candidates) {
     if (!list.empty()) list += "; ";
-    list += describe_candidate(*e);
+    list += describe_candidate(e);
   }
   out.ambiguous =
       std::format("{} elements match '{}'; scope it with under=<scope> "
@@ -193,13 +180,11 @@ inline UIResolution resolve_ui_single(
 }
 
 enum struct ScopeStatus { Ok, NotFound, Ambiguous };
-
 struct ScopeOutcome {
   ScopeStatus status = ScopeStatus::NotFound;
   EntityID id = -1;
   size_t count = 0;
 };
-
 inline ScopeOutcome resolve_scope_entity(const std::string &scope_name) {
   ScopeOutcome out;
   for (Entity &e : ui_query()
@@ -219,11 +204,6 @@ inline ScopeOutcome resolve_scope_entity(const std::string &scope_name) {
     out.status = ScopeStatus::Ambiguous;
   return out;
 }
-
-// Removes trailing `under=<name>`/`in=<name>` tokens from args[start..],
-// returning the remaining positional tokens in order. At least
-// min_positionals tokens are kept, so `expect_input_text name "under=x"`
-// is still a name+text pair, never a name missing its text.
 inline std::vector<std::string> strip_trailing_scope(
     const PendingE2ECommand &cmd, size_t start, size_t min_positionals,
     std::string &scope_name, std::string &error) {
@@ -246,10 +226,6 @@ inline std::vector<std::string> strip_trailing_scope(
     pos.push_back(cmd.args[i]);
   return pos;
 }
-
-// Prop-style handlers (`assert_ui name prop=val ...`): pulls `under=/in=`
-// tokens (anywhere after args[start-1]) into scope_name; every other token
-// is returned in order.
 inline std::vector<std::string> split_scope_props(
     const PendingE2ECommand &cmd, size_t start, std::string &scope_name,
     std::string &error) {
@@ -271,10 +247,6 @@ inline std::vector<std::string> split_scope_props(
   }
   return rest;
 }
-
-// Resolves the scope for a command into `scope`. Returns false when the
-// command must return now (ambiguous scope fails; a missing scope fails or
-// retries per retry_when_missing, matching each handler's not-found path).
 inline bool scope_or_done(PendingE2ECommand &cmd,
                           const std::string &cmd_label,
                           const std::string &scope_name,
@@ -300,16 +272,10 @@ inline bool scope_or_done(PendingE2ECommand &cmd,
   scope = so.id;
   return true;
 }
-
-// Point inside a named element at an offset from its top left. `off` holds
-// the args after the name (dx, dy); "center" or a missing value means the
-// rect middle. error carries the ambiguity text; point empty means no
-// element matched in scope (caller reports not-found).
 struct ElementPointResult {
   std::optional<Position> point;
   std::string error;
 };
-
 inline ElementPointResult element_point(
     const std::string &name, const std::vector<std::string> &off,
     bool use_offset, EntityID scope) {
@@ -321,7 +287,7 @@ inline ElementPointResult element_point(
     return r;
   }
   if (!res.entity) return r;
-  const RectangleType rect = get_screen_rect(*res.entity);
+  const RectangleType rect = get_screen_rect(res.entity.asE());
   const auto off_at = [&](size_t i, float extent) {
     if (!use_offset || off.size() <= i - 1 || off[i - 1] == "center")
       return extent * 0.5f;
@@ -331,28 +297,20 @@ inline ElementPointResult element_point(
                      rect.y + off_at(2, rect.height)};
   return r;
 }
-
-// Back-compat: the one clickable centre, no scope. New code must use
-// resolve_ui_single so ambiguity fails loudly instead of being refused
-// silently here.
 template <typename InputAction>
 std::optional<Position> find_component_center(const std::string &name) {
   auto res = resolve_ui_single(name, -1, UIMatchKind::DebugName,
                                UIVisibility::Clickable);
   if (!res.entity) return std::nullopt;
-  return visible_center(*res.entity);
+  return visible_center(res.entity.asE());
 }
-
-// Back-compat: the one clickable centre by substring, no scope.
 template <typename InputAction>
 std::optional<Position> find_component_with_text(const std::string &text) {
   auto res = resolve_ui_single(text, -1, UIMatchKind::TextSubstring,
                                UIVisibility::Clickable);
   if (!res.entity) return std::nullopt;
-  return visible_center(*res.entity);
+  return visible_center(res.entity.asE());
 }
-
-// Handle 'click_ui name [under=scope]' - clicks UI component by debug name
 template <typename InputAction>
 struct HandleClickUICommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
@@ -364,6 +322,7 @@ struct HandleClickUICommand : System<PendingE2ECommand> {
     if (pos.empty()) { cmd.fail("click_ui requires component name"); return; }
     EntityID scope = -1;
     if (!scope_or_done(cmd, "click_ui", scope_name, false, scope)) return;
+    if (render_checkpoint_pending(cmd)) return;
     auto res = resolve_ui_single(pos[0], scope, UIMatchKind::DebugName,
                                  UIVisibility::Clickable);
     if (!res.ambiguous.empty()) { cmd.fail(res.ambiguous); return; }
@@ -371,13 +330,12 @@ struct HandleClickUICommand : System<PendingE2ECommand> {
       cmd.fail(std::format("UI component not found: {}", pos[0]));
       return;
     }
-    auto centre = visible_center(*res.entity);
+    auto centre = visible_center(res.entity.asE());
     test_input::simulate_click(centre->x, centre->y);
     cmd.consume();
   }
 };
 
-// Handle 'right_click_ui name [under=scope]' - secondary click on a component by debug name.
 // A context menu is opened by name in the app and could only be opened by
 // coordinate in a test, which goes stale the moment the layout moves.
 template <typename InputAction>
@@ -392,6 +350,7 @@ struct HandleRightClickUICommand : System<PendingE2ECommand> {
     EntityID scope = -1;
     if (!scope_or_done(cmd, "right_click_ui", scope_name, false, scope))
       return;
+    if (render_checkpoint_pending(cmd)) return;
     auto res = resolve_ui_single(pos[0], scope, UIMatchKind::DebugName,
                                  UIVisibility::Clickable);
     if (!res.ambiguous.empty()) { cmd.fail(res.ambiguous); return; }
@@ -399,13 +358,12 @@ struct HandleRightClickUICommand : System<PendingE2ECommand> {
       cmd.fail(std::format("UI component not found: {}", pos[0]));
       return;
     }
-    auto centre = visible_center(*res.entity);
+    auto centre = visible_center(res.entity.asE());
     test_input::simulate_right_click(centre->x, centre->y);
     cmd.consume();
   }
 };
 
-// Handle 'right_click_text "text" [under=scope]' - secondary click on a component by label.
 template <typename InputAction>
 struct HandleRightClickTextCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
@@ -418,6 +376,7 @@ struct HandleRightClickTextCommand : System<PendingE2ECommand> {
     EntityID scope = -1;
     if (!scope_or_done(cmd, "right_click_text", scope_name, false, scope))
       return;
+    if (render_checkpoint_pending(cmd)) return;
     auto res = resolve_ui_single(pos[0], scope, UIMatchKind::TextSubstring,
                                  UIVisibility::Clickable);
     if (!res.ambiguous.empty()) { cmd.fail(res.ambiguous); return; }
@@ -425,13 +384,12 @@ struct HandleRightClickTextCommand : System<PendingE2ECommand> {
       cmd.fail(std::format("No UI with text: {}", pos[0]));
       return;
     }
-    auto centre = visible_center(*res.entity);
+    auto centre = visible_center(res.entity.asE());
     test_input::simulate_right_click(centre->x, centre->y);
     cmd.consume();
   }
 };
 
-// Handle 'click_text "text" [under=scope]' - clicks UI component containing text
 template <typename InputAction>
 struct HandleClickTextCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
@@ -443,6 +401,7 @@ struct HandleClickTextCommand : System<PendingE2ECommand> {
     if (pos.empty()) { cmd.fail("click_text requires text"); return; }
     EntityID scope = -1;
     if (!scope_or_done(cmd, "click_text", scope_name, false, scope)) return;
+    if (render_checkpoint_pending(cmd)) return;
     auto res = resolve_ui_single(pos[0], scope, UIMatchKind::TextSubstring,
                                  UIVisibility::Clickable);
     if (!res.ambiguous.empty()) { cmd.fail(res.ambiguous); return; }
@@ -450,7 +409,7 @@ struct HandleClickTextCommand : System<PendingE2ECommand> {
       cmd.fail(std::format("No UI with text: {}", pos[0]));
       return;
     }
-    auto centre = visible_center(*res.entity);
+    auto centre = visible_center(res.entity.asE());
     test_input::simulate_click(centre->x, centre->y);
     cmd.consume();
   }
@@ -467,6 +426,7 @@ struct HandleFocusUICommand : System<PendingE2ECommand> {
     if (pos.empty()) { cmd.fail("focus_ui requires component name"); return; }
     EntityID scope = -1;
     if (!scope_or_done(cmd, "focus_ui", scope_name, false, scope)) return;
+    if (render_checkpoint_pending(cmd)) return;
     auto res = resolve_ui_single(pos[0], scope, UIMatchKind::DebugName,
                                  UIVisibility::Rendered);
     if (!res.ambiguous.empty()) { cmd.fail(res.ambiguous); return; }
@@ -474,7 +434,7 @@ struct HandleFocusUICommand : System<PendingE2ECommand> {
       cmd.fail(std::format("UI component not found: {}", pos[0]));
       return;
     }
-    Entity &entity = *res.entity;
+    Entity &entity = res.entity.asE();
     auto &cmp = entity.get<ui::UIComponent>();
     auto *ctx = EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
     if (ctx) {
@@ -610,7 +570,7 @@ struct HandleExpectFocusedCommand : System<PendingE2ECommand> {
       cmd.retry_with(std::format("UI component not found: {}", pos[0]));
       return;
     }
-    Entity &entity = *res.entity;
+    Entity &entity = res.entity.asE();
     auto &cmp = entity.get<ui::UIComponent>();
     if (ctx->has_focus(cmp.id)) {
       cmd.consume();
@@ -638,8 +598,7 @@ struct HandleExpectFocusedCommand : System<PendingE2ECommand> {
 };
 
 // Forward declarations: defined with the other scope helpers below.
-// Forward declarations: defined with the other scope helpers below.
-inline bool is_within_scope(Entity &entity, EntityID scope);
+inline bool is_within_scope(const Entity &entity, EntityID scope);
 inline bool is_partially_visible(const Entity &entity);
 
 // Handle 'expect_no_focus' - asserts nothing holds keyboard focus.
@@ -694,7 +653,6 @@ struct HandleExpectHoveredCommand : System<PendingE2ECommand> {
   }
 };
 
-// Handle 'click_label "text" [under=scope|in=scope]' - clicks the element with the
 // exact label, but only if the click would land on it. click_text clicks the
 // first substring match at its centre without checking what is on top, so a
 // click that hit a modal or a covering element still passed. This one
@@ -706,11 +664,19 @@ struct HandleClickLabelCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
     if (cmd.is_consumed() || !cmd.is("click_label"))
       return;
+    if (!cmd.has_args(1)) { cmd.fail("click_label requires text"); return; }
+    if (render_checkpoint_pending(cmd)) return;
+    const std::string &text = cmd.arg(0);
+    // Preserve main's click_label contract on top of the unified resolver:
+    // in= (and the PR's under= alias) may appear anywhere after the text,
+    // and any other trailing argument fails loudly instead of being ignored.
     std::string scope_name, scope_err;
-    auto pos = strip_trailing_scope(cmd, 0, 1, scope_name, scope_err);
+    auto extra = split_scope_props(cmd, 1, scope_name, scope_err);
     if (!scope_err.empty()) { cmd.fail(scope_err); return; }
-    if (pos.empty()) { cmd.fail("click_label requires text"); return; }
-    const std::string &text = pos[0];
+    if (!extra.empty()) {
+      cmd.fail(std::format("click_label: unexpected argument '{}'", extra[0]));
+      return;
+    }
     EntityID scope = -1;
     if (!scope_or_done(cmd, "click_label", scope_name, true, scope)) return;
     auto res = resolve_ui_single(text, scope, UIMatchKind::TextExact,
@@ -720,9 +686,8 @@ struct HandleClickLabelCommand : System<PendingE2ECommand> {
       cmd.retry_with(std::format("No UI with text: {}", text));
       return;
     }
-    Entity &target = *res.entity;
-    if (target.is_missing<ui::HasClickListener>() &&
-        target.is_missing<ui::HasDragListener>()) {
+    Entity &target = res.entity.asE();
+    if (!target.has_any<ui::HasClickListener, ui::HasDragListener>()) {
       cmd.fail(std::format("click_label \"{}\": element has no click listener", text));
       return;
     }
@@ -756,7 +721,6 @@ struct HandleClickLabelCommand : System<PendingE2ECommand> {
   }
 };
 
-// Handle 'click_button "text" [under=scope]' - clicks button by its label text
 template <typename InputAction>
 struct HandleClickButtonCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
@@ -768,6 +732,7 @@ struct HandleClickButtonCommand : System<PendingE2ECommand> {
     if (pos.empty()) { cmd.fail("click_button requires button text"); return; }
     EntityID scope = -1;
     if (!scope_or_done(cmd, "click_button", scope_name, false, scope)) return;
+    if (render_checkpoint_pending(cmd)) return;
     auto res = resolve_ui_single(
         pos[0], scope, UIMatchKind::TextSubstring, UIVisibility::Rendered,
         [](Entity &e) { return e.has<ui::HasClickListener>(); });
@@ -776,7 +741,7 @@ struct HandleClickButtonCommand : System<PendingE2ECommand> {
       cmd.fail(std::format("Button not found: {}", pos[0]));
       return;
     }
-    auto rect = get_screen_rect(*res.entity);
+    auto rect = get_screen_rect(res.entity.asE());
     test_input::simulate_click(rect.x + rect.width / 2,
                                rect.y + rect.height / 2);
     cmd.consume();
@@ -795,6 +760,7 @@ struct HandleToggleCheckboxCommand : System<PendingE2ECommand> {
     EntityID scope = -1;
     if (!scope_or_done(cmd, "toggle_checkbox", scope_name, false, scope))
       return;
+    if (render_checkpoint_pending(cmd)) return;
     auto res = resolve_ui_single(
         pos[0], scope, UIMatchKind::DebugName, UIVisibility::Rendered,
         [](Entity &e) { return e.has<ui::HasCheckboxState>(); });
@@ -803,7 +769,7 @@ struct HandleToggleCheckboxCommand : System<PendingE2ECommand> {
       cmd.fail(std::format("Checkbox not found: {}", pos[0]));
       return;
     }
-    auto rect = get_screen_rect(*res.entity);
+    auto rect = get_screen_rect(res.entity.asE());
     test_input::simulate_click(rect.x + rect.width / 2,
                                rect.y + rect.height / 2);
     cmd.consume();
@@ -850,6 +816,7 @@ struct HandleSetSliderCommand : System<PendingE2ECommand> {
       cmd.fail(std::format("Invalid slider value: {}", pos[1]));
       return;
     }
+    if (render_checkpoint_pending(cmd)) return;
 
     if (owner_line != cmd.line_number) {
       owner_line = cmd.line_number;
@@ -881,7 +848,7 @@ struct HandleSetSliderCommand : System<PendingE2ECommand> {
       cmd.fail(std::format("Slider not found: {}", pos[0]));
       return;
     }
-    OptEntity target = find_state_under<ui::HasSliderState>(*res.entity);
+    OptEntity target = find_state_under<ui::HasSliderState>(res.entity.asE());
     Entity &entity = target.asE();
     auto rect = get_screen_rect(entity);
     const float pct = std::clamp(value, 0.f, 1.f);
@@ -916,6 +883,7 @@ struct HandleSelectDropdownCommand : System<PendingE2ECommand> {
     EntityID scope = -1;
     if (!scope_or_done(cmd, "select_dropdown", scope_name, false, scope))
       return;
+    if (render_checkpoint_pending(cmd)) return;
     auto res = resolve_ui_single(
         pos[0], scope, UIMatchKind::DebugName, UIVisibility::Rendered,
         [](Entity &e) { return e.has<ui::HasDropdownState>(); });
@@ -924,7 +892,7 @@ struct HandleSelectDropdownCommand : System<PendingE2ECommand> {
       cmd.fail(std::format("Dropdown not found: {}", pos[0]));
       return;
     }
-    auto rect = get_screen_rect(*res.entity);
+    auto rect = get_screen_rect(res.entity.asE());
     test_input::simulate_click(rect.x + rect.width / 2,
                                rect.y + rect.height / 2);
     cmd.consume();
@@ -965,6 +933,77 @@ struct HandleExpectCheckboxCommand : System<PendingE2ECommand> {
 };
 
 template <typename InputAction>
+struct HandleExpectAccessibleCommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("expect_accessible")) return;
+    if (!cmd.has_args(1)) {
+      cmd.fail("expect_accessible requires a name or name=<accessible name>");
+      return;
+    }
+    std::map<std::string, std::string> want;
+    size_t first_prop = 0;
+    std::string debug_name;
+    if (cmd.arg(0).find('=') == std::string::npos) {
+      debug_name = cmd.arg(0);
+      first_prop = 1;
+    }
+    for (size_t i = first_prop; i < cmd.args.size(); ++i) {
+      const std::string &raw = cmd.arg(i);
+      auto eq = raw.find('=');
+      if (eq == std::string::npos || eq == 0) {
+        cmd.fail(std::format("expect_accessible: expected prop=value, got '{}'",
+                             raw));
+        return;
+      }
+      want[raw.substr(0, eq)] = raw.substr(eq + 1);
+    }
+    if (!debug_name.empty() && want.empty()) want["name"] = debug_name;
+    auto query = ui_query()
+                     .whereHasComponent<ui::UIComponent>()
+                     .whereHasComponent<ui::HasAccessibility>()
+                     .whereLambda([&](const Entity &e) {
+                       if (!e.get<ui::UIComponent>().was_rendered_to_screen)
+                         return false;
+                       if (!debug_name.empty())
+                         return e.has<ui::UIComponentDebug>() &&
+                                e.get<ui::UIComponentDebug>().name() ==
+                                    debug_name;
+                       auto it = want.find("name");
+                       return it == want.end() ||
+                              e.get<ui::HasAccessibility>().name == it->second;
+                     })
+                     .first();
+    for (Entity &entity : query.gen()) {
+      auto &a = entity.get<ui::HasAccessibility>();
+      for (auto &[prop, expected] : want) {
+        std::string actual;
+        if (prop == "name") actual = a.name;
+        else if (prop == "role") actual = ui::accessible_role_name(a.role);
+        else if (prop == "value") actual = a.value;
+        else if (prop == "description") actual = a.description;
+        else {
+          cmd.fail(std::format("expect_accessible: unknown prop '{}'", prop));
+          return;
+        }
+        if (actual != expected) {
+          cmd.retry_with(std::format(
+              "expect_accessible {}={} but got {} (role={} name=\"{}\" "
+              "value=\"{}\")",
+              prop, expected, actual, ui::accessible_role_name(a.role),
+              a.name, a.value));
+          return;
+        }
+      }
+      cmd.consume();
+      return;
+    }
+    cmd.retry_with(std::format("expect_accessible: no element found for '{}'",
+                               debug_name.empty() ? want["name"] : debug_name));
+  }
+};
+
+// Handle 'expect_slider name value [tolerance]' - asserts slider value
+template <typename InputAction>
 struct HandleExpectSliderCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
     if (cmd.is_consumed() || !cmd.is("expect_slider"))
@@ -999,7 +1038,7 @@ struct HandleExpectSliderCommand : System<PendingE2ECommand> {
       cmd.retry_with(std::format("Slider not found: {}", pos[0]));
       return;
     }
-    OptEntity target = find_state_under<ui::HasSliderState>(*res.entity);
+    OptEntity target = find_state_under<ui::HasSliderState>(res.entity.asE());
     auto &slider = target.asE().get<ui::HasSliderState>();
     if (std::abs(slider.value - expected) <= tolerance) {
       cmd.consume();
@@ -1130,7 +1169,7 @@ struct HandleExpectInputTextCommand : System<PendingE2ECommand> {
       cmd.retry_with(std::format("Text input not found: {}", pos[0]));
       return;
     }
-    Entity &entity = *res.entity;
+    Entity &entity = res.entity.asE();
     const std::string actual =
         entity.has<text_input::HasTextInputState>()
             ? entity.get<text_input::HasTextInputState>().text()
@@ -1174,7 +1213,7 @@ struct HandleExpectSelectedTextCommand : System<PendingE2ECommand> {
       cmd.retry_with(std::format("Text field not found: {}", pos[0]));
       return;
     }
-    Entity &entity = *res.entity;
+    Entity &entity = res.entity.asE();
     const std::string got =
         entity.has<text_input::HasTextAreaState>()
             ? entity.get<text_input::HasTextAreaState>().selected_text()
@@ -1232,12 +1271,10 @@ inline void reset_multi_click(const std::string &name) {
   }
 }
 
-// 'double_click_ui name [dx dy] [under=scope]' and 'triple_click_ui ...'.
 //
 // Clicking a named element at an offset rather than at raw screen coordinates:
 // a layout change then retargets the click instead of silently landing on
 // empty space. dx/dy are from the element's top left; omitted means centre.
-// Name resolution (incl. scoping) is element_point() above.
 
 namespace multi_click_ui_detail {
 inline int phase = 0;
@@ -1372,7 +1409,7 @@ struct HandleExpectInputSelectionCommand : System<PendingE2ECommand> {
       cmd.retry_with(std::format("Text input not found: {}", pos[0]));
       return;
     }
-    Entity &entity = *res.entity;
+    Entity &entity = res.entity.asE();
     const bool multiline = entity.has<text_input::HasTextAreaState>();
     const auto sel_start =
         multiline
@@ -1418,10 +1455,19 @@ inline std::string truncate_text(const std::string &s, size_t max_len = 80) {
   return s.substr(0, max_len) + "...";
 }
 
-inline void dump_ui_node(std::string &out, Entity &entity, int depth) {
+inline std::string format_dim(float v) {
+  if (std::fabs(v - std::round(v)) < 1e-4f)
+    return std::format("{}", std::lroundf(v));
+  std::string s = std::format("{:.5f}", v);
+  s.erase(s.find_last_not_of('0') + 1, std::string::npos);
+  if (!s.empty() && s.back() == '.') s.pop_back();
+  return s;
+}
+
+inline void dump_ui_node(std::string &out, const Entity &entity, int depth) {
   if (depth > 64) return;
 
-  auto &cmp = entity.get<ui::UIComponent>();
+  const auto &cmp = entity.get<ui::UIComponent>();
   if (!cmp.was_rendered_to_screen) return;
 
   std::string indent(depth * 2, ' ');
@@ -1430,18 +1476,30 @@ inline void dump_ui_node(std::string &out, Entity &entity, int depth) {
   out += indent + "<ui";
 
   if (entity.has<ui::UIComponentDebug>()) {
-    auto &dbg = entity.get<ui::UIComponentDebug>();
+    const auto &dbg = entity.get<ui::UIComponentDebug>();
     if (dbg.type == ui::UIComponentDebug::Type::custom)
       out += " name=\"" + xml_escape(dbg.name_value) + "\"";
   }
 
   out += std::format(" x=\"{}\" y=\"{}\" w=\"{}\" h=\"{}\"",
-                     std::lroundf(rect.x), std::lroundf(rect.y),
-                     std::lroundf(rect.width), std::lroundf(rect.height));
+                     format_dim(rect.x), format_dim(rect.y),
+                     format_dim(rect.width), format_dim(rect.height));
 
   if (entity.has<ui::HasLabel>())
     out += " text=\"" + xml_escape(truncate_text(entity.get<ui::HasLabel>().label)) + "\"";
 
+  if (entity.has<ui::HasAccessibility>()) {
+    const auto &a = entity.get<ui::HasAccessibility>();
+    if (a.role != ui::AccessibleRole::None)
+      out += std::format(" role=\"{}\"", ui::accessible_role_name(a.role));
+    if (!a.name.empty())
+      out += " accessible_name=\"" + xml_escape(truncate_text(a.name)) + "\"";
+    if (!a.value.empty())
+      out += " accessible_value=\"" + xml_escape(truncate_text(a.value)) + "\"";
+    if (!a.description.empty())
+      out += " accessible_description=\"" +
+             xml_escape(truncate_text(a.description)) + "\"";
+  }
   const auto sides = [&](const char *attr, const auto &v) {
     const float t = v[ui::Axis::top], r = v[ui::Axis::right],
                 b = v[ui::Axis::bottom], l = v[ui::Axis::left];
@@ -1454,20 +1512,20 @@ inline void dump_ui_node(std::string &out, Entity &entity, int depth) {
     out += std::format(" gap=\"{}\"", cmp.gap);
 
   if (entity.has<ui::HasScrollView>()) {
-    auto &sv = entity.get<ui::HasScrollView>();
+    const auto &sv = entity.get<ui::HasScrollView>();
     out += std::format(" scroll_x=\"{}\" scroll_y=\"{}\"",
-                       std::lroundf(sv.scroll_offset.x),
-                       std::lroundf(sv.scroll_offset.y));
+                       format_dim(sv.scroll_offset.x),
+                       format_dim(sv.scroll_offset.y));
   }
 
   if (cmp.should_hide)
     out += " hidden=\"true\"";
 
-  std::vector<Entity *> valid_children;
+  std::vector<const Entity *> valid_children;
   for (EntityID child_id : cmp.children) {
     OptEntity opt = ui::UICollectionHolder::getEntityForID(child_id);
     if (!opt.valid()) continue;
-    Entity &child = opt.asE();
+    const Entity &child = opt.asE();
     if (!child.has<ui::UIComponent>()) continue;
     if (!child.get<ui::UIComponent>().was_rendered_to_screen) continue;
     valid_children.push_back(&child);
@@ -1477,7 +1535,7 @@ inline void dump_ui_node(std::string &out, Entity &entity, int depth) {
     out += "/>\n";
   } else {
     out += ">\n";
-    for (Entity *child : valid_children)
+    for (const Entity *child : valid_children)
       dump_ui_node(out, *child, depth + 1);
     out += indent + "</ui>\n";
   }
@@ -1504,7 +1562,7 @@ inline std::string format_hex_color(const Color &c) {
   return std::format("#{:02x}{:02x}{:02x}{:02x}", c.r, c.g, c.b, c.a);
 }
 
-inline bool is_within_scope(Entity &entity, EntityID scope) {
+inline bool is_within_scope(const Entity &entity, EntityID scope) {
   EntityID current = entity.id;
   for (int depth = 0; depth < 64 && current != -1; ++depth) {
     if (current == scope)
@@ -1555,18 +1613,20 @@ inline bool parse_prop_assertion(const std::string &arg, std::string &prop,
 
 // Check a single property assertion against an entity.
 // Returns empty string on match, error message on mismatch.
-inline std::string check_ui_property(Entity &entity, const std::string &prop,
+inline std::string check_ui_property(const Entity &entity,
+                                      const std::string &prop,
                                       const std::string &expected) {
-  auto &cmp = entity.get<ui::UIComponent>();
+  const auto &cmp = entity.get<ui::UIComponent>();
   RectangleType rect = get_screen_rect(entity);
 
   long actual_int = 0;
+  float actual_float = 0.f;
   bool is_int_prop = true;
 
-  if (prop == "x") actual_int = std::lroundf(rect.x);
-  else if (prop == "y") actual_int = std::lroundf(rect.y);
-  else if (prop == "w") actual_int = std::lroundf(rect.width);
-  else if (prop == "h") actual_int = std::lroundf(rect.height);
+  if (prop == "x") { actual_float = rect.x; actual_int = std::lroundf(rect.x); }
+  else if (prop == "y") { actual_float = rect.y; actual_int = std::lroundf(rect.y); }
+  else if (prop == "w") { actual_float = rect.width; actual_int = std::lroundf(rect.width); }
+  else if (prop == "h") { actual_float = rect.height; actual_int = std::lroundf(rect.height); }
   else if (prop == "hidden") {
     std::string actual_str = cmp.should_hide ? "true" : "false";
     if (actual_str != expected)
@@ -1577,17 +1637,33 @@ inline std::string check_ui_property(Entity &entity, const std::string &prop,
     is_int_prop = false;
     if (!entity.has<ui::HasLabel>())
       return std::format("text={} but element has no label", expected);
-    auto &label = entity.get<ui::HasLabel>().label;
+    const auto &label = entity.get<ui::HasLabel>().label;
     if (label != expected)
       return std::format("text=\"{}\" but got \"{}\"", expected, label);
+    return "";
+  }
+  else if (prop == "accessible_name" || prop == "role" ||
+           prop == "accessible_value" || prop == "accessible_description") {
+    is_int_prop = false;
+    if (!entity.has<ui::HasAccessibility>())
+      return std::format("{}={} but element has no accessibility semantics",
+                         prop, expected);
+    const auto &a = entity.get<ui::HasAccessibility>();
+    std::string actual = prop == "role" ? ui::accessible_role_name(a.role)
+                         : prop == "accessible_name" ? a.name
+                         : prop == "accessible_value" ? a.value
+                                                      : a.description;
+    if (actual != expected)
+      return std::format("{}=\"{}\" but got \"{}\"", prop, expected, actual);
     return "";
   }
   else if (prop == "scroll_x" || prop == "scroll_y") {
     if (!entity.has<ui::HasScrollView>())
       return std::format("{}={} but element has no scroll view", prop, expected);
-    actual_int = std::lroundf(prop == "scroll_x"
-                                  ? entity.get<ui::HasScrollView>().scroll_offset.x
-                                  : entity.get<ui::HasScrollView>().scroll_offset.y);
+    actual_float = prop == "scroll_x"
+                       ? entity.get<ui::HasScrollView>().scroll_offset.x
+                       : entity.get<ui::HasScrollView>().scroll_offset.y;
+    actual_int = std::lroundf(actual_float);
   }
   else if (prop == "bg" || prop == "fg") {
     Color want;
@@ -1621,6 +1697,13 @@ inline std::string check_ui_property(Entity &entity, const std::string &prop,
   }
 
   if (is_int_prop) {
+    if (expected.find_first_of(".eE") != std::string::npos) {
+      const float expected_float = std::stof(expected);
+      if (std::fabs(actual_float - expected_float) > 0.01f)
+        return std::format("{}={} but got {}", prop, expected,
+                           format_dim(actual_float));
+      return "";
+    }
     long expected_int = std::stol(expected);
     if (actual_int != expected_int)
       return std::format("{}={} but got {}", prop, expected_int, actual_int);
@@ -1635,6 +1718,8 @@ struct HandleAssertUICommand : System<PendingE2ECommand> {
       cmd.fail("assert_ui requires: <name> <prop>=<value> [...]");
       return;
     }
+    if (render_checkpoint_pending(cmd)) return;
+
     std::string name = cmd.args[0];
     std::string scope_name, scope_err;
     auto props = split_scope_props(cmd, 1, scope_name, scope_err);
@@ -1648,7 +1733,7 @@ struct HandleAssertUICommand : System<PendingE2ECommand> {
       cmd.retry();  // Element may not be rendered yet
       return;
     }
-    Entity &entity = *res.entity;
+    Entity &entity = res.entity.asE();
     for (const std::string &p : props) {
       std::string prop, expected;
       if (!parse_prop_assertion(p, prop, expected)) {
@@ -1686,6 +1771,7 @@ struct HandleExpectPointInCommand : System<PendingE2ECommand> {
                            pos[1], pos[2]));
       return;
     }
+    if (render_checkpoint_pending(cmd)) return;
     EntityID scope = -1;
     if (!scope_or_done(cmd, "expect_point_in", scope_name, true, scope))
       return;
@@ -1696,7 +1782,7 @@ struct HandleExpectPointInCommand : System<PendingE2ECommand> {
       cmd.retry();
       return;
     }
-    Entity &entity = *res.entity;
+    Entity &entity = res.entity.asE();
     RectangleType rect = get_screen_rect(entity);
     if (ui::is_mouse_inside(input::MousePosition{x, y}, rect)) {
       cmd.consume();
@@ -1716,6 +1802,8 @@ struct HandleAssertUITextCommand : System<PendingE2ECommand> {
       cmd.fail("assert_ui_text requires: \"<text>\" <prop>=<value> [...]");
       return;
     }
+    if (render_checkpoint_pending(cmd)) return;
+
     std::string text = cmd.args[0];
     std::string scope_name, scope_err;
     auto rest = split_scope_props(cmd, 1, scope_name, scope_err);
@@ -1762,16 +1850,16 @@ struct HandleAssertUITextCommand : System<PendingE2ECommand> {
     }
     if (candidates.size() > 1) {
       std::string list;
-      for (Entity *e : candidates) {
+      for (Entity &e : candidates) {
         if (!list.empty()) list += "; ";
-        list += describe_candidate(*e);
+        list += describe_candidate(e);
       }
       cmd.fail(std::format("{} elements match '{}'; scope it with under=<scope> "
                            "(in=<scope> accepted as alias) — candidates: {}",
                            candidates.size(), text, list));
       return;
     }
-    Entity &entity = *candidates[0];
+    Entity &entity = candidates[0].get();
     for (const std::string &tok : props) {
       std::string prop, expected;
       parse_prop_assertion(tok, prop, expected);
@@ -1793,6 +1881,7 @@ struct HandleExpectNoUICommand : System<PendingE2ECommand> {
       cmd.fail("expect_no_ui requires: <debug_name>");
       return;
     }
+    if (render_checkpoint_pending(cmd)) return;
     if (cmd.frames_alive == 0) {
       cmd.retry();
       return;
@@ -1847,6 +1936,7 @@ struct HandleDumpUICommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
     if (cmd.is_consumed() || !cmd.is("dump_ui")) return;
     if (!cmd.has_args(1)) { cmd.fail("dump_ui requires a name argument"); return; }
+    if (render_checkpoint_pending(cmd)) return;
 
     std::string dump_name = cmd.args[0];
     std::string subtree_root = cmd.has_args(2) ? cmd.args[1] : "";
@@ -1950,6 +2040,8 @@ void register_ui_commands(SystemManager &sm,
       std::make_unique<HandleExpectCheckboxCommand<InputAction>>());
   sm.register_update_system(
       std::make_unique<HandleExpectSliderCommand<InputAction>>());
+  sm.register_update_system(
+      std::make_unique<HandleExpectAccessibleCommand<InputAction>>());
   sm.register_update_system(
       std::make_unique<HandleExpectInputTextCommand<InputAction>>());
   sm.register_update_system(

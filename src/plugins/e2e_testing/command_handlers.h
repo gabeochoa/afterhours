@@ -38,6 +38,27 @@ inline std::pair<float, float> e2e_screen_size() {
     return {1280.f, 720.f};  // fallback
 }
 
+namespace resize_steps_detail {
+inline int step = 0;
+inline int start_w = 0, start_h = 0;
+
+inline void reset() {
+    step = 0;
+    start_w = 0;
+    start_h = 0;
+}
+}
+
+inline bool render_checkpoint_pending(PendingE2ECommand &cmd) {
+    if (cmd.seen_render < 0) return false;
+    if (cmd.seen_render ==
+        static_cast<long long>(VisibleTextRegistry::instance().generation())) {
+        cmd.retry();
+        return true;
+    }
+    return false;
+}
+
 // Handle 'type "text"' command - types characters
 struct HandleTypeCommand : System<PendingE2ECommand> {
     virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
@@ -426,6 +447,84 @@ struct HandleMouseUpCommand : System<PendingE2ECommand> {
     }
 };
 
+inline std::optional<int> e2e_gamepad_arg(PendingE2ECommand &cmd,
+                                          bool must_be_connected) {
+    const auto pad = cmd.maybe_arg_as<int>(0);
+    if (!pad || !input_injector::is_valid_gamepad(*pad)) {
+        cmd.fail(std::format("{}: gamepad id must be 0-{}, got '{}'", cmd.name,
+                             input_injector::GAMEPAD_COUNT - 1, cmd.arg(0)));
+        return std::nullopt;
+    }
+    if (must_be_connected && !input_injector::is_gamepad_available(*pad)) {
+        cmd.fail(std::format("{}: gamepad {} is not connected, run "
+                             "gamepad_connect {} first",
+                             cmd.name, *pad, *pad));
+        return std::nullopt;
+    }
+    return pad;
+}
+
+struct HandleGamepadConnectCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed()) return;
+        const bool connect = cmd.is("gamepad_connect");
+        if (!connect && !cmd.is("gamepad_disconnect")) return;
+        const auto pad = e2e_gamepad_arg(cmd, false);
+        if (!pad) return;
+        input_injector::set_gamepad_available(*pad, connect);
+        cmd.consume();
+    }
+};
+
+struct HandleGamepadButtonCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed()) return;
+        if (!cmd.is("gamepad_button") && !cmd.is("gamepad_down") &&
+            !cmd.is("gamepad_up"))
+            return;
+        const auto pad = e2e_gamepad_arg(cmd, true);
+        if (!pad) return;
+        const int button = gamepad_button_from_name(cmd.arg(1));
+        if (button < 0) {
+            cmd.fail(std::format("{}: unknown gamepad button '{}'", cmd.name,
+                                 cmd.arg(1)));
+            return;
+        }
+        if (cmd.is("gamepad_button"))
+            input_injector::tap_gamepad_button(*pad, button);
+        else if (cmd.is("gamepad_down"))
+            input_injector::set_gamepad_button_down(*pad, button);
+        else
+            input_injector::set_gamepad_button_up(*pad, button);
+        cmd.consume();
+    }
+};
+
+struct HandleGamepadAxisCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed() || !cmd.is("gamepad_axis")) return;
+        const auto pad = e2e_gamepad_arg(cmd, true);
+        if (!pad) return;
+        const int axis = gamepad_axis_from_name(cmd.arg(1));
+        if (axis < 0) {
+            cmd.fail(std::format("gamepad_axis: unknown gamepad axis '{}'",
+                                 cmd.arg(1)));
+            return;
+        }
+        const auto value = cmd.maybe_arg_as<float>(2);
+        if (!value || *value < -1.f || *value > 1.f) {
+            cmd.fail(std::format("gamepad_axis: value must be -1 to 1, got '{}'",
+                                 cmd.arg(2)));
+            return;
+        }
+        input_injector::set_gamepad_axis(*pad, axis, *value);
+        cmd.consume();
+    }
+};
+
 // Handle 'disable_animations' / 'enable_animations'.
 //
 // Thin wrappers over animation::set_instant, which is the real knob -- e2e is
@@ -587,6 +686,7 @@ struct HandleExpectTextCommand : System<PendingE2ECommand> {
             return;
         }
 
+        if (render_checkpoint_pending(cmd)) return;
         auto &registry = VisibleTextRegistry::instance();
         if (cmd.is("expect_text_fully_visible")
                 ? registry.contains_fully_visible(cmd.args[0])
@@ -613,6 +713,7 @@ struct HandleExpectTextInsensitiveCommand : System<PendingE2ECommand> {
             return;
         }
 
+        if (render_checkpoint_pending(cmd)) return;
         if (VisibleTextRegistry::instance().contains_ignoring_case(
                 cmd.args[0])) {
             cmd.consume();
@@ -755,15 +856,52 @@ struct HandleScreenshotCommand : System<PendingE2ECommand> {
     template <typename F>
     explicit HandleScreenshotCommand(F fn)
         : screenshot_fn_(as_screenshot_fn(std::move(fn))) {}
+    template <typename F, typename G>
+    HandleScreenshotCommand(F fn, G presented_fn)
+        : screenshot_fn_(as_screenshot_fn(std::move(fn))),
+          presented_screenshot_fn_(as_screenshot_fn(std::move(presented_fn))) {}
 
     virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
                                float) override {
-        if (cmd.is_consumed() || !cmd.is("screenshot")) return;
-        take_screenshot(screenshot_fn_, cmd);
+        if (cmd.is_consumed()) return;
+        if (cmd.is("screenshot")) {
+            take_screenshot(screenshot_fn_, cmd);
+        } else if (cmd.is("screenshot_fresh")) {
+            if (!cmd.has_args(1) || cmd.args[0].empty()) {
+                cmd.fail("screenshot_fresh requires a name");
+                return;
+            }
+            const ScreenshotFn &fn = presented_screenshot_fn_
+                                         ? presented_screenshot_fn_
+                                         : screenshot_fn_;
+            if (!fn) {
+                cmd.fail("screenshot_fresh: no screenshot callback registered");
+                return;
+            }
+            const long long gen = static_cast<long long>(
+                VisibleTextRegistry::instance().generation());
+            if (cmd.seen_render < 0) {
+                cmd.seen_render = gen;
+                cmd.retry();
+                return;
+            }
+            if (cmd.seen_render == gen) {
+                cmd.retry();
+                return;
+            }
+            take_screenshot(fn, cmd);
+        } else if (cmd.is("screenshot_presented")) {
+            if (!presented_screenshot_fn_)
+                cmd.fail("screenshot_presented: no presented-frame "
+                         "screenshot callback registered");
+            else
+                take_screenshot(presented_screenshot_fn_, cmd);
+        }
     }
 
    private:
     ScreenshotFn screenshot_fn_;
+    ScreenshotFn presented_screenshot_fn_;
 };
 
 // Handle 'reset_test_state' command - resets test state between tests
@@ -783,6 +921,7 @@ struct HandleResetTestStateCommand : System<PendingE2ECommand> {
         }
         test_input::reset_all();
         key_release_detail::reset();
+        resize_steps_detail::reset();
         double_click_detail::reset();
         triple_click_detail::reset();
         shift_tab_detail::reset();
@@ -793,6 +932,18 @@ struct HandleResetTestStateCommand : System<PendingE2ECommand> {
    private:
     ResetFn on_reset_;
 };
+
+inline void apply_e2e_resize(int w, int h) {
+    auto *pcr = EntityHelper::get_singleton_cmp<
+        window_manager::ProvidesCurrentResolution>();
+    if (pcr) {
+        pcr->current_resolution.width = w;
+        pcr->current_resolution.height = h;
+        pcr->should_refetch =
+            false;
+    }
+    window_manager::set_window_size(w, h);
+}
 
 // Handle 'resize w h' command - resizes the window/viewport
 // Updates ProvidesCurrentResolution singleton and calls set_window_size().
@@ -814,21 +965,131 @@ struct HandleResizeCommand : System<PendingE2ECommand> {
             return;
         }
 
-        // Update the ECS resolution singleton (authoritative source for UI
-        // layout)
-        auto *pcr = EntityHelper::get_singleton_cmp<
-            window_manager::ProvidesCurrentResolution>();
-        if (pcr) {
-            pcr->current_resolution.width = w;
-            pcr->current_resolution.height = h;
-            pcr->should_refetch =
-                false;  // Prevent CollectCurrentResolution from overwriting
+        apply_e2e_resize(w, h);
+        cmd.consume();
+    }
+};
+
+struct HandleResizeStepsCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed() || !cmd.is("resize_steps")) return;
+        if (!cmd.has_args(3)) {
+            cmd.fail("resize_steps requires width height steps arguments");
+            return;
+        }
+        const int w = cmd.arg_as<int>(0);
+        const int h = cmd.arg_as<int>(1);
+        const int steps = cmd.arg_as<int>(2);
+        if (w <= 0 || h <= 0 || steps <= 0) {
+            cmd.fail(std::format(
+                "resize_steps: invalid target {}x{} in {} steps", w, h,
+                steps));
+            return;
         }
 
-        // Physically resize the window (no-op in headless mode)
-        window_manager::set_window_size(w, h);
+        using namespace resize_steps_detail;
+        if (step == 0) {
+            auto [sw, sh] = e2e_screen_size();
+            start_w = static_cast<int>(sw);
+            start_h = static_cast<int>(sh);
+        }
+        step++;
+        const auto at = [](int from, int to, int i, int n) {
+            return static_cast<int>(std::round(
+                from + (to - from) * (static_cast<double>(i) / n)));
+        };
+        apply_e2e_resize(at(start_w, w, step, steps),
+                         at(start_h, h, step, steps));
+        if (step < steps) {
+            cmd.retry();
+        } else {
+            reset();
+            cmd.consume();
+        }
+    }
+};
 
+struct HandleWaitResizedCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed() || !cmd.is("wait_resized")) return;
+        if (!cmd.has_args(2)) {
+            cmd.fail("wait_resized requires width height arguments");
+            return;
+        }
+        const int w = cmd.arg_as<int>(0);
+        const int h = cmd.arg_as<int>(1);
+        if (w <= 0 || h <= 0) {
+            cmd.fail(std::format("wait_resized: invalid dimensions {}x{}", w,
+                                 h));
+            return;
+        }
+
+        auto *pcr = EntityHelper::get_singleton_cmp<
+            window_manager::ProvidesCurrentResolution>();
+        if (!pcr || pcr->width() != w || pcr->height() != h) {
+            cmd.seen_render = -1;
+            cmd.retry_with(std::format(
+                "wait_resized: resolution is {}, expected {}x{}",
+                pcr ? std::format("{}x{}", pcr->width(), pcr->height())
+                    : std::string("unset"),
+                w, h));
+            return;
+        }
+        const auto drawable = window_manager::fetch_raw_window_size();
+        if (drawable.width != w || drawable.height != h) {
+            cmd.seen_render = -1;
+            cmd.retry_with(std::format(
+                "wait_resized: drawable is {}x{}, expected {}x{}",
+                drawable.width, drawable.height, w, h));
+            return;
+        }
+        auto &registry = VisibleTextRegistry::instance();
+        const long long gen = static_cast<long long>(registry.generation());
+        if (cmd.seen_render < 0) {
+            cmd.seen_render = gen;
+            cmd.retry_with(std::format(
+                "wait_resized: {}x{} reached but no frame presented at "
+                "that size yet",
+                w, h));
+            return;
+        }
+        if (gen == cmd.seen_render) {
+            cmd.retry_with(std::format(
+                "wait_resized: {}x{} reached but no frame presented at "
+                "that size yet",
+                w, h));
+            return;
+        }
         cmd.consume();
+    }
+};
+
+struct HandleExpectWindowSizeCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed() || !cmd.is("expect_window_size")) return;
+        if (!cmd.has_args(2)) {
+            cmd.fail("expect_window_size requires width height arguments");
+            return;
+        }
+        const int w = cmd.arg_as<int>(0);
+        const int h = cmd.arg_as<int>(1);
+        if (w <= 0 || h <= 0) {
+            cmd.fail(std::format("expect_window_size: invalid dimensions {}x{}",
+                                 w, h));
+            return;
+        }
+        auto *pcr = EntityHelper::get_singleton_cmp<
+            window_manager::ProvidesCurrentResolution>();
+        if (!pcr) {
+            cmd.retry_with("expect_window_size: resolution singleton unset");
+            return;
+        }
+        cmd.expect(pcr->width() == w && pcr->height() == h,
+                   std::format("expect_window_size: is {}x{}, expected {}x{}",
+                               pcr->width(), pcr->height(), w, h));
     }
 };
 
@@ -851,6 +1112,7 @@ struct HandleAssertNoOverflowCommand : System<PendingE2ECommand> {
         if (cmd.is_consumed() ||
             (!cmd.is("assert_no_overflow") && !check_parents))
             return;
+        if (render_checkpoint_pending(cmd)) return;
 
         auto [vw, vh] = e2e_screen_size();
         // Same reason the parent tolerance scales: a full-width element snaps

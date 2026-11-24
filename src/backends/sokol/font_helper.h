@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -16,6 +17,10 @@
 #include "../../developer.h"
 #include "metal_state.h"
 
+namespace afterhours::graphics::metal_detail {
+inline void ensure_sokol_gl_and_fonts();
+}
+
 namespace afterhours {
 
 // Font is an int (fontstash font ID). We wrap it so the type is distinct.
@@ -24,6 +29,17 @@ struct Font {
 };
 
 inline void mesh_font_fallbacks(FONScontext *ctx, int new_id);
+
+inline float font_display_scale() {
+  const float dpi = graphics::metal_detail::dpi_scale();
+  return dpi > 1.f ? dpi : 1.f;
+}
+
+inline int display_scaled_size(int nominal) {
+  const float scaled =
+      std::round(static_cast<float>(nominal) * font_display_scale());
+  return scaled >= 1.f ? static_cast<int>(scaled) : 1;
+}
 
 inline std::string fontstash_name(const char *name) {
   char key[24];
@@ -63,6 +79,9 @@ inline Font register_loaded_font(FONScontext *ctx, int id,
 
 inline Font load_font_from_memory(const unsigned char *data, int size,
                                   const char *name, int = 0) {
+#ifdef AFTERHOURS_FONT_HELPER_HAS_ENSURE
+  graphics::metal_detail::ensure_sokol_gl_and_fonts();
+#endif
   auto *ctx = graphics::metal_detail::g_fons_ctx;
   if (!ctx) {
     log_warn("fontstash context not ready yet (load_font_from_memory)");
@@ -94,6 +113,9 @@ inline Font load_font_from_memory(const unsigned char *data, int size,
 }
 
 inline Font load_font_from_file(const char *file, int = 0) {
+#ifdef AFTERHOURS_FONT_HELPER_HAS_ENSURE
+  graphics::metal_detail::ensure_sokol_gl_and_fonts();
+#endif
   auto *ctx = graphics::metal_detail::g_fons_ctx;
   if (!ctx) {
     log_warn("fontstash context not ready yet (load_font_from_file)");
@@ -166,8 +188,53 @@ inline bool expand_font_atlas(FONScontext *ctx) {
   return true;
 }
 
+#ifndef AFTERHOURS_FONT_ATLAS_SIZE
+#define AFTERHOURS_FONT_ATLAS_SIZE 2048
+#endif
+inline constexpr int kFontAtlasInitialSize = AFTERHOURS_FONT_ATLAS_SIZE;
+
+// R8 atlas, so width*height is the GPU byte count.
+inline std::size_t font_atlas_bytes(FONScontext *ctx) {
+  if (!ctx)
+    return 0;
+  int w = 0, h = 0;
+  fonsGetAtlasSize(ctx, &w, &h);
+  return (w > 0 && h > 0) ? static_cast<std::size_t>(w) *
+                                static_cast<std::size_t>(h)
+                          : 0;
+}
+
+// Rebuild at the initial size, dropping every cached glyph; live glyphs
+// re-rasterize on next use. Call only at a frame boundary, before any
+// measure/draw that frame, or already-emitted quads keep stale UVs.
+inline bool shrink_font_atlas(FONScontext *ctx) {
+  if (!ctx)
+    return false;
+  int w = 0, h = 0;
+  fonsGetAtlasSize(ctx, &w, &h);
+  if (w <= kFontAtlasInitialSize && h <= kFontAtlasInitialSize)
+    return false;
+  if (!fonsResetAtlas(ctx, kFontAtlasInitialSize, kFontAtlasInitialSize))
+    return false;
+  log_info("font atlas shrunk to {}x{}; cached glyphs will re-rasterize",
+           kFontAtlasInitialSize, kFontAtlasInitialSize);
+  return true;
+}
+
+inline bool shrink_font_atlas() {
+  return shrink_font_atlas(graphics::metal_detail::g_fons_ctx);
+}
+
+inline std::size_t font_atlas_bytes() {
+  return font_atlas_bytes(graphics::metal_detail::g_fons_ctx);
+}
+
+inline Font load_font_at_display_size(const char *file, int = 32) {
+  return load_font_from_file(file);
+}
+
 inline Font load_font_from_file_with_codepoints(const char *file, int *, int,
-                                                int = 32) {
+                                                int = 0) {
   // fontstash loads full TTF; codepoint filtering not needed
   return load_font_from_file(file);
 }
@@ -186,10 +253,32 @@ inline Font load_font_for_string(const std::string &,
   return load_font_from_file(font_file.c_str());
 }
 
+inline void prewarm_text(const Font font, const char *text,
+                         const float size) {
+  auto *ctx = graphics::metal_detail::g_fons_ctx;
+  if (!ctx || !text || !std::isfinite(size) || size <= 0.f)
+    return;
+  int fid = (font.id != FONS_INVALID) ? font.id
+                                      : graphics::metal_detail::g_active_font;
+  if (fid == FONS_INVALID)
+    return;
+  std::string shown;
+  text = drawable_text(fid, text, shown);
+  const float dpi = graphics::metal_detail::dpi_scale();
+  fonsSetFont(ctx, fid);
+  fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
+  fonsSetSize(ctx, dpi > 1.01f ? size * dpi : size);
+  FONStextIter iter;
+  FONSquad quad{};
+  if (fonsTextIterInit(ctx, &iter, 0, 0, text, nullptr))
+    while (fonsTextIterNext(ctx, &iter, &quad)) {
+    }
+}
+
 // Advance width, same as measure_text.
 
 inline Vector2Type measure_text(const Font font, const char *text,
-                                const float size, const float /*spacing*/) {
+                                const float size, const float spacing) {
   if (!std::isfinite(size) || size <= 0.f)
     return Vector2Type{0, 0};
   auto *ctx = graphics::metal_detail::g_fons_ctx;
@@ -203,8 +292,8 @@ inline Vector2Type measure_text(const Font font, const char *text,
   const float dpi_now = graphics::metal_detail::dpi_scale();
   const std::uint64_t font_id = (static_cast<std::uint64_t>(fid) << 32) ^
                                 static_cast<std::uint64_t>(dpi_now * 1024.f);
-  const auto key =
-      measure_memo::key_for(text ? text : "", size, 1.f, font_id);
+  const auto key = measure_memo::key_for(text ? text : "", size, spacing,
+                                          font_id);
   Vector2Type cached{};
   if (measure_memo::lookup(key, cached))
     return cached;
@@ -213,6 +302,8 @@ inline Vector2Type measure_text(const Font font, const char *text,
   float dpi = graphics::metal_detail::dpi_scale();
   fonsSetSize(ctx, size * dpi);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
+  // Only excess over raylib's 1px gap counts; negatives tighten, dpi-scaled.
+  fonsSetSpacing(ctx, (spacing - 1.f) * dpi);
   // Advance, not the ink box: ink drops the side bearings, so text sized from
   // it comes up short and clips.
   std::string shown;

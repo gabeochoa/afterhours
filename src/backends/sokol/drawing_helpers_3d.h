@@ -10,7 +10,7 @@
 namespace afterhours {
 
 namespace detail_3d {
-constexpr float PI = 3.14159265358979323846f;
+constexpr float PI = afterhours::PI;
 
 inline void set_color(const Color c) { sgl_c4b(c.r, c.g, c.b, c.a); }
 
@@ -265,6 +265,23 @@ inline void draw_cylinder_wires(Vector3Type start, Vector3Type end, float rtop,
     float ca = cosf(a), sa = sinf(a);
     sgl_v3f(start.x + rbot * ca, start.y, start.z + rbot * sa);
     sgl_v3f(end.x + rtop * ca, end.y, end.z + rtop * sa);
+  }
+  sgl_end();
+}
+
+inline void draw_ellipse_3d(Vector3Type center, float radius_x, float radius_z,
+                            Color c) {
+  constexpr int SEGMENTS = 24;
+  detail_3d::set_color(c);
+  sgl_begin_triangles();
+  for (int i = 0; i < SEGMENTS; i++) {
+    float a0 = 2.f * detail_3d::PI * static_cast<float>(i) / SEGMENTS;
+    float a1 = 2.f * detail_3d::PI * static_cast<float>(i + 1) / SEGMENTS;
+    sgl_v3f(center.x, center.y, center.z);
+    sgl_v3f(center.x + radius_x * cosf(a0), center.y,
+            center.z + radius_z * sinf(a0));
+    sgl_v3f(center.x + radius_x * cosf(a1), center.y,
+            center.z + radius_z * sinf(a1));
   }
   sgl_end();
 }

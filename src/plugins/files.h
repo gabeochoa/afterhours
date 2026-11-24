@@ -13,6 +13,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "../core/base_component.h"
 #include "../ecs.h"
@@ -182,6 +183,8 @@ struct files : developer::Plugin {
   };
   inline static TestRoots *active_test_roots = nullptr;
 
+  static bool maybe_install_e2e_test_roots(int argc, char *argv[]);
+
   // Non-templated version for PluginCore concept compatibility
   // Note: For actual files functionality, use the overload with game_name.
   static void add_singleton_components(Entity &entity) {
@@ -217,6 +220,18 @@ struct files : developer::Plugin {
   // Available before init(); empty on Emscripten.
   static fs::path get_executable_dir();
 
+  // The user's Documents folder (~/Documents etc.), or empty on Emscripten.
+  // Available before init(); the caller adds its own subfolder.
+  static fs::path get_documents_path();
+
+  // Show path in the platform file manager (Finder/Explorer/open folder).
+  // False when the path does not exist or the platform is unsupported
+  // (Emscripten). Testable seam: reveal_command() builds the invocation
+  // without running it, so tests never pop a window.
+  static std::optional<std::vector<std::string>>
+  reveal_command(const fs::path &path);
+  static bool reveal(const fs::path &path);
+
   static void for_resources_in_group(
       const std::string &group,
       const std::function<void(std::string, std::string, std::string)> &cb);
@@ -242,6 +257,46 @@ struct files : developer::Plugin {
   // helpers with no singleton or platform_folders dependency, and theme_io
   // (pulled in by ui.h) needs them without forcing every UI consumer to link
   // files.cpp.
+
+  static bool path_within_root(const fs::path &base, const fs::path &p) {
+    auto b = base.begin();
+    auto it = p.begin();
+    for (; b != base.end(); ++b, ++it)
+      if (it == p.end() || *it != *b)
+        return false;
+    return true;
+  }
+
+  static std::optional<fs::path> resolve_confined(const fs::path &root,
+                                                  const fs::path &relative) {
+    if (relative.is_absolute() || relative.has_root_name())
+      return std::nullopt;
+    std::error_code ec;
+    const fs::path base = fs::weakly_canonical(fs::absolute(root, ec), ec);
+    if (ec)
+      return std::nullopt;
+    fs::path cur = base;
+    for (const auto &part : relative) {
+      const std::string name = part.string();
+      if (name.empty() || name == ".")
+        continue;
+      if (name == "..") {
+        if (cur == base)
+          return std::nullopt;
+        cur = cur.parent_path();
+        continue;
+      }
+      cur /= part;
+      ec.clear();
+      if (fs::is_symlink(cur, ec)) {
+        const fs::path target = fs::canonical(cur, ec);
+        if (ec || !path_within_root(base, target))
+          return std::nullopt;
+        cur = target;
+      }
+    }
+    return cur;
+  }
 
   static bool write_string_atomic(const fs::path &path,
                                   std::string_view content) {

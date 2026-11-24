@@ -1,7 +1,13 @@
 #pragma once
 
+#include <algorithm>
+#include <chrono>
+#include <cmath>
 #include <functional>
 #include <map>
+#include <optional>
+#include <set>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -16,12 +22,65 @@
 namespace afterhours {
 
 struct sound_system : developer::Plugin {
-    // Games should define their own SoundFile enum and provide a conversion
-    // function Example:
-    //   enum struct MySoundFile { UI_Click, Jump, Shoot };
-    //   const char* my_sound_to_str(MySoundFile sf) { ... }
-    // Then use: sound_system::play_sound<MySoundFile>(MySoundFile::UI_Click,
-    // my_sound_to_str);
+    struct PlayRecord {
+        std::string name;
+        std::string bus;
+        float volume = 1.f;
+        float pan = 0.5f;
+        float pitch = 1.f;
+        std::optional<Vector3Type> position;
+    };
+
+    struct Listener {
+        Vector3Type position;
+        Vector3Type forward;
+        Vector3Type up;
+        Listener()
+            : position{0.f, 0.f, 0.f}, forward{0.f, 0.f, -1.f}, up{0.f, 1.f, 0.f} {}
+        Listener(Vector3Type pos, Vector3Type fwd,
+                 Vector3Type up_vec = Vector3Type{0.f, 1.f, 0.f})
+            : position(pos), forward(fwd), up(up_vec) {}
+    };
+
+    struct SpatialGain {
+        float volume = 0.f;
+        float pan = 0.5f;
+        float distance = 0.f;
+    };
+
+    static SpatialGain spatial_gain(const Listener &listener,
+                                    const Vector3Type &source,
+                                    float max_distance,
+                                    float reference_distance = 1.f) {
+        SpatialGain out;
+        const float dx = source.x - listener.position.x;
+        const float dy = source.y - listener.position.y;
+        const float dz = source.z - listener.position.z;
+        const float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+        out.distance = dist;
+        if (max_distance <= 0.f || dist >= max_distance) {
+            out.volume = 0.f;
+        } else if (dist <= reference_distance) {
+            out.volume = 1.f;
+        } else {
+            out.volume = reference_distance / dist;
+        }
+        float rx = listener.forward.y * listener.up.z -
+                   listener.forward.z * listener.up.y;
+        float ry = listener.forward.z * listener.up.x -
+                   listener.forward.x * listener.up.z;
+        float rz = listener.forward.x * listener.up.y -
+                   listener.forward.y * listener.up.x;
+        const float rlen = std::sqrt(rx * rx + ry * ry + rz * rz);
+        if (dist > 0.f && rlen > 0.f) {
+            rx /= rlen; ry /= rlen; rz /= rlen;
+            const float side = (dx * rx + dy * ry + dz * rz) / dist;
+            out.pan = std::clamp(0.5f + 0.5f * side, 0.f, 1.f);
+        }
+        return out;
+    }
+
+    struct FadeUpdateSystem;
 
     SINGLETON_CLASS_FWD(SoundLibrary)
     struct SoundLibrary {
@@ -33,32 +92,270 @@ struct sound_system : developer::Plugin {
         [[nodiscard]] const SoundType &get(const std::string &name) const {
             return impl.get(name);
         }
+        using Handle = Library<SoundType>::Handle;
+        [[nodiscard]] Handle intern(const std::string &name) {
+            return impl.intern(name);
+        }
+        [[nodiscard]] SoundType &get(Handle handle) {
+            return impl.get(handle);
+        }
+        [[nodiscard]] const SoundType &get(Handle handle) const {
+            return impl.get(handle);
+        }
+        [[nodiscard]] bool contains(Handle handle) const {
+            return impl.contains(handle);
+        }
         [[nodiscard]] bool contains(const std::string &name) const {
             return impl.contains(name);
         }
-        void load(const char *filename, const char *name) {
-            impl.load(filename, name);
-            ::afterhours::SetSoundVolume(get(name),
-                                        current_volume * get_master_volume());
+
+        [[nodiscard]] std::string bus_of(const std::string &name) const {
+            auto it = bus_by_name.find(name);
+            return it == bus_by_name.end() ? std::string{"effects"}
+                                           : it->second;
+        }
+        void set_bus(const std::string &name, const std::string &bus) {
+            bus_by_name[name] = bus;
+            if (contains(name)) apply_volume(name);
+        }
+        void set_bus_volume(const std::string &bus, float volume) {
+            bus_volumes[bus] = std::max(0.f, volume);
+            for (const auto &[name, b] : bus_by_name)
+                if (b == bus && contains(name)) apply_volume(name);
+            if (bus == "effects") {
+                for (const auto &kv : impl.storage)
+                    if (!bus_by_name.contains(kv.first)) apply_volume(kv.first);
+            }
+        }
+        [[nodiscard]] float get_bus_volume(const std::string &bus) const {
+            auto it = bus_volumes.find(bus);
+            return it == bus_volumes.end() ? 1.f : it->second;
+        }
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        [[nodiscard]] std::vector<std::string> known_buses() const {
+            std::set<std::string> out{"effects"};
+            for (const auto &kv : bus_volumes) out.insert(kv.first);
+            for (const auto &kv : bus_by_name) out.insert(kv.second);
+            return {out.begin(), out.end()};
+        }
+#endif
+        [[nodiscard]] float effective_volume(const std::string &name) const {
+            return current_volume * get_master_volume() *
+                   get_bus_volume(bus_of(name));
+        }
+        void apply_volume(const std::string &name) {
+#ifdef AFTER_HOURS_USE_RAYLIB
+            ::afterhours::SetSoundVolume(get(name), effective_volume(name) *
+                                                        fade_gain(name));
+#else
+            (void)name;
+#endif
         }
 
-        void play(const char *const name) {
+        void load(const char *filename, const char *name) {
+            load_on_bus(filename, name, bus_of(name));
+        }
+        void load_on_bus(const char *filename, const char *name,
+                         const std::string &bus) {
+            const bool was_present = contains(name);
+            impl.load(filename, name);
+            if (!was_present && contains(name)) bus_by_name[name] = bus;
+            if (contains(name)) apply_volume(name);
+        }
+        bool add(const std::string &name, SoundType sound,
+                 const std::string &bus = "effects") {
+            auto res = impl.add(name.c_str(), sound);
+            if (!res) {
+                log_warn("SoundLibrary::add: '{}' is already registered",
+                         name.c_str());
+                return false;
+            }
+            bus_by_name[name] = bus;
+            apply_volume(name);
+            return true;
+        }
+        bool add_samples(const std::string &name,
+                         std::span<const float> samples, int sample_rate,
+                         int channels = 1,
+                         const std::string &bus = "effects") {
+            return add(name,
+                       load_sound_from_samples(samples, sample_rate, channels),
+                       bus);
+        }
+        void load_pool(const char *filename, const char *name, int copies,
+                       const std::string &bus = "effects") {
+            load_on_bus(filename, name, bus);
+            if (!contains(name)) return;
+#ifdef AFTER_HOURS_USE_RAYLIB
+            for (int i = 0; i < copies; ++i) {
+                const std::string alias =
+                    std::string{name} + "_a" + std::to_string(i);
+                if (contains(alias)) continue;
+                auto res = impl.add(alias.c_str(),
+                                    ::afterhours::LoadSoundAlias(get(name)));
+                if (res) {
+                    bus_by_name[alias] = bus;
+                    apply_volume(alias);
+                }
+            }
+#else
+            (void)copies;
+#endif
+        }
+
+        void set_range(const std::string &name, float max_distance) {
+            range_by_name[name] = max_distance;
+        }
+        [[nodiscard]] float range_of(const std::string &name,
+                                     float fallback) const {
+            auto it = range_by_name.find(name);
+            return it == range_by_name.end() ? fallback : it->second;
+        }
+
+        // Closed captions: a sound name maps to accessibility text. Playing
+        // the sound stamps the caption; last_caption() is the query UI uses.
+        // No rendering here by design.
+        static constexpr float DEFAULT_CAPTION_DURATION = 4.f;
+
+        struct Caption {
+            std::string text;
+            float started_at = 0.f;
+            float duration = DEFAULT_CAPTION_DURATION;
+        };
+
+        void set_caption(const std::string &name, const std::string &text,
+                         float duration = DEFAULT_CAPTION_DURATION) {
+            captions_[name] = Caption{text, 0.f, duration};
+        }
+
+        void clear_caption(const std::string &name) { captions_.erase(name); }
+
+        [[nodiscard]] bool has_caption(const std::string &name) const {
+            return captions_.contains(name);
+        }
+
+        // Seconds, for caption timestamps; tests inject a fake clock.
+        void set_caption_clock(std::function<float()> clock) {
+            caption_clock_ = std::move(clock);
+        }
+
+        [[nodiscard]] std::optional<Caption> last_caption() const {
+            if (!last_) return std::nullopt;
+            if (now() - last_->started_at >= last_->duration)
+                return std::nullopt;
+            return last_;
+        }
+
+        void note_played(const std::string &name) {
+            auto it = captions_.find(name);
+            if (it == captions_.end()) return;
+            last_ = it->second;
+            last_->started_at = now();
+        }
+
+        void play(const char *const name) { play_loaded(name); }
+
+        void play_loaded(const std::string &name, float volume_scale = 1.f,
+                         float pan = 0.5f, float pitch = 1.f,
+                         bool positional = false,
+                         Vector3Type position = Vector3Type{0.f, 0.f, 0.f}) {
             if (!contains(name)) {
-                log_warn("SoundLibrary::play: no sound loaded named '{}'", name);
+                log_warn("SoundLibrary::play: no sound loaded named '{}'",
+                         name.c_str());
                 return;
             }
-            ::afterhours::PlaySound(get(name));
+#ifdef AFTER_HOURS_USE_RAYLIB
+            auto &sound = get(name);
+            if (positional) {
+                ::afterhours::SetSoundVolume(
+                    sound, effective_volume(name) * volume_scale *
+                               fade_gain(name));
+                ::afterhours::SetSoundPan(sound, pan);
+                ::afterhours::SetSoundPitch(sound, pitch);
+            }
+            ::afterhours::PlaySound(sound);
+#endif
+            record_play(PlayRecord{name, bus_of(name),
+                                   effective_volume(name) * volume_scale *
+                                       fade_gain(name),
+                                   pan, pitch,
+                                   positional ? std::optional<Vector3Type>(position)
+                                              : std::nullopt});
+            note_played(name);
+        }
+
+        void stop(const std::string &name) {
+            fades.erase(name);
+#ifdef AFTER_HOURS_USE_RAYLIB
+            if (contains(name)) {
+                ::afterhours::StopSound(get(name));
+                apply_volume(name);
+            }
+#else
+            (void)name;
+#endif
+        }
+        void pause(const std::string &name) {
+#ifdef AFTER_HOURS_USE_RAYLIB
+            if (contains(name)) ::afterhours::PauseSound(get(name));
+#else
+            (void)name;
+#endif
+        }
+        void resume(const std::string &name) {
+#ifdef AFTER_HOURS_USE_RAYLIB
+            if (contains(name)) ::afterhours::ResumeSound(get(name));
+#else
+            (void)name;
+#endif
+        }
+        [[nodiscard]] bool is_playing(const std::string &name) {
+#ifdef AFTER_HOURS_USE_RAYLIB
+            return contains(name) && ::afterhours::IsSoundPlaying(get(name));
+#else
+            (void)name;
+            return false;
+#endif
+        }
+
+        void fade_to(const std::string &name, float target, float seconds) {
+            begin_fade(name, target, seconds, false);
+        }
+        void stop_with_fade(const std::string &name, float seconds) {
+            begin_fade(name, 0.f, seconds, true);
+        }
+        void set_fade_level(const std::string &name, float level) {
+            if (!contains(name)) {
+                log_warn("SoundLibrary::set_fade_level: no sound loaded "
+                         "named '{}'",
+                         name.c_str());
+                return;
+            }
+            Fade &fade = fades[name];
+            fade.level = std::clamp(level, 0.f, 1.f);
+            fade.active = false;
+            fade.stop_at_end = false;
+            apply_volume(name);
+        }
+        [[nodiscard]] float fade_level(const std::string &name) const {
+            return fade_gain(name);
         }
 
         void play_random_match(const std::string &prefix) {
-            // Explicit has_value/value instead of .transform(): the latter is a
-            // C++23 monadic op that std::expected has but the tl::expected
-            // fallback (used when <expected> is unavailable, e.g. gcc 11) does
-            // not, so .transform() fails to compile there.
-            auto match = impl.get_random_match(prefix);
-            if (match.has_value()) {
-                ::afterhours::PlaySound(match.value());
+            auto matches = impl.lookup(prefix);
+            const auto num = static_cast<size_t>(
+                std::distance(matches.first, matches.second));
+            if (num == 0) return;
+            size_t idx = 0;
+#if AFTER_HOURS_RANDOM_ENABLED
+            if (num > 1) {
+                idx = static_cast<size_t>(afterhours::RandomEngine::get().get_int(
+                    0, static_cast<int>(num) - 1));
             }
+#endif
+            auto it = matches.first;
+            std::advance(it, idx);
+            play_loaded(it->first);
         }
 
         void play_if_none_playing(const std::string &prefix) {
@@ -67,12 +364,14 @@ struct sound_system : developer::Plugin {
                 log_warn("got no matches for your prefix search: {}", prefix);
                 return;
             }
+#ifdef AFTER_HOURS_USE_RAYLIB
             for (auto it = matches.first; it != matches.second; ++it) {
                 if (::afterhours::IsSoundPlaying(it->second)) {
                     return;
                 }
             }
-            ::afterhours::PlaySound(matches.first->second);
+#endif
+            play_loaded(matches.first->first);
         }
 
         void play_first_available_match(const std::string &prefix) {
@@ -81,47 +380,132 @@ struct sound_system : developer::Plugin {
                 log_warn("got no matches for your prefix search: {}", prefix);
                 return;
             }
+#ifdef AFTER_HOURS_USE_RAYLIB
             for (auto it = matches.first; it != matches.second; ++it) {
                 if (!::afterhours::IsSoundPlaying(it->second)) {
-                    ::afterhours::PlaySound(it->second);
+                    play_loaded(it->first);
                     return;
                 }
             }
-            ::afterhours::PlaySound(matches.first->second);
+#endif
+            play_loaded(matches.first->first);
         }
 
         void update_volume(const float new_v) {
             current_volume = new_v;
-            impl.update_volume(current_volume * get_master_volume());
+            for (const auto &kv : impl.storage) apply_volume(kv.first);
         }
 
-        void unload_all() { impl.unload_all(); }
+        void unload_all() {
+            impl.unload_all();
+            bus_by_name.clear();
+            range_by_name.clear();
+            fades.clear();
+        }
 
         [[nodiscard]] float get_volume() const { return current_volume; }
 
        private:
+        friend struct FadeUpdateSystem;
+
+        struct Fade {
+            float level = 1.f;
+            float from = 1.f;
+            float to = 1.f;
+            float duration = 0.f;
+            float elapsed = 0.f;
+            bool active = false;
+            bool stop_at_end = false;
+        };
+
+        // Fade state only; advancement is FadeUpdateSystem's job (it calls
+        // this once per frame when registered). No host should pump this.
+        void advance_fades(float dt) {
+            if (dt <= 0.f) return;
+            std::vector<std::string> finished;
+            for (auto &[name, fade] : fades) {
+                if (!fade.active) continue;
+                fade.elapsed += dt;
+                const float t = fade.duration <= 0.f
+                                    ? 1.f
+                                    : std::clamp(fade.elapsed / fade.duration,
+                                                 0.f, 1.f);
+                fade.level = fade.from + (fade.to - fade.from) * t;
+                apply_volume(name);
+                if (t >= 1.f) {
+                    fade.active = false;
+                    if (fade.stop_at_end && fade.to <= 0.f)
+                        finished.push_back(name);
+                }
+            }
+            for (const auto &name : finished) stop(name);
+        }
+
+        [[nodiscard]] float fade_gain(const std::string &name) const {
+            auto it = fades.find(name);
+            return it == fades.end() ? 1.f : it->second.level;
+        }
+        void begin_fade(const std::string &name, float target, float seconds,
+                        bool stop_at_end) {
+            if (!contains(name)) {
+                log_warn("SoundLibrary::fade_to: no sound loaded named '{}'",
+                         name.c_str());
+                return;
+            }
+            Fade &fade = fades[name];
+            fade.from = fade.level;
+            fade.to = std::clamp(target, 0.f, 1.f);
+            fade.duration = std::max(0.f, seconds);
+            fade.elapsed = 0.f;
+            fade.stop_at_end = stop_at_end;
+            if (fade.duration <= 0.f) {
+                fade.level = fade.to;
+                fade.active = false;
+                if (stop_at_end && fade.to <= 0.f) {
+                    stop(name);
+                    return;
+                }
+                apply_volume(name);
+                return;
+            }
+            fade.active = true;
+        }
+
         float current_volume = 1.f;
+        std::map<std::string, std::string> bus_by_name;
+        std::map<std::string, float> bus_volumes;
+        std::map<std::string, float> range_by_name;
+        std::map<std::string, Fade> fades;
+        std::map<std::string, Caption> captions_;
+        std::optional<Caption> last_;
+        std::function<float()> caption_clock_ = [] {
+            return std::chrono::duration<float>(
+                       std::chrono::steady_clock::now().time_since_epoch())
+                .count();
+        };
+
+        [[nodiscard]] float now() const { return caption_clock_(); }
 
         struct SoundLibraryImpl : Library<SoundType> {
             virtual SoundType convert_filename_to_object(
                 const char *, const char *filename) override {
+#ifdef AFTER_HOURS_USE_RAYLIB
                 return ::afterhours::LoadSound(filename);
+#else
+                (void)filename;
+                return SoundType{};
+#endif
             }
             virtual void unload(SoundType sound) override {
+#ifdef AFTER_HOURS_USE_RAYLIB
                 ::afterhours::UnloadSound(sound);
-            }
-
-            void update_volume(const float new_v) {
-                for (const auto &kv : storage) {
-                    log_trace("updating sound volume for {} to {}", kv.first,
-                              new_v);
-                    ::afterhours::SetSoundVolume(kv.second, new_v);
-                }
+#else
+                (void)sound;
+#endif
             }
         } impl;
     };
 
-    // Music library for streaming music
     SINGLETON_CLASS_FWD(MusicLibrary)
     struct MusicLibrary {
         SINGLETON(MusicLibrary)
@@ -132,13 +516,76 @@ struct sound_system : developer::Plugin {
         [[nodiscard]] const MusicType &get(const std::string &name) const {
             return impl.get(name);
         }
+        using Handle = Library<MusicType>::Handle;
+        [[nodiscard]] Handle intern(const std::string &name) {
+            return impl.intern(name);
+        }
+        [[nodiscard]] MusicType &get(Handle handle) {
+            return impl.get(handle);
+        }
+        [[nodiscard]] const MusicType &get(Handle handle) const {
+            return impl.get(handle);
+        }
+        [[nodiscard]] bool contains(Handle handle) const {
+            return impl.contains(handle);
+        }
         [[nodiscard]] bool contains(const std::string &name) const {
             return impl.contains(name);
         }
+        [[nodiscard]] std::string bus_of(const std::string &name) const {
+            auto it = bus_by_name.find(name);
+            return it == bus_by_name.end() ? std::string{"music"} : it->second;
+        }
+        void set_bus_volume(const std::string &bus, float volume) {
+            bus_volumes[bus] = std::max(0.f, volume);
+            for (const auto &kv : impl.storage)
+                if (bus_of(kv.first) == bus) apply_volume(kv.first);
+        }
+        [[nodiscard]] float get_bus_volume(const std::string &bus) const {
+            auto it = bus_volumes.find(bus);
+            return it == bus_volumes.end() ? 1.f : it->second;
+        }
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        [[nodiscard]] std::vector<std::string> known_buses() const {
+            std::set<std::string> out{"music"};
+            for (const auto &kv : bus_volumes) out.insert(kv.first);
+            for (const auto &kv : bus_by_name) out.insert(kv.second);
+            return {out.begin(), out.end()};
+        }
+#endif
+        [[nodiscard]] float effective_volume(const std::string &name) const {
+            return current_volume * get_master_volume() *
+                   get_bus_volume(bus_of(name));
+        }
+        void apply_volume(const std::string &name) {
+#ifdef AFTER_HOURS_USE_RAYLIB
+            ::afterhours::SetMusicVolume(get(name), effective_volume(name) *
+                                                        fade_gain(name));
+#else
+            (void)name;
+#endif
+        }
         void load(const char *filename, const char *name) {
+            load_on_bus(filename, name, bus_of(name));
+        }
+        void load_on_bus(const char *filename, const char *name,
+                         const std::string &bus) {
+            const bool was_present = contains(name);
             impl.load(filename, name);
-            ::afterhours::SetMusicVolume(get(name),
-                                        current_volume * get_master_volume());
+            if (!was_present && contains(name)) bus_by_name[name] = bus;
+            if (contains(name)) apply_volume(name);
+        }
+        bool add(const std::string &name, MusicType music,
+                 const std::string &bus = "music") {
+            auto res = impl.add(name.c_str(), music);
+            if (!res) {
+                log_warn("MusicLibrary::add: '{}' is already registered",
+                         name.c_str());
+                return false;
+            }
+            bus_by_name[name] = bus;
+            apply_volume(name);
+            return true;
         }
 
         void play(const std::string &name) {
@@ -147,44 +594,168 @@ struct sound_system : developer::Plugin {
                          name.c_str());
                 return;
             }
+#ifdef AFTER_HOURS_USE_RAYLIB
             auto &music = get(name);
             ::afterhours::PlayMusicStream(music);
+#endif
+            record_play(PlayRecord{name, bus_of(name), effective_volume(name),
+                                   0.5f, 1.f, std::nullopt});
+        }
+        void stop(const std::string &name) {
+            fades.erase(name);
+#ifdef AFTER_HOURS_USE_RAYLIB
+            if (contains(name)) {
+                ::afterhours::StopMusicStream(get(name));
+                apply_volume(name);
+            }
+#else
+            (void)name;
+#endif
+        }
+        [[nodiscard]] bool is_playing(const std::string &name) {
+#ifdef AFTER_HOURS_USE_RAYLIB
+            return contains(name) &&
+                   ::afterhours::IsMusicStreamPlaying(get(name));
+#else
+            (void)name;
+            return false;
+#endif
+        }
+
+        void fade_to(const std::string &name, float target, float seconds) {
+            begin_fade(name, target, seconds, false);
+        }
+        void stop_with_fade(const std::string &name, float seconds) {
+            begin_fade(name, 0.f, seconds, true);
+        }
+        void set_fade_level(const std::string &name, float level) {
+            if (!contains(name)) {
+                log_warn("MusicLibrary::set_fade_level: no music loaded "
+                         "named '{}'",
+                         name.c_str());
+                return;
+            }
+            Fade &fade = fades[name];
+            fade.level = std::clamp(level, 0.f, 1.f);
+            fade.active = false;
+            fade.stop_at_end = false;
+            apply_volume(name);
+        }
+        [[nodiscard]] float fade_level(const std::string &name) const {
+            return fade_gain(name);
         }
 
         void update_volume(const float new_v) {
             current_volume = new_v;
-            impl.update_volume(current_volume * get_master_volume());
+            for (const auto &kv : impl.storage) apply_volume(kv.first);
         }
 
-        void unload_all() { impl.unload_all(); }
+        void unload_all() {
+            impl.unload_all();
+            bus_by_name.clear();
+            fades.clear();
+        }
 
         [[nodiscard]] float get_volume() const { return current_volume; }
 
+        // Stream pumping only. Fade advancement is FadeUpdateSystem's job,
+        // not this method's (it used to take a dt just to tick fades).
         void update() {
-            // Update all music streams (required for streaming music)
             for (const auto &kv : impl.storage) {
+#ifdef AFTER_HOURS_USE_RAYLIB
                 ::afterhours::UpdateMusicStream(kv.second);
+#else
+                (void)kv;
+#endif
             }
         }
 
        private:
+        friend struct FadeUpdateSystem;
+
+        struct Fade {
+            float level = 1.f;
+            float from = 1.f;
+            float to = 1.f;
+            float duration = 0.f;
+            float elapsed = 0.f;
+            bool active = false;
+            bool stop_at_end = false;
+        };
+
+        // Fade state only; advancement is FadeUpdateSystem's job.
+        void advance_fades(float dt) {
+            if (dt <= 0.f) return;
+            std::vector<std::string> finished;
+            for (auto &[name, fade] : fades) {
+                if (!fade.active) continue;
+                fade.elapsed += dt;
+                const float t = fade.duration <= 0.f
+                                    ? 1.f
+                                    : std::clamp(fade.elapsed / fade.duration,
+                                                 0.f, 1.f);
+                fade.level = fade.from + (fade.to - fade.from) * t;
+                apply_volume(name);
+                if (t >= 1.f) {
+                    fade.active = false;
+                    if (fade.stop_at_end && fade.to <= 0.f)
+                        finished.push_back(name);
+                }
+            }
+            for (const auto &name : finished) stop(name);
+        }
+
+        [[nodiscard]] float fade_gain(const std::string &name) const {
+            auto it = fades.find(name);
+            return it == fades.end() ? 1.f : it->second.level;
+        }
+        void begin_fade(const std::string &name, float target, float seconds,
+                        bool stop_at_end) {
+            if (!contains(name)) {
+                log_warn("MusicLibrary::fade_to: no music loaded named '{}'",
+                         name.c_str());
+                return;
+            }
+            Fade &fade = fades[name];
+            fade.from = fade.level;
+            fade.to = std::clamp(target, 0.f, 1.f);
+            fade.duration = std::max(0.f, seconds);
+            fade.elapsed = 0.f;
+            fade.stop_at_end = stop_at_end;
+            if (fade.duration <= 0.f) {
+                fade.level = fade.to;
+                fade.active = false;
+                if (stop_at_end && fade.to <= 0.f) {
+                    stop(name);
+                    return;
+                }
+                apply_volume(name);
+                return;
+            }
+            fade.active = true;
+        }
+
         float current_volume = 1.f;
+        std::map<std::string, std::string> bus_by_name;
+        std::map<std::string, float> bus_volumes;
+        std::map<std::string, Fade> fades;
 
         struct MusicLibraryImpl : Library<MusicType> {
             virtual MusicType convert_filename_to_object(
                 const char *, const char *filename) override {
+#ifdef AFTER_HOURS_USE_RAYLIB
                 return ::afterhours::LoadMusicStream(filename);
+#else
+                (void)filename;
+                return MusicType{};
+#endif
             }
             virtual void unload(MusicType music) override {
+#ifdef AFTER_HOURS_USE_RAYLIB
                 ::afterhours::UnloadMusicStream(music);
-            }
-
-            void update_volume(const float new_v) {
-                for (const auto &kv : storage) {
-                    log_trace("updating music volume for {} to {}", kv.first,
-                              new_v);
-                    ::afterhours::SetMusicVolume(kv.second, new_v);
-                }
+#else
+                (void)music;
+#endif
             }
         } impl;
     };
@@ -278,17 +849,21 @@ struct sound_system : developer::Plugin {
                     const std::string &alias_name = names[try_index];
                     if (lib.contains(alias_name)) {
                         auto &s = lib.get(alias_name);
+#ifdef AFTER_HOURS_USE_RAYLIB
                         if (!::afterhours::IsSoundPlaying(s)) {
-                            ::afterhours::PlaySound(s);
+#else
+                        if (true) {
+                            (void)s;
+#endif
+                            lib.play_loaded(alias_name);
+                            lib.note_played(base);
                             idx = (try_index + 1) % names.size();
                             return;
                         }
                     }
                 }
-                // On a missing base, play(name) logs and no-ops (it
-                // contains-guards); no exception.
                 if (lib.contains(base)) {
-                    ::afterhours::PlaySound(lib.get(base));
+                    lib.play_loaded(base);
                 } else {
                     lib.play(name);
                 }
@@ -297,18 +872,31 @@ struct sound_system : developer::Plugin {
             }
 
             if (lib.contains(base)) {
-                ::afterhours::PlaySound(lib.get(base));
+                lib.play_loaded(base);
             } else {
                 lib.play(name);
             }
         }
     };
 
-    // System to update music streams
-    struct MusicUpdateSystem : System<> {
-        virtual void for_each_with(Entity &, float) override {
-            MusicLibrary::get().update();
+    // Advances every in-flight fade on both libraries once per frame.
+    // Libraries hold fade state + gain application only; this system is
+    // the tick. Hosts get fades by registering update systems (below),
+    // never by pumping a library update method by hand.
+    struct FadeUpdateSystem : System<> {
+        bool should_iterate() const override { return false; }
+        void once(float dt) override {
+            SoundLibrary::get().advance_fades(dt);
+            MusicLibrary::get().advance_fades(dt);
         }
+    };
+
+    // Pumps music streams once per frame. Fade advancement used to ride
+    // along here (and inside MusicLibrary::update(dt)); it now lives in
+    // FadeUpdateSystem so this system's one job is stream upkeep.
+    struct MusicUpdateSystem : System<> {
+        bool should_iterate() const override { return false; }
+        void once(float) override { MusicLibrary::get().update(); }
     };
 
     static void add_singleton_components(Entity &entity) {
@@ -323,10 +911,10 @@ struct sound_system : developer::Plugin {
 
     static void register_update_systems(SystemManager &sm) {
         sm.register_update_system(std::make_unique<SoundPlaybackSystem>());
+        sm.register_update_system(std::make_unique<FadeUpdateSystem>());
         sm.register_update_system(std::make_unique<MusicUpdateSystem>());
     }
 
-    // Helper function to play a sound by name
     template<typename SoundFileEnum>
     static void play_sound(SoundFileEnum sound_file,
                            const char *(*sound_to_str)(SoundFileEnum)) {
@@ -334,12 +922,126 @@ struct sound_system : developer::Plugin {
         SoundLibrary::get().play(name);
     }
 
-    // Helper function to request a sound via component
     template<typename SoundFileEnum>
     static void request_sound(Entity &entity, SoundFileEnum sound_file,
                               const char *(*sound_to_str)(SoundFileEnum)) {
         const char *name = sound_to_str(sound_file);
         entity.addComponent<PlaySoundRequest>(name);
+    }
+
+    static void set_listener(const Listener &listener) { listener_ = listener; }
+    static void set_listener_position(Vector3Type position,
+                                      Vector3Type forward = Vector3Type{0.f, 0.f, -1.f}) {
+        listener_.position = position;
+        listener_.forward = forward;
+    }
+    [[nodiscard]] static const Listener &listener() { return listener_; }
+
+    static bool play_at(const char *name, Vector3Type position,
+                        float base_volume = 1.f,
+                        float default_max_distance = 50.f,
+                        float pitch = 1.f) {
+        auto &lib = SoundLibrary::get();
+        if (!lib.contains(name)) {
+            log_warn("sound_system::play_at: no sound loaded named '{}'", name);
+            return false;
+        }
+        const float max_dist = lib.range_of(name, default_max_distance);
+        const SpatialGain g = spatial_gain(listener_, position, max_dist);
+        if (g.volume <= 0.f) return false;
+        lib.play_loaded(name, base_volume * g.volume, g.pan, pitch, true,
+                        position);
+        return true;
+    }
+
+    static void fade_to(const std::string &name, float target, float seconds) {
+        if (SoundLibrary::get().contains(name)) {
+            SoundLibrary::get().fade_to(name, target, seconds);
+            return;
+        }
+        if (MusicLibrary::get().contains(name)) {
+            MusicLibrary::get().fade_to(name, target, seconds);
+            return;
+        }
+        log_warn("sound_system::fade_to: no sound or music loaded named '{}'",
+                 name.c_str());
+    }
+    static void stop_with_fade(const std::string &name, float seconds) {
+        if (SoundLibrary::get().contains(name)) {
+            SoundLibrary::get().stop_with_fade(name, seconds);
+            return;
+        }
+        if (MusicLibrary::get().contains(name)) {
+            MusicLibrary::get().stop_with_fade(name, seconds);
+            return;
+        }
+        log_warn("sound_system::stop_with_fade: no sound or music loaded "
+                 "named '{}'",
+                 name.c_str());
+    }
+    static void set_fade_level(const std::string &name, float level) {
+        if (SoundLibrary::get().contains(name)) {
+            SoundLibrary::get().set_fade_level(name, level);
+            return;
+        }
+        if (MusicLibrary::get().contains(name)) {
+            MusicLibrary::get().set_fade_level(name, level);
+            return;
+        }
+        log_warn("sound_system::set_fade_level: no sound or music loaded "
+                 "named '{}'",
+                 name.c_str());
+    }
+    [[nodiscard]] static float fade_level(const std::string &name) {
+        if (SoundLibrary::get().contains(name))
+            return SoundLibrary::get().fade_level(name);
+        if (MusicLibrary::get().contains(name))
+            return MusicLibrary::get().fade_level(name);
+        return 1.f;
+    }
+
+    static void set_bus_volume(const std::string &bus, float volume) {
+        SoundLibrary::get().set_bus_volume(bus, volume);
+        MusicLibrary::get().set_bus_volume(bus, volume);
+    }
+    [[nodiscard]] static float get_bus_volume(const std::string &bus) {
+        return SoundLibrary::get().get_bus_volume(bus);
+    }
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    // Bus enumeration exists only for the e2e set_volume/expect_volume
+    // commands; it compiles out with the rest of the e2e surface.
+    [[nodiscard]] static std::vector<std::string> known_buses() {
+        std::set<std::string> out{"effects", "music"};
+        for (const auto &bus : SoundLibrary::get().known_buses())
+            out.insert(bus);
+        for (const auto &bus : MusicLibrary::get().known_buses())
+            out.insert(bus);
+        return {out.begin(), out.end()};
+    }
+    [[nodiscard]] static bool has_bus(const std::string &bus) {
+        for (const auto &known : known_buses())
+            if (known == bus) return true;
+        return false;
+    }
+#endif
+
+    static void set_recording(bool on) { recording_ = on; }
+    [[nodiscard]] static bool recording() { return recording_; }
+    [[nodiscard]] static const std::vector<PlayRecord> &play_log() {
+        return play_log_;
+    }
+    static void clear_play_log() { play_log_.clear(); }
+    [[nodiscard]] static int play_count(const std::string &name) {
+        int n = 0;
+        for (const auto &r : play_log_)
+            if (r.name == name) ++n;
+        return n;
+    }
+    [[nodiscard]] static bool expect_sound_played(const std::string &name) {
+        return play_count(name) > 0;
+    }
+    static void record_play(const PlayRecord &rec) {
+        if (recording_) play_log_.push_back(rec);
     }
 
     // Volumes are independent preferences; backend gains are master * category.
@@ -367,6 +1069,9 @@ struct sound_system : developer::Plugin {
 
    private:
     inline static float master_volume = 1.f;
+    inline static Listener listener_{};
+    inline static bool recording_ = false;
+    inline static std::vector<PlayRecord> play_log_{};
 };
 
 // Compile-time verification that sound_system satisfies the PluginCore concept

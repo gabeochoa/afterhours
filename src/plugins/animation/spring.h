@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "../../developer.h"
+
 #ifndef AFTERHOURS_SPRING_CRITICAL_ZETA
 #define AFTERHOURS_SPRING_CRITICAL_ZETA 0.9999f
 #endif
@@ -28,7 +30,7 @@ struct Spring {
   static Spring gentle() { return {.response = 0.5f, .bounce = 0.f}; }
   static Spring from_freq_decay(float freq, float decay) {
     freq = std::max(freq, 1e-4f);
-    return {.response = 2.f * 3.14159265358979f / freq,
+    return {.response = 2.f * PI / freq,
             .bounce = std::clamp(1.f - decay / freq, 0.f, 0.999f)};
   }
 };
@@ -45,7 +47,7 @@ struct SpringSample {
 };
 
 static float spring_omega(const Spring &s) {
-  return 2.f * 3.14159265358979f / std::max(s.response, 1e-4f);
+  return 2.f * PI / std::max(s.response, 1e-4f);
 }
 static float spring_zeta(const Spring &s) {
   return 1.f - std::clamp(s.bounce, 0.f, 0.999f);

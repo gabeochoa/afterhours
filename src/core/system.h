@@ -10,6 +10,8 @@
 #include <string_view>
 #include <type_traits>
 #include <typeinfo>
+#include <unordered_map>
+#include <vector>
 
 #include <cstdlib>
 #if __has_include(<cxxabi.h>)
@@ -136,6 +138,26 @@ class SystemBase {
         return static_cast<const SystemBase &>(*this).should_run(dt);
     }
     virtual bool should_run(const float) const { return true; }
+    virtual void on_activate(const float dt) {
+        static_cast<const SystemBase &>(*this).on_activate(dt);
+    }
+    virtual void on_activate(const float) const {}
+    virtual void on_deactivate(const float dt) {
+        static_cast<const SystemBase &>(*this).on_deactivate(dt);
+    }
+    virtual void on_deactivate(const float) const {}
+    bool is_active() const { return active; }
+    bool advance_lifecycle(const float dt) {
+        const bool running = should_run(dt);
+        if (running != active) {
+            active = running;
+            if (running)
+                on_activate(dt);
+            else
+                on_deactivate(dt);
+        }
+        return running;
+    }
     virtual void once(const float) {}
     virtual void once(const float) const {}
     virtual void on_iteration_begin(const float) {}
@@ -152,6 +174,10 @@ class SystemBase {
         return {};
     }
 
+    virtual const std::vector<ComponentID> *membership_requirements() const {
+        return nullptr;
+    }
+
     virtual void for_each(Entity &, const float) = 0;
     virtual void for_each(const Entity &, const float) const = 0;
 
@@ -163,6 +189,7 @@ class SystemBase {
 
    private:
     mutable std::string cached_name_;
+    bool active = false;
 };
 
 template<typename S>
@@ -503,6 +530,22 @@ struct System
         return OnlySingletons<ComponentsOnly>::find(coll);
     }
 
+    template<typename>
+    struct PositiveIds;
+    template<typename... Cs>
+    struct PositiveIds<type_list<Cs...>> {
+        static const std::vector<ComponentID> &get() {
+            static const std::vector<ComponentID> ids{
+                components::get_type_id<Cs>()...};
+            return ids;
+        }
+    };
+
+    const std::vector<ComponentID> *membership_requirements() const override {
+        const auto &ids = PositiveIds<ComponentsOnly>::get();
+        return ids.empty() ? nullptr : &ids;
+    }
+
     using ForEachBase::for_each_with;
     using ForEachBase::for_each_with_derived;
 };
@@ -521,21 +564,23 @@ enum struct SystemPhase { Update, FixedUpdate, Render };
 // it a consumer can only time systems it wrote.
 struct SystemProfileHook {
     std::function<void(std::string_view, SystemPhase)> begin;
-    std::function<void(std::string_view, SystemPhase)> end;
+    std::function<void(std::string_view, SystemPhase, int)> end;
     explicit operator bool() const { return begin && end; }
 };
 
 // One iteration pass, shared by every phase and by the UI collection runner.
 // Templated on the system so the const render pass still picks the const
-// for_each overloads.
+// for_each overloads. Returns entities visited (entries iterated, not matches).
 template<typename Sys>
-inline void run_system_over(Sys &system, Entities &entities, const float dt,
+inline int run_system_over(Sys &system, Entities &entities, const float dt,
                             const EntityCollection &coll,
                             const bool skip_cleanup) {
-    if (!system.should_iterate()) return;
+    if (!system.should_iterate()) return 0;
     system.on_iteration_begin(dt);
+    int visited = 0;
 
     auto visit = [&](auto &entity) {
+        ++visited;
         if (system.include_derived_children)
             system.for_each_derived(entity, dt);
         else
@@ -546,6 +591,16 @@ inline void run_system_over(Sys &system, Entities &entities, const float dt,
         only.has_value()) {
         Entity &ent = *only.value();
         if (!skip_cleanup || !ent.cleanup) visit(ent);
+    } else if (!system.include_derived_children &&
+               system.membership_requirements() &&
+               &entities == &coll.get_entities()) {
+        const Entities candidates =
+            coll.membership_candidates(*system.membership_requirements());
+        for (const auto &entity : candidates) {
+            if (!entity) continue;
+            if (skip_cleanup && entity->cleanup) continue;
+            visit(*entity);
+        }
     } else {
         // Index-based so a push_back to entities (e.g. a for_each that
         // triggers a merge) doesn't invalidate our iterator.
@@ -558,6 +613,7 @@ inline void run_system_over(Sys &system, Entities &entities, const float dt,
         }
     }
     system.on_iteration_end(dt);
+    return visited;
 }
 
 struct SystemManager {
@@ -574,6 +630,7 @@ struct SystemManager {
     struct ProfileScope {
         const SystemBase *sys = nullptr;
         SystemPhase phase{};
+        int entity_count = 0;
 #if AFTERHOURS_ENABLE_PROFILING
         profiling::detail::TimingScope timing;
 #endif
@@ -595,8 +652,11 @@ struct SystemManager {
         // Re-checked: a system may clear the hook while it runs, and calling
         // a cleared std::function here would throw out of a destructor.
         ~ProfileScope() {
+#if AFTERHOURS_ENABLE_PROFILING
+            timing.entity_count = entity_count;
+#endif
             if (sys && profile_hook().end)
-                profile_hook().end(sys->name(), phase);
+                profile_hook().end(sys->name(), phase, entity_count);
             crash::set_running_system(nullptr);
         }
         ProfileScope(const ProfileScope &) = delete;
@@ -613,7 +673,29 @@ struct SystemManager {
     std::vector<std::unique_ptr<SystemBase>> fixed_update_systems_;
     std::vector<std::unique_ptr<SystemBase>> render_systems_;
 
+   private:
+    std::unordered_map<SystemBase *, std::string> system_groups;
+    std::unordered_map<std::string, bool> group_states;
+
+    void assign_group(SystemBase *sys, std::string_view group) {
+        system_groups[sys] = std::string(group);
+    }
+
+    bool system_group_enabled(SystemBase *sys) const {
+        const auto it = system_groups.find(sys);
+        if (it == system_groups.end()) return true;
+        const auto g = group_states.find(it->second);
+        return g == group_states.end() || g->second;
+    }
+
+   public:
     void register_update_system(std::unique_ptr<SystemBase> system) {
+        update_systems_.emplace_back(std::move(system));
+    }
+
+    void register_update_system(std::unique_ptr<SystemBase> system,
+                                std::string_view group) {
+        assign_group(system.get(), group);
         update_systems_.emplace_back(std::move(system));
     }
 
@@ -621,8 +703,45 @@ struct SystemManager {
         fixed_update_systems_.emplace_back(std::move(system));
     }
 
+    void register_fixed_update_system(std::unique_ptr<SystemBase> system,
+                                      std::string_view group) {
+        assign_group(system.get(), group);
+        fixed_update_systems_.emplace_back(std::move(system));
+    }
+
     void register_render_system(std::unique_ptr<SystemBase> system) {
         render_systems_.emplace_back(std::move(system));
+    }
+
+    void register_render_system(std::unique_ptr<SystemBase> system,
+                                std::string_view group) {
+        assign_group(system.get(), group);
+        render_systems_.emplace_back(std::move(system));
+    }
+
+    void set_group_enabled(std::string_view group, bool enabled) {
+        group_states[std::string(group)] = enabled;
+    }
+
+    bool group_enabled(std::string_view group) const {
+        const auto it = group_states.find(std::string(group));
+        return it == group_states.end() || it->second;
+    }
+
+    std::vector<std::string_view> systems_in_group(
+        std::string_view group) const {
+        std::vector<std::string_view> out;
+        auto scan = [&](const auto &list) {
+            for (const auto &sys : list) {
+                const auto it = system_groups.find(sys.get());
+                if (it != system_groups.end() && it->second == group)
+                    out.push_back(sys->name());
+            }
+        };
+        scan(update_systems_);
+        scan(fixed_update_systems_);
+        scan(render_systems_);
+        return out;
     }
 
     void register_update_system(const std::function<void(float)> &cb) {
@@ -639,11 +758,14 @@ struct SystemManager {
 
     void tick(Entities &entities, const float dt) {
         for (auto &system : update_systems_) {
-            if (!system->should_run(dt)) continue;
+            if (!system_group_enabled(system.get()) ||
+                !system->advance_lifecycle(dt))
+                continue;
             ProfileScope profile_scope(system.get(), SystemPhase::Update);
             system->once(dt);
-            run_system_over(*system, entities, dt,
-                            EntityHelper::get_default_collection(), false);
+            profile_scope.entity_count = run_system_over(
+                *system, entities, dt, EntityHelper::get_default_collection(),
+                false);
             system->after(dt);
             EntityHelper::merge_entity_arrays();
         }
@@ -651,22 +773,28 @@ struct SystemManager {
 
     void fixed_tick(Entities &entities, const float dt) {
         for (auto &system : fixed_update_systems_) {
-            if (!system->should_run(dt)) continue;
+            if (!system_group_enabled(system.get()) ||
+                !system->advance_lifecycle(dt))
+                continue;
             ProfileScope profile_scope(system.get(), SystemPhase::FixedUpdate);
             system->once(dt);
-            run_system_over(*system, entities, dt,
-                            EntityHelper::get_default_collection(), false);
+            profile_scope.entity_count = run_system_over(
+                *system, entities, dt, EntityHelper::get_default_collection(),
+                false);
             system->after(dt);
         }
     }
 
     void render(Entities &entities, const float dt) {
         for (auto &system : render_systems_) {
-            if (!system->should_run(dt)) continue;
+            if (!system_group_enabled(system.get()) ||
+                !system->advance_lifecycle(dt))
+                continue;
             ProfileScope profile_scope(system.get(), SystemPhase::Render);
             system->once(dt);
-            run_system_over(*system, entities, dt,
-                            EntityHelper::get_default_collection(), false);
+            profile_scope.entity_count = run_system_over(
+                *system, entities, dt, EntityHelper::get_default_collection(),
+                false);
             system->after(dt);
 #ifndef AFTERHOURS_SINGLE_RENDER_PASS
             const SystemBase &sys = *system;

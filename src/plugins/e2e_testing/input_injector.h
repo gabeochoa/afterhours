@@ -3,15 +3,30 @@
 #pragma once
 
 #include "../../core/key_codes.h"
+#include "../../logging.h"
+#include "../../core/wheel_delta.h"
 #include "concepts.h"
 
 #include <array>
+#include <cstdint>
+#include <cstdlib>
+#include <limits>
+#include <string>
+#include <utility>
+#include <vector>
 
 // TODO eventually match this exactly 1-1 with UI input system so we can share
 // concepts
+#include <queue>
+
 namespace afterhours {
 namespace testing {
 namespace input_injector {
+
+// TODO: support customization
+inline constexpr int GAMEPAD_COUNT = 8;
+inline constexpr int GAMEPAD_BUTTON_COUNT = 18;
+inline constexpr int GAMEPAD_AXIS_COUNT = 6;
 
 namespace detail {
 inline std::array<bool, 512> synthetic_keys{};
@@ -22,6 +37,12 @@ inline std::array<int, 512> synthetic_press_count{};
 inline std::array<int, 512> synthetic_press_delay{};
 inline std::array<int, 512> synthetic_release_count{};
 inline std::array<int, 512> synthetic_release_delay{};
+inline std::array<bool, 512> synthetic_press_read{};
+inline std::vector<std::string> unread_presses;
+
+inline void note_unread_press(std::string label) {
+  unread_presses.push_back(std::move(label));
+}
 
 struct MouseState {
   Position pos{}; // Uses Position from concepts.h (satisfies HasPosition)
@@ -62,6 +83,7 @@ inline MouseState mouse;
 struct WheelState {
   float x = 0.0f;
   float y = 0.0f;
+  WheelDeltaKind kind = WheelDeltaKind::Notched;
 };
 inline WheelState wheel;
 inline bool wheel_fresh = false;
@@ -88,7 +110,30 @@ struct KeyHold {
   int keycode = 0;
   float remaining = 0.0f;
 };
+// Drained destructively by pop_key_pressed, like GetKeyPressed.
+struct QueuedPress {
+  int key = 0;
+  int delay = 1;
+};
+inline std::queue<QueuedPress> key_press_queue{};
 inline KeyHold key_hold;
+
+struct GamepadState {
+  bool available = false;
+  std::array<bool, GAMEPAD_BUTTON_COUNT> down{};
+  std::array<uint8_t, GAMEPAD_BUTTON_COUNT> press_count{};
+  std::array<int, GAMEPAD_BUTTON_COUNT> press_delay{};
+  std::array<int, GAMEPAD_BUTTON_COUNT> release_in{};
+  std::array<float, GAMEPAD_AXIS_COUNT> axes{};
+};
+inline std::array<GamepadState, GAMEPAD_COUNT> gamepads{};
+
+inline void require(bool ok, const char *what) {
+  if (ok)
+    return;
+  log_error("input_injector: {}", what);
+  std::abort();
+}
 } // namespace detail
 
 /// Set a key as synthetically held down.
@@ -99,6 +144,8 @@ inline void set_key_down(int key) {
     detail::synthetic_keys[key] = true;
     detail::synthetic_press_count[key]++;
     detail::synthetic_press_delay[key] = 1;
+    detail::key_press_queue.push({key, 1});
+    detail::synthetic_press_read[key] = false;
   }
 }
 
@@ -125,7 +172,10 @@ inline void set_key_up(int key) {
 
 /// Check if key is synthetically held
 inline bool is_key_down(int key) {
-  return key >= 0 && key < 512 && detail::synthetic_keys[key];
+  if (key < 0 || key >= 512 || !detail::synthetic_keys[key])
+    return false;
+  detail::synthetic_press_read[key] = true;
+  return true;
 }
 
 /// Check if a synthetic key press is available this frame.
@@ -135,8 +185,21 @@ inline bool is_key_down(int key) {
 inline bool consume_press(int key) {
   if (key < 0 || key >= 512)
     return false;
-  return detail::synthetic_press_count[key] > 0 &&
-         detail::synthetic_press_delay[key] == 0;
+  const bool pressed = detail::synthetic_press_count[key] > 0 &&
+                       detail::synthetic_press_delay[key] == 0;
+  if (pressed)
+    detail::synthetic_press_read[key] = true;
+  return pressed;
+}
+
+/// Pop the next mature injected key press, or 0 when none is ready.
+inline int pop_key_pressed() {
+  auto &q = detail::key_press_queue;
+  if (q.empty() || q.front().delay > 0)
+    return 0;
+  int key = q.front().key;
+  q.pop();
+  return key;
 }
 
 inline bool consume_release(int key) {
@@ -161,6 +224,75 @@ inline void update_key_hold(float dt) {
       detail::key_hold.active = false;
     }
   }
+}
+
+inline bool is_valid_gamepad(int id) { return id >= 0 && id < GAMEPAD_COUNT; }
+inline bool is_valid_gamepad_button(int button) {
+  return button > 0 && button < GAMEPAD_BUTTON_COUNT;
+}
+inline bool is_valid_gamepad_axis(int axis) {
+  return axis >= 0 && axis < GAMEPAD_AXIS_COUNT;
+}
+
+inline bool is_gamepad_available(int id) {
+  return is_valid_gamepad(id) && detail::gamepads[id].available;
+}
+
+inline void set_gamepad_available(int id, bool available) {
+  detail::require(is_valid_gamepad(id), "gamepad id out of range");
+  detail::gamepads[id] = {};
+  detail::gamepads[id].available = available;
+}
+
+inline detail::GamepadState &connected_gamepad(int id, int button) {
+  detail::require(is_gamepad_available(id), "gamepad is not connected");
+  detail::require(is_valid_gamepad_button(button),
+                  "gamepad button out of range");
+  return detail::gamepads[id];
+}
+
+inline void set_gamepad_button_down(int id, int button) {
+  auto &pad = connected_gamepad(id, button);
+  pad.down[button] = true;
+  if (pad.press_count[button] < std::numeric_limits<uint8_t>::max())
+    pad.press_count[button]++;
+  pad.press_delay[button] = 1;
+  pad.release_in[button] = 0;
+}
+
+inline void tap_gamepad_button(int id, int button) {
+  set_gamepad_button_down(id, button);
+  detail::gamepads[id].release_in[button] = 2;
+}
+
+inline void set_gamepad_button_up(int id, int button) {
+  auto &pad = connected_gamepad(id, button);
+  pad.down[button] = false;
+  pad.release_in[button] = 0;
+}
+
+inline void set_gamepad_axis(int id, int axis, float value) {
+  detail::require(is_gamepad_available(id), "gamepad is not connected");
+  detail::require(is_valid_gamepad_axis(axis), "gamepad axis out of range");
+  detail::gamepads[id].axes[axis] = value;
+}
+
+inline bool is_gamepad_button_down(int id, int button) {
+  return is_gamepad_available(id) && is_valid_gamepad_button(button) &&
+         detail::gamepads[id].down[button];
+}
+
+inline bool consume_gamepad_press(int id, int button) {
+  if (!is_gamepad_available(id) || !is_valid_gamepad_button(button))
+    return false;
+  const auto &pad = detail::gamepads[id];
+  return pad.press_count[button] > 0 && pad.press_delay[button] == 0;
+}
+
+inline float get_gamepad_axis(int id, int axis) {
+  if (!is_gamepad_available(id) || !is_valid_gamepad_axis(axis))
+    return 0.f;
+  return detail::gamepads[id].axes[axis];
 }
 
 /// Set mouse position
@@ -222,6 +354,23 @@ inline void release_scheduled_click() {
   }
 }
 
+/// Hold or release the right button across frames. Unlike simulate_right_click
+/// this does not auto-release, so scripts can drag with it.
+inline void set_right_button_down(bool down) {
+  auto &m = detail::mouse;
+  if (m.right_down == down)
+    return;
+  m.active = true;
+  m.auto_release = false;
+  m.right_down = down;
+  if (down) {
+    m.right_just_pressed = true;
+    m.right_press_read = false;
+  } else {
+    m.right_just_released = true;
+  }
+}
+
 /// Check mouse button state
 inline bool is_mouse_button_pressed() {
   const bool pressed = detail::mouse.active && detail::mouse.just_pressed;
@@ -229,12 +378,18 @@ inline bool is_mouse_button_pressed() {
   return pressed;
 }
 inline bool is_mouse_button_down() {
+  if (detail::mouse.just_pressed)
+    detail::mouse.press_read = true;
   return detail::mouse.active && detail::mouse.left_down;
 }
 inline bool is_mouse_right_button_down() {
+  if (detail::mouse.right_just_pressed)
+    detail::mouse.right_press_read = true;
   return detail::mouse.active && detail::mouse.right_down;
 }
 inline bool is_mouse_middle_button_down() {
+  if (detail::mouse.middle_just_pressed)
+    detail::mouse.middle_press_read = true;
   return detail::mouse.active && detail::mouse.middle_down;
 }
 inline bool is_mouse_middle_button_pressed() {
@@ -258,9 +413,11 @@ inline bool is_mouse_middle_button_released() {
 }
 
 /// Set scroll wheel delta for the current frame
-inline void set_mouse_wheel(float dx, float dy) {
+inline void set_mouse_wheel(float dx, float dy,
+                            WheelDeltaKind kind = WheelDeltaKind::Notched) {
   detail::wheel.x = dx;
   detail::wheel.y = dy;
+  detail::wheel.kind = kind;
   detail::wheel_fresh = true;
   detail::wheel_read = false;
   // Wheel injection should be observable even if no prior mouse move occurred.
@@ -269,6 +426,12 @@ inline void set_mouse_wheel(float dx, float dy) {
 
 /// Read the synthetic wheel delta. Stable within a frame, like raylib's, so
 /// every reader in a frame sees it -- but the frame it is read is its last.
+inline WheelDeltaKind consume_wheel_kind() {
+  if (detail::wheel.x != 0.f || detail::wheel.y != 0.f)
+    detail::wheel_read = true;
+  return detail::wheel.kind;
+}
+
 inline Position consume_wheel() {
   if (detail::wheel.x != 0.f || detail::wheel.y != 0.f)
     detail::wheel_read = true;
@@ -325,7 +488,9 @@ inline void reset_frame() {
     if (detail::synthetic_press_delay[i] > 0) {
       detail::synthetic_press_delay[i]--;
     } else if (detail::synthetic_press_count[i] > 0) {
-      detail::synthetic_press_count[i]--;
+      if (--detail::synthetic_press_count[i] == 0 &&
+          !detail::synthetic_press_read[i])
+        detail::note_unread_press("key '" + key_to_name(i) + "'");
     }
     if (detail::synthetic_release_delay[i] > 0) {
       detail::synthetic_release_delay[i]--;
@@ -333,6 +498,32 @@ inline void reset_frame() {
       detail::synthetic_release_count[i]--;
     }
   }
+  for (auto &pad : detail::gamepads) {
+    for (int b = 0; b < GAMEPAD_BUTTON_COUNT; b++) {
+      if (pad.press_delay[b] > 0) {
+        pad.press_delay[b]--;
+      } else if (pad.press_count[b] > 0) {
+        pad.press_count[b]--;
+      }
+      if (pad.release_in[b] > 0 && --pad.release_in[b] == 0)
+        pad.down[b] = false;
+    }
+  }
+  std::queue<detail::QueuedPress> matured;
+  while (!detail::key_press_queue.empty()) {
+    detail::QueuedPress p = detail::key_press_queue.front();
+    detail::key_press_queue.pop();
+    if (p.delay > 0)
+      p.delay--;
+    matured.push(p);
+  }
+  detail::key_press_queue = std::move(matured);
+}
+
+inline std::vector<std::string> take_unread_presses() {
+  std::vector<std::string> out = std::move(detail::unread_presses);
+  detail::unread_presses.clear();
+  return out;
 }
 
 /// Clear all synthetic input state
@@ -342,9 +533,13 @@ inline void reset_all() {
   detail::synthetic_press_delay.fill(0);
   detail::synthetic_release_count.fill(0);
   detail::synthetic_release_delay.fill(0);
+  std::queue<detail::QueuedPress>().swap(detail::key_press_queue);
+  detail::synthetic_press_read.fill(false);
+  detail::unread_presses.clear();
   detail::mouse = {};
   detail::pending_click = {};
   detail::key_hold = {};
+  detail::gamepads = {};
   detail::wheel = {};
   detail::wheel_fresh = false;
   detail::wheel_read = false;
