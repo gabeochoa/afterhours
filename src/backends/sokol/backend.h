@@ -47,7 +47,7 @@
 #include <string>
 #include <unordered_map>
 
-// Shared state (also used by font_helper.h)
+#define AFTERHOURS_FONT_HELPER_HAS_ENSURE 1
 #include "font_helper.h"
 #include "metal_state.h"
 
@@ -78,6 +78,14 @@ extern "C" void metal_install_live_resize_draw(void);
 // (SOKOL_GLES3) builds never reference Metal symbols.
 #if defined(SOKOL_METAL)
 extern "C" const void *metal_create_system_device(void);
+#ifdef SOKOL_METAL
+extern "C" void metal_install_first_frame_early_draw(void);
+extern "C" bool metal_should_draw_first_frame_early(bool has_view,
+                                                    bool already_drawn);
+extern "C" int metal_first_frame_early_draw_count(void);
+extern "C" int metal_first_frame_early_attempt_count(void);
+extern "C" void metal_reset_first_frame_early_draw(void);
+#endif
 extern "C" bool metal_capture_render_texture(uint32_t color_img_id, int width,
                                              int height, const char *path);
 #endif
@@ -165,9 +173,12 @@ inline sgl_pipeline g_blend_pip_additive{};
 inline sgl_pipeline g_blend_pip_multiplied{};
 inline sgl_pipeline g_blend_pip_premultiplied{};
 
-// sokol_gl + fontstash setup shared by the windowed (sokol_init_cb) and headless
-// (metal_init) bootstraps. Assumes sg_setup() has already run.
-inline void setup_sokol_gl_and_fonts() {
+inline bool g_sgl_ready = false;
+
+inline void ensure_sokol_gl_and_fonts() {
+  if (g_sgl_ready)
+    return;
+  g_sgl_ready = true;
   sgl_desc_t sgl_desc{};
   sgl_desc.max_vertices = 1 << 18; // 262144 vertices
   sgl_desc.max_commands = 1 << 16; // 65536 commands
@@ -376,8 +387,6 @@ inline void sokol_init_cb() {
   stm_setup();
   g_start_time = stm_now();
 
-  // Initialize sokol_gl (2D drawing) + fontstash (text). Shared with headless.
-  setup_sokol_gl_and_fonts();
 
   g_initialized = true;
 
@@ -412,7 +421,10 @@ inline void sokol_cleanup_cb() {
     sfons_destroy(g_fons_ctx);
     g_fons_ctx = nullptr;
   }
-  sgl_shutdown();
+  if (g_sgl_ready) {
+    sgl_shutdown();
+    g_sgl_ready = false;
+  }
   sg_shutdown();
   g_initialized = false;
 }
@@ -607,6 +619,7 @@ struct MetalPlatformAPI {
 
   // ── Frame ──
   static void begin_drawing() {
+    metal_detail::ensure_sokol_gl_and_fonts();
     // Headless: no swapchain — render into the offscreen texture instead. This
     // sets up the ortho projection + GL→Metal fixup internally, so we return.
     if (metal_detail::g_headless) {
@@ -674,6 +687,7 @@ struct MetalPlatformAPI {
   }
 
   static void clear_background(::afterhours::ColorLike auto c) {
+    metal_detail::ensure_sokol_gl_and_fonts();
     // Update pass action so sg_begin_pass clears to this color
     metal_detail::g_pass_action.colors[0].clear_value = {
         static_cast<float>(c.r) / 255.0f,
@@ -907,16 +921,16 @@ struct MetalPlatformAPI {
     // struct, so it is applied in input_system.h's Metal branch instead --
     // which is where the raylib path does it as well.
     float dpi = sapp_dpi_scale();
+    if (!(dpi > 0.f)) dpi = 1.f; // pre-init reads 0; 0/0 is NaN
     return {s.mouse_x / dpi, s.mouse_y / dpi};
   }
   static Vec2 get_screen_to_world_2d(const Vec2 &position,
                                      const Camera2D &camera) {
-    constexpr float kDegToRad = 3.14159265358979323846f / 180.0f;
     const float zoom = (camera.zoom == 0.0f) ? 1.0f : camera.zoom;
     const float x = (position.x - camera.offset.x) / zoom;
     const float y = (position.y - camera.offset.y) / zoom;
 
-    const float rot = -camera.rotation * kDegToRad;
+    const float rot = -camera.rotation * DEG2RAD;
     const float c = std::cos(rot);
     const float s = std::sin(rot);
 
@@ -924,12 +938,11 @@ struct MetalPlatformAPI {
   }
   static Vec2 get_world_to_screen_2d(const Vec2 &position,
                                      const Camera2D &camera) {
-    constexpr float kDegToRad = 3.14159265358979323846f / 180.0f;
     const float zoom = (camera.zoom == 0.0f) ? 1.0f : camera.zoom;
     const float x = position.x - camera.target.x;
     const float y = position.y - camera.target.y;
 
-    const float rot = camera.rotation * kDegToRad;
+    const float rot = camera.rotation * DEG2RAD;
     const float c = std::cos(rot);
     const float s = std::sin(rot);
 
@@ -965,6 +978,7 @@ struct MetalPlatformAPI {
   static Vec2 get_mouse_delta() {
     auto &s = metal_detail::input_state();
     float dpi = sapp_dpi_scale();
+    if (!(dpi > 0.f)) dpi = 1.f; // pre-init reads 0; 0/0 is NaN
     return {s.mouse_dx / dpi, s.mouse_dy / dpi};
   }
 
@@ -1052,6 +1066,9 @@ struct MetalPlatformAPI {
       // sokol windows are resizable by default
     }
 
+#ifdef SOKOL_METAL
+    metal_install_first_frame_early_draw();
+#endif
     // sapp_run blocks until the application quits
     sapp_run(&desc);
   }
@@ -1156,7 +1173,6 @@ inline bool metal_init(const Config &cfg) {
     }
     stm_setup();
     metal_detail::g_start_time = stm_now();
-    metal_detail::setup_sokol_gl_and_fonts();
     metal_detail::g_initialized = true;
 
     const int scale =
@@ -1189,7 +1205,10 @@ inline void metal_shutdown() {
     sfons_destroy(metal_detail::g_fons_ctx);
     metal_detail::g_fons_ctx = nullptr;
   }
-  sgl_shutdown();
+  if (metal_detail::g_sgl_ready) {
+    sgl_shutdown();
+    metal_detail::g_sgl_ready = false;
+  }
   sg_shutdown();
 #ifdef AFTER_HOURS_USE_VULKAN
   vulkan_destroy_headless_environment();
