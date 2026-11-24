@@ -27,7 +27,7 @@ static bool bound_to(EntityCollection &c) {
 }
 
 static int early_return(EntityCollection &c) {
-  EntityHelper::ScopedCollection scope(&c);
+  EntityHelper::ScopedCollection scope(c);
   CHECK(bound_to(c));
   return 42;
 }
@@ -37,10 +37,10 @@ int main() {
 
   EntityCollection a, b;
   {
-    EntityHelper::ScopedCollection outer(&a);
+    EntityHelper::ScopedCollection outer(a);
     CHECK(bound_to(a));
     {
-      EntityHelper::ScopedCollection inner(&b);
+      EntityHelper::ScopedCollection inner(b);
       CHECK(bound_to(b));
     }
     CHECK(bound_to(a));
@@ -49,7 +49,7 @@ int main() {
 
   EntityHelper::set_default_collection(&a);
   {
-    EntityHelper::ScopedCollection scope(nullptr);
+    auto scope = EntityHelper::ScopedCollection::use_default();
     CHECK(bound_to(singleton_default()));
   }
   CHECK(bound_to(a));
@@ -57,7 +57,7 @@ int main() {
   CHECK(bound_to(singleton_default()));
 
   try {
-    EntityHelper::ScopedCollection scope(&a);
+    EntityHelper::ScopedCollection scope(a);
     CHECK(bound_to(a));
     throw 1;
   } catch (int) {
