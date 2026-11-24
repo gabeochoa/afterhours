@@ -181,6 +181,7 @@ ALL_TESTS := \
 	rounded_corners_test \
 	rounded_outline_mask_test \
 	viewport_test \
+	coord_conversion_test \
 	grid_test \
 	pathfinding_provider_test \
 	bitset_test \
