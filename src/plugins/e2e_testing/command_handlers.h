@@ -866,6 +866,30 @@ struct HandleScreenshotCommand : System<PendingE2ECommand> {
         if (cmd.is_consumed()) return;
         if (cmd.is("screenshot")) {
             take_screenshot(screenshot_fn_, cmd);
+        } else if (cmd.is("screenshot_fresh")) {
+            if (!cmd.has_args(1) || cmd.args[0].empty()) {
+                cmd.fail("screenshot_fresh requires a name");
+                return;
+            }
+            const ScreenshotFn &fn = presented_screenshot_fn_
+                                         ? presented_screenshot_fn_
+                                         : screenshot_fn_;
+            if (!fn) {
+                cmd.fail("screenshot_fresh: no screenshot callback registered");
+                return;
+            }
+            const long long gen = static_cast<long long>(
+                VisibleTextRegistry::instance().generation());
+            if (cmd.seen_render < 0) {
+                cmd.seen_render = gen;
+                cmd.retry();
+                return;
+            }
+            if (cmd.seen_render == gen) {
+                cmd.retry();
+                return;
+            }
+            take_screenshot(fn, cmd);
         } else if (cmd.is("screenshot_presented")) {
             if (!presented_screenshot_fn_)
                 cmd.fail("screenshot_presented: no presented-frame "

@@ -297,10 +297,10 @@ capture_render_texture_to_memory(const graphics::RenderTextureType &) {
   return {};
 }
 
-inline std::optional<RgbaCapture>
+inline std::optional<RGBACapture>
 capture_render_texture_rgba(const graphics::RenderTextureType &) { return std::nullopt; }
 
-inline std::optional<PngCapture>
+inline std::optional<PNGCapture>
 capture_render_texture_png(const graphics::RenderTextureType &) { return std::nullopt; }
 
 inline std::vector<uint8_t> capture_screen_to_memory() {
