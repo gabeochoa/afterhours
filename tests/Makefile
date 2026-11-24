@@ -84,6 +84,7 @@ ALL_TESTS := \
 	terminal_ui_test \
 	font_atlas_measure_test \
 	font_prewarm_test \
+	sokol_letter_spacing_test \
 	font_display_size_test \
 	font_points_test \
 	window_focus_test \
@@ -147,6 +148,7 @@ ALL_TESTS := \
 	input_enum_actions_test \
 	input_repeat_test \
 	input_remap_test \
+	input_axis_edge_test \
 	file_watcher_test \
 	render_capture_test \
 	presented_frame_test \
@@ -397,6 +399,7 @@ ALL_TESTS += sokol_include_order_test
 ALL_TESTS += sokol_wrappers_test
 ALL_TESTS += sokol_frame_dt_test
 ALL_TESTS += sokol_msaa_test
+ALL_TESTS += sokol_cmd_chords_test
 ALL_TESTS += sokol_mouse_pre_init_test
 ALL_TESTS += sokol_startup_order_test
 ALL_TESTS += staging_texture_leak_test
@@ -428,6 +431,7 @@ RAYLIB_TESTS := \
 	input_device_activity_test \
 	input_activity_snapshot_test \
 	input_enum_actions_test \
+	input_axis_edge_test \
 	render_capture_test \
 	presented_frame_test \
 	triangle_winding_test \
@@ -522,15 +526,15 @@ $(OUT)/crash_handler_web_sim_test: INCLUDES_T = -Iweb_sim $(INCLUDES)
 # Shift+Enter is a raw is_key_down check, and the key injector is only wired in
 # behind this macro. Without it the backend is asked directly and answers false
 # with no window, so the modifier half of a chord cannot be tested at all.
-$(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test: LDFLAGS_T = $(subst $(RAYLIB_LIB)/libraylib.a,-L$(RAYLIB_LIB) -lraylib,$(LDFLAGS_RAYLIB))
-# These two tests double every raylib input function they exercise and stub
+$(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test $(OUT)/input_axis_edge_test: LDFLAGS_T = $(subst $(RAYLIB_LIB)/libraylib.a,-L$(RAYLIB_LIB) -lraylib,$(LDFLAGS_RAYLIB))
+# These tests double every raylib input function they exercise and stub
 # the rest (input_raylib_unused_stubs.h), so they link no raylib at all.
 # Linking the real archive pulls rcore.c.o for the unused window/rlgl entry
 # points, and raylib 6.x's rcore.c.o also defines the doubled input
 # functions: duplicate symbols against a static-only install. Keep just the
 # platform frameworks (either raylib spelling is stripped, so this holds on
 # Linux too).
-$(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test: LDFLAGS_T = $(subst -lraylib,,$(subst $(RAYLIB_LIB)/libraylib.a,,$(LDFLAGS_RAYLIB)))
+$(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test $(OUT)/input_axis_edge_test: LDFLAGS_T = $(subst -lraylib,,$(subst $(RAYLIB_LIB)/libraylib.a,,$(LDFLAGS_RAYLIB)))
 
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/middle_click_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/wheel_input_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
@@ -659,6 +663,10 @@ $(OUT)/sokol_msaa_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_msaa_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_msaa_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_msaa_test: ../src/backends/sokol/drawing_helpers.h ../src/backends/sokol/backend.h
+$(OUT)/sokol_cmd_chords_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_cmd_chords_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_cmd_chords_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_cmd_chords_test: ../src/backends/sokol/backend.h
 $(OUT)/sokol_startup_order_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_startup_order_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_startup_order_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
@@ -771,6 +779,7 @@ profiling-render-benchmark: $(OUT)/profiling_render_benchmark_on $(OUT)/profilin
 
 $(OUT)/font_atlas_measure_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/font_prewarm_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
+$(OUT)/sokol_letter_spacing_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/font_points_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/glyph_placeholder_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/load_font_size_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
