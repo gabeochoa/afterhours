@@ -70,6 +70,7 @@ ALL_TESTS := \
 	font_tier_scaling_test \
 	text_visibility_test \
 	image_tint_test \
+	icon_row_test \
 	e2e_arguments_test \
 	scrollbar_render_test \
 	scroll_input_gate_test \
