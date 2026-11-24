@@ -321,6 +321,13 @@ struct Entity {
     setTag(static_cast<TagId>(tag_enum), enabled);
   }
 
+  void toggleTag(const TagId tag_id, bool on) { setTag(tag_id, on); }
+
+  template <typename TEnum, std::enable_if_t<std::is_enum_v<TEnum>, int> = 0>
+  void toggleTag(const TEnum tag_enum, bool on) {
+    toggleTag(static_cast<TagId>(tag_enum), on);
+  }
+
   [[nodiscard]] bool hasTag(const TagId tag_id) const {
     if (tag_id >= AFTER_HOURS_MAX_ENTITY_TAGS)
       return false;
