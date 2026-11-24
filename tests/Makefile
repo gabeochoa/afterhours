@@ -133,6 +133,7 @@ ALL_TESTS := \
 	triangle_winding_none_test \
 	text_unit_motion_test \
 	text_alignment_test \
+	text_origin_test \
 	sound_volume_test \
 	caption_test \
 	audio_plugin_test \
