@@ -109,6 +109,7 @@ ALL_TESTS := \
 	appearance_test \
 	frame_loop_test \
 	headless_cadence_test \
+	timer_test \
 	jobs_test \
 	frame_phases_test \
 	color_value_test \
