@@ -419,6 +419,7 @@ lighting_zones_test \
 	theme_io_test \
 	tree_view_test \
 	window_helpers_test \
+	disclosure_test \
 	skeletal_test \
 	translation_test \
 	layout_inspector_test \
@@ -556,6 +557,7 @@ RAYLIB_TESTS := \
 	styled_ellipsis_test \
 	theme_io_test \
 	tree_view_test \
+	disclosure_test \
 	layout_inspector_test
 
 ifeq ($(UNAME_S),Darwin)
