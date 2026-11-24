@@ -162,6 +162,14 @@ ElementResult divider(HasUIContext auto &ctx, EntityParent ep_pair, Axis axis,
 
   auto elem = div(ctx, ep_pair, config);
   Entity &entity = elem.ent();
+  const Size across = moves_in_x ? config.size.x_axis : config.size.y_axis;
+  const float min_hit = ctx.theme.divider_min_hit_thickness;
+  if (across.dim == Dim::Pixels && across.value < min_hit) {
+    const float pad = (min_hit - across.value) / 2.f;
+    HasHitExpand &expand = entity.addComponentIfMissing<HasHitExpand>();
+    expand.pad_x = moves_in_x ? pad : 0.f;
+    expand.pad_y = moves_in_x ? 0.f : pad;
+  }
   // The no-op callback is only there to make the element hit-testable; the
   // movement is read off `down` on the next build pass instead, so the caller
   // can act on it in normal control flow rather than inside a lambda.
@@ -204,7 +212,7 @@ ElementResult value_pill(HasUIContext auto &ctx, EntityParent ep_pair,
     config.with_alignment(TextAlignment::Center);
   if (config.size.is_default)
     config.with_size(ComponentSize{children(), pixels(28.f)});
-  if (!config.has_padding())
+  if (!config.has_padding() && !config.padding_explicitly_set)
     config.with_padding(Padding::horizontal(pixels(12.f)));
   if (!config.corner_radius.has_value())
     config.with_roundness(1.f);
@@ -545,22 +553,9 @@ ElementResult icon_row(HasUIContext auto &ctx, EntityParent ep_pair,
                        ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
 
-  auto row_config =
-      ComponentConfig::inherit_from(config, "icon_row")
-          .with_size(config.size)
-          .with_margin(config.margin)
-          .with_padding(config.padding)
-          .with_gap(config.flex_gap)
-          .with_align_items(config.align_items)
-          .with_justify_content(config.justify_content)
-          .with_self_align(config.self_align)
-          .with_flex_wrap(config.flex_wrap)
-          .with_translate(config.translate_x, config.translate_y)
-          .with_skip_grid_snap(config.skip_grid_snap)
-          .with_debug_name(config.debug_name.empty() ? "icon_row"
-                                                     : config.debug_name);
-  row_config.is_absolute = config.is_absolute;
-  auto row = hstack(ctx, ep_pair, row_config);
+  if (config.debug_name.empty())
+    config.with_debug_name("icon_row");
+  auto row = hstack(ctx, ep_pair, config);
 
   size_t i = 0;
   for (const auto &frame : frames) {

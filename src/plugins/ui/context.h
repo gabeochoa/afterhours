@@ -30,6 +30,7 @@
 #include "../../warn_once.h"
 #include "../input_system.h"
 #include "components.h"
+#include "mouse_pointer.h"
 #include "text_selection.h"
 #include "theme.h"
 #include "ui_collection.h"
@@ -103,53 +104,6 @@ struct ConsumesDirectionalInput : BaseComponent {};
 // value widget to get the arrow keys.
 using AcceptsValueInput = ConsumesDirectionalInput;
 
-struct MousePointerState {
-  // pos and delta are in the same space as UIComponent::rect() -- letterbox
-  // and resolution scaling are already applied. Callers reaching for the
-  // backend's raw mouse instead have to redo that conversion by hand.
-  input::MousePosition pos{};
-  // Movement since the previous frame. Derived from pos rather than the
-  // backend's mouse delta, which is raw window pixels. Zero when there is no
-  // cursor, and no dead zone, unlike moved_this_frame below.
-  input::MousePosition delta{};
-  bool left_down = false;
-  bool just_pressed = false;
-  bool just_released = false;
-  // Secondary button. Kept separate rather than generalising to an array: the
-  // left button drives hot/active/drag and the right one only ever asks "was
-  // there a click on this, and where", so sharing the machinery would mean
-  // teaching all of it which button it is talking about.
-  bool right_down = false;
-  bool right_just_pressed = false;
-  bool right_just_released = false;
-  bool middle_down = false;
-  bool middle_just_pressed = false;
-  bool middle_just_released = false;
-  input::MousePosition press_pos{};
-  bool press_moved = false;
-  bool moved_this_frame = false; // pos changed since last frame (any button)
-  static constexpr float press_drag_threshold_px = 6.0f;
-  // Below this, the cursor is parked. An exact compare made sub-pixel jitter
-  // (a hi-DPI position rescaled to render space flickers in the last mantissa
-  // bit) read as intent, which is enough to yank focus away from the keyboard.
-  static constexpr float move_dead_zone_px = 2.0f;
-
-  // A distance test rather than `!=`, because the exact compare counted
-  // sub-pixel jitter as intent. The two non-finite cases have to be handled
-  // explicitly or NaN decides by accident: with no cursor at all (headless)
-  // `!=` reported movement on every frame forever, while a plain distance test
-  // would let one NaN frame poison `prev` and report *no* movement forever.
-  [[nodiscard]] bool moved_since(const input::MousePosition &prev) const {
-    const bool now_ok = std::isfinite(pos.x) && std::isfinite(pos.y);
-    if (!now_ok)
-      return false; // no cursor: not moving
-    if (!std::isfinite(prev.x) || !std::isfinite(prev.y))
-      return true; // a cursor just appeared
-    const float dx = pos.x - prev.x, dy = pos.y - prev.y;
-    return dx * dx + dy * dy > move_dead_zone_px * move_dead_zone_px;
-  }
-};
-
 // Who last claimed focus this frame. Hover-follow must not overwrite a focus
 // move that something asked for on purpose (a game's own arrow-key nav, a test
 // harness, process_tabbing) -- but it must still win over `Grab`, the ordinary
@@ -181,6 +135,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
 
   EntityID text_selection_entity = ROOT;
   text_selection::Selection label_text_selection;
+  int prev_focus_index = -1;
 
   EntityID hot_id = ROOT;          // hot means the mouse is over this element
   EntityID prev_hot_id = ROOT;     // previous frame's hot_id (for animations)
@@ -397,6 +352,28 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     focus_id = id;
   }
 
+  [[nodiscard]] EntityHandle capture_focus() const {
+    if (focus_id == ROOT)
+      return EntityHandle::invalid();
+    OptEntity e = UICollectionHolder::getEntityForID(focus_id);
+    return e.has_value() ? UICollectionHolder::handle_for(e.asE())
+                         : EntityHandle::invalid();
+  }
+
+  bool restore_focus(EntityHandle handle) {
+    if (handle.is_invalid())
+      return false;
+    OptEntity e = UICollectionHolder::resolve(handle);
+    if (!e.has_value())
+      return false;
+    Entity &target = e.asE();
+    if (target.template is_missing<UIComponent>() ||
+        target.template has_any<DoesNotTakeFocus, ShouldHide>())
+      return false;
+    set_focus(target.id, FocusSource::Explicit);
+    return true;
+  }
+
   // :focus-visible: the ring exists for users who cannot see a pointer.
   [[nodiscard]] bool focus_visible() const {
     return focus_modality != FocusSource::Pointer;
@@ -466,6 +443,22 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     warn_if_not_hit_testable(id, "is_middle_click");
     return false;
   }
+  [[nodiscard]] bool is_double_click(EntityID id) const {
+    if (!mouse.just_released || mouse.click_count != 2)
+      return false;
+    if (contains_in_subtree(id, prev_hot_id))
+      return true;
+    warn_if_not_hit_testable(id, "is_double_click");
+    return false;
+  }
+  [[nodiscard]] bool is_triple_click(EntityID id) const {
+    if (!mouse.just_released || mouse.click_count != 3)
+      return false;
+    if (contains_in_subtree(id, prev_hot_id))
+      return true;
+    warn_if_not_hit_testable(id, "is_triple_click");
+    return false;
+  }
   /// Previous frame's answer. Use this while building a screen: hot_id is not
   /// resolved until after.
   [[nodiscard]] bool mouse_was_in_subtree(EntityID id) const {
@@ -511,6 +504,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     focus_modality = FocusSource::Grab;
     focused_ids.clear();
     focus_order.clear();
+    prev_focus_index = -1;
     render_cmds.clear();
     input_gates.clear();
     last_action = InputAction::None;
@@ -615,6 +609,34 @@ template <typename InputAction> struct UIContext final : BaseComponent {
       all_actions[magic_enum::enum_index<InputAction>(name).value()] = false;
     }
     return a;
+  }
+
+  bool dispatch_focused_shortcut(InputAction action) {
+    if (action == InputAction::None)
+      return false;
+    const int wanted = static_cast<int>(action);
+    EntityID cur = focus_id;
+    for (int depth = 0; depth < 64 && cur != ROOT && cur >= 0; depth++) {
+      OptEntity opt = UICollectionHolder::getEntityForID(cur);
+      if (!opt.has_value())
+        break;
+      Entity &e = opt.asE();
+      if (is_input_allowed(cur) && e.template has<HasShortcuts>() &&
+          e.template get<HasShortcuts>().dispatch(wanted, e)) {
+        last_action = InputAction::None;
+        last_action_modifiers = 0;
+        const auto idx = magic_enum::enum_index<InputAction>(action);
+        if (idx.has_value()) {
+          all_actions.reset(idx.value());
+          all_actions_repeat.reset(idx.value());
+        }
+        return true;
+      }
+      if (!e.template has<UIComponent>())
+        break;
+      cur = e.template get<UIComponent>().parent;
+    }
+    return false;
   }
 
   // Does the focused element own WidgetUp/WidgetDown? When true they belong to

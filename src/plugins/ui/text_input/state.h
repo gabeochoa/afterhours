@@ -125,6 +125,15 @@ struct HasTextInputStateT : BaseComponent {
 // Default alias for simple std::string-based text input
 using HasTextInputState = HasTextInputStateT<StringStorage>;
 
+// Submit state for text_input/text_area, on the field's root entity:
+// `submitted` is set on the frame Enter submits (the same frame on_submit
+// fires) and cleared at the start of that entity's next widget call, so a
+// caller or system can read it via the entity after the widget call instead
+// of it floating on the transient ElementResult.
+struct IsSubmittable : BaseComponent {
+  bool submitted = false;
+};
+
 // Listener for text input events (character typing)
 struct HasTextInputListener : BaseComponent {
   std::function<void(Entity &, const std::string &)> on_change;

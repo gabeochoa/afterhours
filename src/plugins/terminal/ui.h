@@ -69,7 +69,8 @@ inline auto panel(ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent parent,
   if (config.size.is_default) config.with_size({percent(1.f), h720(420.f)});
   if (config.font_size_is_default) config.with_font_size(h720(20.f));
   if (config.color_usage == Theme::Usage::Default) config.with_background(Theme::Usage::Surface);
-  if (config.padding.top.dim == Dim::None && config.padding.left.dim == Dim::None &&
+  if (!config.padding_explicitly_set && config.padding.top.dim == Dim::None &&
+      config.padding.left.dim == Dim::None &&
       config.padding.bottom.dim == Dim::None && config.padding.right.dim == Dim::None)
     config.with_padding(Padding::all(h720(16.f)));
   config.with_flex_direction(FlexDirection::Column).with_gap(h720(12.f));
