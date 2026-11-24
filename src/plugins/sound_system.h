@@ -6,6 +6,7 @@
 #include <functional>
 #include <map>
 #include <optional>
+#include <set>
 #include <span>
 #include <string>
 #include <vector>
@@ -130,6 +131,14 @@ struct sound_system : developer::Plugin {
             auto it = bus_volumes.find(bus);
             return it == bus_volumes.end() ? 1.f : it->second;
         }
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        [[nodiscard]] std::vector<std::string> known_buses() const {
+            std::set<std::string> out{"effects"};
+            for (const auto &kv : bus_volumes) out.insert(kv.first);
+            for (const auto &kv : bus_by_name) out.insert(kv.second);
+            return {out.begin(), out.end()};
+        }
+#endif
         [[nodiscard]] float effective_volume(const std::string &name) const {
             return current_volume * get_master_volume() *
                    get_bus_volume(bus_of(name));
@@ -536,6 +545,14 @@ struct sound_system : developer::Plugin {
             auto it = bus_volumes.find(bus);
             return it == bus_volumes.end() ? 1.f : it->second;
         }
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        [[nodiscard]] std::vector<std::string> known_buses() const {
+            std::set<std::string> out{"music"};
+            for (const auto &kv : bus_volumes) out.insert(kv.first);
+            for (const auto &kv : bus_by_name) out.insert(kv.second);
+            return {out.begin(), out.end()};
+        }
+#endif
         [[nodiscard]] float effective_volume(const std::string &name) const {
             return current_volume * get_master_volume() *
                    get_bus_volume(bus_of(name));
@@ -990,6 +1007,23 @@ struct sound_system : developer::Plugin {
     [[nodiscard]] static float get_bus_volume(const std::string &bus) {
         return SoundLibrary::get().get_bus_volume(bus);
     }
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    // Bus enumeration exists only for the e2e set_volume/expect_volume
+    // commands; it compiles out with the rest of the e2e surface.
+    [[nodiscard]] static std::vector<std::string> known_buses() {
+        std::set<std::string> out{"effects", "music"};
+        for (const auto &bus : SoundLibrary::get().known_buses())
+            out.insert(bus);
+        for (const auto &bus : MusicLibrary::get().known_buses())
+            out.insert(bus);
+        return {out.begin(), out.end()};
+    }
+    [[nodiscard]] static bool has_bus(const std::string &bus) {
+        for (const auto &known : known_buses())
+            if (known == bus) return true;
+        return false;
+    }
+#endif
 
     static void set_recording(bool on) { recording_ = on; }
     [[nodiscard]] static bool recording() { return recording_; }
