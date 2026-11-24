@@ -43,9 +43,6 @@ ElementResult disclosure(HasUIContext auto &ctx, EntityParent ep_pair,
   auto &state = init_state<HasDisclosureState>(
       entity, [](HasDisclosureState &) {}, disclosure_config.default_expanded);
 
-  const bool expanded = state.expanded;
-  const Color chevron_color = ctx.theme.font;
-
   auto header =
       button(ctx, mk(entity, 0),
              ComponentConfig::inherit_from(config, "disclosure_header")
@@ -62,10 +59,16 @@ ElementResult disclosure(HasUIContext auto &ctx, EntityParent ep_pair,
     changed = true;
   }
 
+  const bool expanded = state.expanded;
+  const Color chevron_color =
+      config.custom_text_color.value_or(ctx.theme.font);
+
   div(ctx, mk(header.ent(), 0),
       ComponentConfig{}
           .with_size(ComponentSize{pixels(disclosure_config.chevron_size),
                                    pixels(disclosure_config.chevron_size)})
+          .with_transparent_bg()
+          .with_ignore_pointer_events()
           .with_skip_tabbing(true)
           .with_debug_name("disclosure_chevron")
           .with_on_draw_fg([expanded, chevron_color](RectangleType r) {
@@ -80,6 +83,8 @@ ElementResult disclosure(HasUIContext auto &ctx, EntityParent ep_pair,
   div(ctx, mk(header.ent(), 1),
       ComponentConfig::inherit_from(config, "disclosure_label")
           .with_size(ComponentSize{expand(), percent(1.f)})
+          .with_transparent_bg()
+          .with_ignore_pointer_events()
           .with_label(label)
           .with_alignment(TextAlignment::Left)
           .with_skip_tabbing(true));

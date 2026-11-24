@@ -16,6 +16,12 @@ struct LineChartOptions {
     std::optional<std::size_t> selected_index;
     float label_font_size = 12;
     std::optional<std::pair<std::size_t, std::size_t>> selected_range;
+    float stroke_width = 2;
+    bool show_hover = true;
+    std::optional<std::pair<double, double>> x_domain;
+    std::optional<std::pair<double, double>> y_domain;
+    std::optional<Color> grid_color;
+    std::optional<Color> label_color;
 };
 
 inline RectangleType chart_plot_bounds(RectangleType rect, float label_size) {
@@ -31,8 +37,8 @@ inline ElementResult line_chart(HasUIContext auto &ctx, EntityParent parent,
     const auto mouse = ctx.mouse.pos;
     const auto *fonts = EntityHelper::get_singleton_cmp<FontManager>();
     const auto font = fonts ? fonts->get_active_font() : get_default_font();
-    const auto text_color = ctx.theme.from_usage(Theme::Usage::Font);
-    const auto grid_color = ctx.theme.from_usage(Theme::Usage::Secondary);
+    const auto text_color = options.label_color.value_or(ctx.theme.from_usage(Theme::Usage::Font));
+    const auto grid_color = options.grid_color.value_or(ctx.theme.from_usage(Theme::Usage::Secondary));
     if (config.size.is_default) config.with_size({pixels(480), pixels(220)});
     config.with_on_draw_fg([series = std::move(series), options = std::move(options),
                            mouse, font, text_color, grid_color](RectangleType rect) {
@@ -57,6 +63,7 @@ inline ElementResult line_chart(HasUIContext auto &ctx, EntityParent parent,
             draw_text("No samples", plot.x, plot.y, std::max(14.f, label_size), text_color);
             return;
         }
+        *extent = charts::apply_domains(*extent, options.x_domain, options.y_domain);
         auto position = [&](charts::Point point) -> Vector2Type {
             return {plot.x + static_cast<float>(charts::fraction(point.x, extent->min_x, extent->max_x)) * plot.width,
                     plot.y + (1.f - static_cast<float>(charts::fraction(point.y, extent->min_y, extent->max_y))) * plot.height};
@@ -94,12 +101,12 @@ inline ElementResult line_chart(HasUIContext auto &ctx, EntityParent parent,
             for (const auto point : line.points) {
                 if (!charts::finite(point)) { previous.reset(); continue; }
                 const auto at = position(point);
-                if (previous) draw_line_ex(*previous, at, 2, line.color);
+                if (previous) draw_line_ex(*previous, at, std::max(1.f, options.stroke_width), line.color);
                 if (line.points.size() == 1) draw_circle(static_cast<int>(at.x), static_cast<int>(at.y), 3, line.color);
                 previous = at;
             }
             auto selected = options.selected_index;
-            if (hovered) {
+            if (hovered && options.show_hover) {
                 const double x = std::lerp(extent->min_x, extent->max_x, static_cast<double>((mouse.x - plot.x) / plot.width));
                 selected = charts::nearest_x(line.points, x);
             }
