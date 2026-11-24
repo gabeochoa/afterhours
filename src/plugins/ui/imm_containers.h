@@ -182,7 +182,8 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                  .with_absolute_position()
                  .with_translate(pixels(placed.x - anchor.x),
                                  pixels(placed.y - anchor.y))
-                 .with_render_layer(config.render_layer + 1));
+                 .with_render_layer(config.render_layer +
+                                    overlay::OVERLAY_BASE));
 
     // Set tray selection to current option only when first opened
     if (!dropdownState.was_open_last_frame &&
@@ -238,6 +239,8 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
     entity.disableTag(UITag::InputExclusivity);
   }
 
+  detail::apply_accessibility(entity, config, AccessibleRole::Dropdown,
+                                label_str, current_option);
   option_index = dropdownState.last_option_clicked;
   return ElementResult{dropdownState.changed_since, entity,
                        dropdownState.last_option_clicked};
