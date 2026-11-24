@@ -144,6 +144,7 @@ ALL_TESTS := \
 	synth_beep_test \
 	settings_save_test \
 	settings_comment_test \
+	storage_codec_test \
 	settings_path_test \
 	settings_table_test \
 	files_test_roots_test \

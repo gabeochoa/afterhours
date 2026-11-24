@@ -6,6 +6,7 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+- **Versioned storage codecs (`src/plugins/storage_codec.h`).** `storage::Codec<T>` stamps a version envelope, runs ordered migrations, and returns `DecodeStatus` (`Ok`, `Migrated`, `Corrupt`, `TooNew`). Includes `peek_version` and `make_string_codec`. Covered by `storage_codec_test`.
 - **Styled labels honor `TextOverflow::Ellipsis`.** `detail::ellipsize_runs` truncates styled `TextSpan` runs at a grapheme boundary with `...` in the cut run's style in both immediate and batched renderers, sharing `detail::JoinedRuns` with `wrap_runs_to_width`. Covered by `styled_ellipsis_test`.
 - **Generation-checked focus restore (`UIContext::capture_focus()` / `restore_focus(EntityHandle)`).** Modals and menus/popovers now save focus as an `EntityHandle` via `UICollectionHolder::handle_for` / `resolve`, so deleted, reused, hidden, or `DoesNotTakeFocus` targets become safe no-ops on close. Covered by `focus_return_test`.
 - **`imm::popover` runs its body on the dismissal frame**, so a click recorded inside the panel is delivered once before it closes; caller-set `open = false` still closes immediately. The panel also keeps the caller's `with_debug_name`. Covered in `menu_test` and `color_swatch_test`.
