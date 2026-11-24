@@ -180,6 +180,8 @@ struct ComponentConfig {
   RenderPrimitive::CustomDrawFn on_draw_bg;
   RenderPrimitive::CustomDrawFn on_draw_fg;
   RenderPrimitive::CustomDrawFn on_draw_over;
+  using OnSubmitFn = std::function<void(std::string_view)>;
+  OnSubmitFn on_submit;
 
   std::string font_name = UIComponent::UNSET_FONT;
   colors::FontWeight font_weight = colors::FontWeight::Regular;
@@ -721,6 +723,11 @@ struct ComponentConfig {
   }
   ComponentConfig &with_on_draw_over(RenderPrimitive::CustomDrawFn fn) {
     on_draw_over = std::move(fn);
+    return *this;
+  }
+
+  ComponentConfig &with_on_submit(OnSubmitFn fn) {
+    on_submit = std::move(fn);
     return *this;
   }
   ComponentConfig &with_disabled(bool dis) {
@@ -1430,6 +1437,8 @@ if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.deb
       merged.on_draw_fg = overrides.on_draw_fg;
     if (overrides.on_draw_over)
       merged.on_draw_over = overrides.on_draw_over;
+    if (overrides.on_submit)
+      merged.on_submit = overrides.on_submit;
 
     // Size constraints
     if (overrides.min_width.dim != Dim::None)
