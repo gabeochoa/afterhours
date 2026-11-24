@@ -225,6 +225,8 @@ struct ComponentConfig {
 
   // Text input: hint shown while the bound string is empty.
   std::string placeholder;
+  // Hint ink override; unset keeps theme.font_muted on both text widgets.
+  std::optional<Color> placeholder_color;
 
   std::optional<std::string> checkbox_checked_indicator;
   std::optional<std::string> checkbox_unchecked_indicator;
@@ -858,6 +860,10 @@ struct ComponentConfig {
     placeholder = std::move(hint);
     return *this;
   }
+  ComponentConfig &with_placeholder_color(Color color) {
+    placeholder_color = color;
+    return *this;
+  }
   /// Flex wrap: lets CHILDREN flow onto a new row/column. NOT text wrapping --
   /// adding this to a label that overflows does nothing. Use
   /// with_text_overflow(TextOverflow::Wrap) for text.
@@ -1488,6 +1494,8 @@ if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.deb
       merged.text_escape_blurs = false;
     if (!overrides.placeholder.empty())
       if (merged.placeholder != overrides.placeholder) merged.placeholder = overrides.placeholder;
+    if (overrides.placeholder_color.has_value())
+      merged.placeholder_color = overrides.placeholder_color;
     if (overrides.text_area_line_height.has_value())
       merged.text_area_line_height = overrides.text_area_line_height;
     // Defaults true; see auto_text_color.
@@ -1594,6 +1602,8 @@ if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.deb
       custom_text_color = parent.custom_text_color;
       auto_text_color = parent.auto_text_color;
     }
+    if (parent.placeholder_color.has_value())
+      placeholder_color = parent.placeholder_color;
     // Same rule: a composite dropped the caller's edge and corner silently.
     if (parent.roundness.has_value())
       roundness = parent.roundness;

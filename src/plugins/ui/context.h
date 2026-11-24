@@ -181,6 +181,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
 
   EntityID text_selection_entity = ROOT;
   text_selection::Selection label_text_selection;
+  int prev_focus_index = -1;
 
   EntityID hot_id = ROOT;          // hot means the mouse is over this element
   EntityID prev_hot_id = ROOT;     // previous frame's hot_id (for animations)
@@ -511,6 +512,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     focus_modality = FocusSource::Grab;
     focused_ids.clear();
     focus_order.clear();
+    prev_focus_index = -1;
     render_cmds.clear();
     input_gates.clear();
     last_action = InputAction::None;

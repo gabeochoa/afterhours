@@ -232,7 +232,8 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   // Entities persist across frames, so the muted colour has to be cleared
   // again rather than only set.
   if (show_placeholder)
-    field_label.explicit_text_color = ctx.theme.font_muted;
+    field_label.explicit_text_color =
+        config.placeholder_color.value_or(ctx.theme.font_muted);
   else if (config.custom_text_color.has_value())
     field_label.explicit_text_color = config.custom_text_color;
   else
