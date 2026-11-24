@@ -110,6 +110,7 @@ ALL_TESTS := \
 	appearance_test \
 	frame_loop_test \
 	headless_cadence_test \
+	file_drop_test \
 	timer_test \
 	jobs_test \
 	frame_phases_test \
