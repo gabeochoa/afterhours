@@ -1179,9 +1179,8 @@ TEST(d34_immediate_ring_draws_over_the_fill_not_under_it) {
 // system, so a game that moves focus during its build has that move undone the
 // same frame. There was no way to say "the keyboard just did this".
 //
-// ComputeVisualFocusId reads the context through the EntityHelper singleton
-// (default collection) while widgets live in the UI collection, so the context
-// here is a separate entity from the harness's.
+// The context here is a separate entity from the harness's, so the tests
+// pass singleton_ctx() explicitly.
 // ===========================================================================
 
 using ui_test::TestInputAction;
@@ -1226,7 +1225,7 @@ TEST(d35_explicit_set_focus_beats_hover) {
   ctx.set_focus(a); // what a game's own nav system does
 
   ComputeVisualFocusId<ui_test::TestInputAction> sys;
-  sys.for_each_with(h.context_entity(), 0.f);
+  sys.for_each_with(h.context_entity(), ctx, 0.f);
 
   ui_test::check(ctx.focus_id == a,
                  "an explicit set_focus this frame survives hover-follow",
@@ -1247,7 +1246,7 @@ TEST(d35_hover_still_follows_when_focus_was_only_regrabbed) {
   ctx.try_to_grab(a);
 
   ComputeVisualFocusId<ui_test::TestInputAction> sys;
-  sys.for_each_with(h.context_entity(), 0.f);
+  sys.for_each_with(h.context_entity(), ctx, 0.f);
 
   ui_test::check(ctx.focus_id == b, "hover still claims focus after a re-grab",
                  __FILE__, __LINE__);
