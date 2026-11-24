@@ -1,7 +1,9 @@
 #pragma once
 
+#include <algorithm>
 #include <cmath>
 #include <string>
+#include <vector>
 
 #include "../core/base_component.h"
 #include "../ecs.h"
@@ -9,10 +11,12 @@
 #include "../core/system.h"
 #include "../developer.h"
 #include "../drawing_helpers.h"
+#include "animation/instant.h"
 #include "color.h"
 #include "ui/element_result.h"
 #include "ui/imm_components.h"
 #include "ui/rendering.h"
+#include "ui/text_measure.h"
 #include "ui/theme.h"
 #include "window_manager.h"
 
@@ -28,6 +32,8 @@ struct toast : developer::Plugin {
     static inline ui::Size HEIGHT = ui::h720(48.0f);
     static inline ui::Size PADDING = ui::h720(14.0f);
     static inline ui::Size TOAST_GAP = ui::h720(8.0f);
+    // TODO: let apps configure MAX_VISIBLE like WIDTH/HEIGHT/position
+    static inline int MAX_VISIBLE = 3;
 
     // Helper to resolve a Size to actual pixels given screen dimensions
     static float resolve_size(const ui::Size &size, int screen_w,
@@ -62,6 +68,7 @@ struct toast : developer::Plugin {
         float duration = 3.0f;
         float elapsed = 0.0f;
         bool dismissed = false;
+        bool hovered = false;
 
         Toast() = default;
         Toast(Level lvl, float dur, Color color = {100, 100, 100, 255})
@@ -109,18 +116,44 @@ struct toast : developer::Plugin {
             EntityHelper::registerSingleton<ToastRoot>(singleton);
         }
 
+        static float wrapped_height(const std::string &text, float width_px,
+                                    float min_height, const std::string &font,
+                                    float font_px, float inset_x,
+                                    float inset_y) {
+            if (text.empty() || width_px <= 2.f * inset_x || font_px <= 0.f)
+                return min_height;
+            const auto m = ui::measure_text_wrapped(
+                text, width_px - 2.f * inset_x, font, font_px);
+            if (m.line_count <= 1) return min_height;
+            return std::max(min_height,
+                            m.height + 2.f * inset_y + inset_x);
+        }
+
         static ui::imm::ElementResult create_simple_toast(
             ui::imm::HasUIContext auto &ctx, const std::string &msg,
             Level level, float duration,
             Color custom_color = {100, 100, 100, 255}) {
-            ui::imm::ElementResult result =
-                schedule(ctx, level, duration, custom_color);
-
             // Set the label with icon and message (no prefix for info/success).
             std::string icon = icon_for_level(level);
-            result.ent().get<ui::HasLabel>().label =
+            const std::string label =
                 icon.empty() ? msg : icon + " " + msg;
 
+            for (Entity &entity : EntityQuery()
+                                      .whereHasComponent<Toast>()
+                                      .gen()) {
+                Toast &existing = entity.get<Toast>();
+                if (!entity.cleanup && !existing.is_expired() &&
+                    existing.level == level && existing.message == label) {
+                    existing.elapsed = 0.f;
+                    existing.duration = duration;
+                    return {true, entity};
+                }
+            }
+
+            ui::imm::ElementResult result =
+                schedule(ctx, level, duration, custom_color);
+            result.ent().get<ui::HasLabel>().label = label;
+            result.ent().get<Toast>().message = label;
             return result;
         }
     };
@@ -147,6 +180,25 @@ struct toast : developer::Plugin {
         ui::imm::HasUIContext auto &ctx, Level level = Level::Info,
         float duration = 3.0f, Color custom_color = {100, 100, 100, 255}) {
         using namespace ui;
+
+        {
+            RefEntities live = EntityQuery()
+                                   .whereHasComponent<Toast>()
+                                   .whereLambda([](const Entity &e) {
+                                       return !e.cleanup &&
+                                              !e.get<Toast>().is_expired();
+                                   })
+                                   .gen();
+            std::sort(live.begin(), live.end(),
+                      [](Entity &a, Entity &b) {
+                          return a.get<Toast>().elapsed >
+                                 b.get<Toast>().elapsed;
+                      });
+            while (static_cast<int>(live.size()) >= MAX_VISIBLE) {
+                live.front().get().cleanup = true;
+                live.erase(live.begin());
+            }
+        }
 
         // Create independent entity (not through IMM mk())
         Entity &entity = EntityHelper::createEntity();
@@ -199,6 +251,7 @@ struct toast : developer::Plugin {
             .set_radius_px(ctx.theme.corner_radius);
         entity.addComponent<Toast>(Toast(level, duration, bg_color));
         auto &label = entity.addComponent<ui::HasLabel>("");
+        label.text_overflow = ui::TextOverflow::Wrap;
         label.text_inset = Vector2Type{12.f, 8.f};
         label.explicit_text_color =
             colors::auto_text_color(bg_color, ctx.theme.font, ctx.theme.darkfont);
@@ -248,7 +301,7 @@ struct toast : developer::Plugin {
 
     struct ToastUpdateSystem : System<Toast> {
         void for_each_with(Entity &entity, Toast &t, float dt) override {
-            t.elapsed += dt;
+            if (!t.hovered) t.elapsed += dt;
             if (t.is_expired()) {
                 entity.cleanup = true;
             }
@@ -272,6 +325,9 @@ struct toast : developer::Plugin {
             float padding_px = resolve_size(PADDING, screen_w, screen_h);
             float gap_px = resolve_size(TOAST_GAP, screen_w, screen_h);
 
+            auto *ctx_ptr = EntityHelper::get_singleton_cmp<
+                ui::UIContext<InputAction>>();
+            float y_offset = 0.f;
             int index = 0;
 
             for (Entity &entity : EntityQuery()
@@ -285,15 +341,26 @@ struct toast : developer::Plugin {
                     ui.computed[ui::Axis::X] = resolve_size(ui.desired[ui::Axis::X], screen_w, screen_h);
                 else if (ui.computed[ui::Axis::X] <= 0)
                     ui.computed[ui::Axis::X] = width_px;
+                float base_height = height_px;
                 if (ui.desired[ui::Axis::Y].dim != ui::Dim::None)
-                    ui.computed[ui::Axis::Y] = resolve_size(ui.desired[ui::Axis::Y], screen_w, screen_h);
-                else if (ui.computed[ui::Axis::Y] <= 0)
-                    ui.computed[ui::Axis::Y] = height_px;
+                    base_height = resolve_size(ui.desired[ui::Axis::Y], screen_w, screen_h);
 
-                float toast_height = ui.computed[ui::Axis::Y];
-
-                float y_offset =
-                    static_cast<float>(index) * (toast_height + gap_px);
+                float toast_height = base_height;
+                if (entity.has<ui::HasLabel>()) {
+                    const auto &label = entity.get<ui::HasLabel>();
+                    const Vector2Type inset =
+                        label.text_inset.value_or(Vector2Type{12.f, 8.f});
+                    toast_height = detail::wrapped_height(
+                        label.label, ui.computed[ui::Axis::X], base_height,
+                        ui.resolved_font_name(),
+                        resolve_size(ui.font_size, screen_w, screen_h),
+                        inset.x, inset.y);
+                    toast_height = std::min(
+                        toast_height,
+                        std::max(base_height,
+                                 static_cast<float>(screen_h) - 2.f * padding_px));
+                }
+                ui.computed[ui::Axis::Y] = toast_height;
                 float y_pos = static_cast<float>(screen_h) - padding_px -
                               toast_height - y_offset;
                 const bool at_top = position == Position::TopLeft || position == Position::TopRight;
@@ -305,28 +372,33 @@ struct toast : developer::Plugin {
                 if (position == Position::TopRight || position == Position::BottomRight)
                     x_pos = static_cast<float>(screen_w) - padding_px - toast_width;
 
-                float alpha_ease = detail::ease_out_expo(t.progress());
-                float slide_offset = (1.0f - alpha_ease) * 24.0f;
+                const bool instant = motion::is_instant();
+                float alpha_ease = instant ? 1.0f : detail::ease_out_expo(t.progress());
+                float slide_offset = instant ? 0.0f : (1.0f - alpha_ease) * 24.0f;
                 y_pos += at_top ? -slide_offset : slide_offset;
 
                 ui.computed_rel[ui::Axis::X] = x_pos;
                 ui.computed_rel[ui::Axis::Y] = y_pos;
+                if (!t.is_expired()) y_offset += toast_height + gap_px;
 
                 if (entity.has<ui::HasOpacity>()) {
                     entity.get<ui::HasOpacity>().value = alpha_ease;
                 }
 
-                // Queue the toast for rendering each frame (skip
-                // expired/cleanup)
+                t.hovered = false;
+                if (ctx_ptr) {
+                    const RectangleType rect{x_pos, y_pos, toast_width,
+                                             toast_height};
+                    t.hovered = ui::is_mouse_inside(ctx_ptr->mouse.pos, rect);
+                    if (t.hovered && ctx_ptr->mouse.just_pressed) t.dismiss();
+                }
+
                 if (!t.is_expired() && !entity.cleanup) {
-                    auto *ctx_ptr = EntityHelper::get_singleton_cmp<
-                        ui::UIContext<InputAction>>();
                     if (ctx_ptr) {
                         ctx_ptr->queue_render(ui::RenderInfo{entity.id, 100});
                     }
+                    index++;
                 }
-
-                index++;
             }
         }
     };
