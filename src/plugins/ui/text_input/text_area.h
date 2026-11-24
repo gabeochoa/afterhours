@@ -149,6 +149,9 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       },
       text);
 
+  auto &submit_state = entity.template addComponentIfMissing<IsSubmittable>();
+  submit_state.submitted = false;
+
   state.readonly = config.text_readonly;
   state.disabled = config.disabled;
   state.copy_disabled = config.text_copy_disabled;
@@ -630,10 +633,17 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
             text_changed = true;
           }
         }
-      } else if (entity.template has<HasTextInputListener>()) {
-        if (auto &listener = entity.template get<HasTextInputListener>();
-            listener.on_submit)
-          listener.on_submit(entity);
+      } else {
+        submit_state.submitted = true;
+        if (entity.template has<HasTextInputListener>()) {
+          if (auto &listener = entity.template get<HasTextInputListener>();
+              listener.on_submit)
+            listener.on_submit(entity);
+        }
+        if (config.on_submit) {
+          const std::string submitted_text = state.text();
+          config.on_submit(submitted_text);
+        }
       }
     }
 
@@ -768,7 +778,8 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
 
   text = state.text();
   entity.template addComponentIfMissing<FocusClusterRoot>();
-  return ElementResult{state.changed_since, entity};
+  ElementResult result{state.changed_since, entity};
+  return result;
 }
 
 } // namespace text_input
