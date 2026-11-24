@@ -298,8 +298,10 @@ lighting_zones_test \
 	cleanup_order_test \
 	attachment_test \
 	canonical_snapshot_test \
+	event_phases_test \
 	draw_only_test \
 	entity_pool_test \
+	session_reset_test \
 	entity_query_test \
 	entity_membership_test \
 	temp_warning_caller_test \
