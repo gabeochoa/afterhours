@@ -388,6 +388,7 @@ lighting_zones_test \
 	system_deactivate_hook_test \
 	library_duplicate_test \
 	library_intern_test \
+	incremental_loader_test \
 	shared_handlers_test \
 	default_font_test \
 	load_font_size_test \
