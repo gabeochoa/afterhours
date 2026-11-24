@@ -6,6 +6,7 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+- **`EntityHelper::ScopedCollection`** (`src/core/entity_helper.h`) binds a collection as the thread-local default for its scope and restores the previous binding on destruction. Construct from `EntityCollection&`, or call `ScopedCollection::use_default()` for the singleton default. Covered by `collection_binding_test`.
 - **`tab_container(..., active_config)`** applies overrides only to the selected tab. Set a shared corner mask on the bar to round every tab, then use `active_config` for a distinct selected edge. Omitting both keeps the default underline.
 
 ### Behaviour

@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -50,6 +51,44 @@ struct EntityHelper {
   static void set_default_collection(EntityCollection *collection) {
     get_thread_default_collection_ptr() = collection;
   }
+
+  // RAII binding for the thread-local default collection.
+  struct ScopedCollection {
+    explicit ScopedCollection(EntityCollection &collection)
+        : previous(capture_previous()) {
+      set_default_collection(&collection);
+    }
+    static ScopedCollection use_default() {
+      return ScopedCollection(DefaultTag{});
+    }
+    ~ScopedCollection() {
+      if (previous.has_value()) {
+        set_default_collection(&previous->get());
+      } else {
+        set_default_collection(nullptr);
+      }
+    }
+    ScopedCollection(const ScopedCollection &) = delete;
+    ScopedCollection &operator=(const ScopedCollection &) = delete;
+    ScopedCollection(ScopedCollection &&) = delete;
+    ScopedCollection &operator=(ScopedCollection &&) = delete;
+
+   private:
+    struct DefaultTag {};
+    explicit ScopedCollection(DefaultTag) : previous(capture_previous()) {
+      set_default_collection(nullptr);
+    }
+    static std::optional<std::reference_wrapper<EntityCollection>>
+    capture_previous() {
+      auto current = get_thread_default_collection_ptr();
+      if (current == nullptr) {
+        return std::nullopt;
+      }
+      return std::ref(*current);
+    }
+
+    std::optional<std::reference_wrapper<EntityCollection>> previous;
+  };
 
   // Get the default collection for the current thread
   // Returns the thread-local collection if registered, otherwise the
