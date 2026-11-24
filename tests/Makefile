@@ -398,6 +398,7 @@ ALL_TESTS += sokol_include_order_test
 ALL_TESTS += sokol_wrappers_test
 ALL_TESTS += sokol_frame_dt_test
 ALL_TESTS += sokol_msaa_test
+ALL_TESTS += sokol_cmd_chords_test
 ALL_TESTS += sokol_mouse_pre_init_test
 ALL_TESTS += sokol_startup_order_test
 ALL_TESTS += staging_texture_leak_test
@@ -657,6 +658,10 @@ $(OUT)/sokol_msaa_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_msaa_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_msaa_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_msaa_test: ../src/backends/sokol/drawing_helpers.h ../src/backends/sokol/backend.h
+$(OUT)/sokol_cmd_chords_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_cmd_chords_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_cmd_chords_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_cmd_chords_test: ../src/backends/sokol/backend.h
 $(OUT)/sokol_startup_order_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_startup_order_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_startup_order_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
