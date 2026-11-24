@@ -154,7 +154,7 @@ inline void draw_rectangle_rounded(
     r = h * 0.5f;
 
   const int segs = (segments > 0) ? segments : 8;
-  const float PI_HALF = 3.14159265f * 0.5f;
+  const float PI_HALF = PI * 0.5f;
 
   // Bit layout: 3=TL, 2=TR, 1=BL, 0=BR
   float rTL = corners.test(3) ? r : 0.0f;
@@ -193,7 +193,7 @@ inline void draw_rectangle_rounded(
 
   // Build rounded rect as triangles from center to perimeter
   // Top-left corner arc (center at x+rTL, y+rTL), angles PI to 1.5*PI
-  emit_corner_arc(x + rTL, y + rTL, rTL, 3.14159265f);
+  emit_corner_arc(x + rTL, y + rTL, rTL, PI);
 
   // Top edge: TL arc end -> TR arc start
   sgl_begin_triangles();
@@ -275,7 +275,7 @@ inline void draw_rectangle_rounded_lines(
     r = h * 0.5f;
 
   const int segs = (segments > 0) ? segments : 8;
-  const float PI_HALF = 3.14159265f * 0.5f;
+  const float PI_HALF = PI * 0.5f;
 
   float rTL = corners.test(3) ? r : 0.0f;
   float rTR = corners.test(2) ? r : 0.0f;
@@ -320,7 +320,7 @@ inline void draw_rectangle_rounded_lines(
 
   // Top-left arc
   for (int i = 0; i <= segs; i++) {
-    float a = 3.14159265f +
+    float a = PI +
               PI_HALF * static_cast<float>(i) / static_cast<float>(segs);
     sgl_v2f(x + rTL + rTL * cosf(a), y + rTL + rTL * sinf(a));
   }
@@ -398,8 +398,8 @@ inline void draw_circle_gradient(int centerX, int centerY, float radius,
   sgl_begin_triangles();
   for (int i = 0; i < SEGMENTS; ++i) {
     const float a0 =
-        static_cast<float>(i) * 2.0f * 3.14159265f / static_cast<float>(SEGMENTS);
-    const float a1 = static_cast<float>(i + 1) * 2.0f * 3.14159265f /
+        static_cast<float>(i) * 2.0f * PI / static_cast<float>(SEGMENTS);
+    const float a1 = static_cast<float>(i + 1) * 2.0f * PI /
                      static_cast<float>(SEGMENTS);
     sgl_c4b(inner.r, inner.g, inner.b, inner.a);
     sgl_v2f(cx, cy);
@@ -551,6 +551,7 @@ inline void draw_ring(float centerX, float centerY, float innerRadius,
 // sokol has no rlSetBlendMode, so each mode is its own pipeline. Skipped when
 // already active: a pipeline swap breaks the batch.
 inline void set_blend_mode(blend::Mode mode) {
+  graphics::metal_detail::ensure_sokol_gl_and_fonts();
   if (mode == blend::detail::current_mode())
     return;
   blend::detail::current_mode() = mode;
@@ -720,7 +721,7 @@ inline void draw_circle_filled(float cx, float cy, float radius,
   sgl_begin_triangle_strip();
   metal_draw_detail::set_color(color);
   for (int i = 0; i <= SEGMENTS; i++) {
-    float angle = static_cast<float>(i) * 2.0f * 3.14159265f /
+    float angle = static_cast<float>(i) * 2.0f * PI /
                   static_cast<float>(SEGMENTS);
     sgl_v2f(cx, cy);
     sgl_v2f(cx + radius * cosf(angle), cy + radius * sinf(angle));
@@ -746,7 +747,7 @@ inline void draw_circle_lines(int centerX, int centerY, float radius,
   float cx = static_cast<float>(centerX);
   float cy = static_cast<float>(centerY);
   for (int i = 0; i <= SEGMENTS; i++) {
-    float angle = static_cast<float>(i) * 2.0f * 3.14159265f /
+    float angle = static_cast<float>(i) * 2.0f * PI /
                   static_cast<float>(SEGMENTS);
     sgl_v2f(cx + radius * cosf(angle), cy + radius * sinf(angle));
   }
@@ -852,9 +853,9 @@ inline void draw_ellipse(int centerX, int centerY, float radiusH,
   metal_draw_detail::set_color(color);
   sgl_begin_triangles();
   for (int i = 0; i < SEGMENTS; i++) {
-    const float a0 = static_cast<float>(i) * 2.0f * 3.14159265f /
+    const float a0 = static_cast<float>(i) * 2.0f * PI /
                      static_cast<float>(SEGMENTS);
-    const float a1 = static_cast<float>(i + 1) * 2.0f * 3.14159265f /
+    const float a1 = static_cast<float>(i + 1) * 2.0f * PI /
                      static_cast<float>(SEGMENTS);
     sgl_v2f(cx, cy);
     sgl_v2f(cx + cosf(a1) * radiusH, cy + sinf(a1) * radiusV);
@@ -871,7 +872,7 @@ inline void draw_ellipse_lines(int centerX, int centerY, float radiusH,
   metal_draw_detail::set_color(color);
   sgl_begin_line_strip();
   for (int i = 0; i <= SEGMENTS; i++) {
-    const float a = static_cast<float>(i) * 2.0f * 3.14159265f /
+    const float a = static_cast<float>(i) * 2.0f * PI /
                     static_cast<float>(SEGMENTS);
     sgl_v2f(cx + cosf(a) * radiusH, cy + sinf(a) * radiusV);
   }
@@ -879,13 +880,15 @@ inline void draw_ellipse_lines(int centerX, int centerY, float radiusH,
 }
 
 inline void draw_texture_pro(TextureType tex, RectangleType src, RectangleType dest,
-                             Vector2Type origin, float rotation, Color tint);
+                             Vector2Type origin, float rotation, Color tint,
+                             int filter = -1);
 inline void draw_quad(const Vector2Type (&p)[4], Color color) {
   const float min_x = std::min({p[0].x, p[1].x, p[2].x, p[3].x}), max_x = std::max({p[0].x, p[1].x, p[2].x, p[3].x});
   const float min_y = std::min({p[0].y, p[1].y, p[2].y, p[3].y}), max_y = std::max({p[0].y, p[1].y, p[2].y, p[3].y});
   capture::record("quad", RectangleType{min_x, min_y, max_x - min_x, max_y - min_y}, color, "");
   draw_rectangle(RectangleType{min_x, min_y, max_x - min_x, max_y - min_y}, color);
 }
+
 inline void draw_texture_quad(TextureType tex, const Vector2Type (&p)[4], Color tint) {
   const float min_x = std::min({p[0].x, p[1].x, p[2].x, p[3].x}), max_x = std::max({p[0].x, p[1].x, p[2].x, p[3].x});
   const float min_y = std::min({p[0].y, p[1].y, p[2].y, p[3].y}), max_y = std::max({p[0].y, p[1].y, p[2].y, p[3].y});
@@ -1015,10 +1018,12 @@ inline afterhours::Font &default_font_override() {
 inline void set_default_font(afterhours::Font font) {
   detail::default_font_override() = font;
 }
+
 inline void clear_default_font() { detail::default_font_override() = {}; }
 inline afterhours::Font get_default_font() {
   return detail::default_font_override();
 }
+
 inline afterhours::Font get_unset_font() { return get_default_font(); }
 
 // Reused across render textures. Not destroyed on unload: sokol_gl's pipeline
@@ -1204,25 +1209,6 @@ inline graphics::RenderTextureType load_render_texture_with_samples(int w,
     return rt;
   }
 
-  // An sgl context depends on the pixel formats and sample count, never on the
-  // size, so a resize does not need a new one. It used to get one anyway, and
-  // sgl_destroy_context does not release the five render pipelines the context
-  // made, so every resize leaked them: 4.8 MB per 1000 frames of a resize
-  // loop. Keyed and reused instead, so a resize makes none.
-  sgl_context sgl_ctx = sgl_context_for(color_fmt, depth_fmt, sc);
-  if (sgl_ctx.id == SG_INVALID_ID) {
-    log_error("load_render_texture: sgl context creation failed");
-    sg_destroy_sampler(smp);
-    sg_destroy_view(tex_view);
-    if (resolve_view.id) sg_destroy_view(resolve_view);
-    if (resolve.id) sg_destroy_image(resolve);
-    sg_destroy_view(depth_view);
-    sg_destroy_view(color_view);
-    sg_destroy_image(depth);
-    sg_destroy_image(color);
-    return rt;
-  }
-
   rt.color_img_id = color.id;
   rt.depth_img_id = depth.id;
   rt.color_view_id = color_view.id;
@@ -1231,13 +1217,13 @@ inline graphics::RenderTextureType load_render_texture_with_samples(int w,
   rt.resolve_img_id = resolve.id;
   rt.resolve_view_id = resolve_view.id;
   rt.sampler_id = smp.id;
-  rt.sgl_ctx_id = sgl_ctx.id;
   return rt;
 }
 
 inline graphics::RenderTextureType load_render_texture(int w, int h) {
   return load_render_texture_with_samples(w, h, 1);
 }
+
 inline graphics::RenderTextureType load_msaa_render_texture(int w, int h,
                                                              int samples) {
   return load_render_texture_with_samples(w, h, samples);
@@ -1265,6 +1251,18 @@ inline void unload_render_texture(graphics::RenderTextureType &rt) {
 }
 
 inline void begin_texture_mode(graphics::RenderTextureType &rt) {
+  graphics::metal_detail::ensure_sokol_gl_and_fonts();
+  if (rt.sgl_ctx_id == 0) {
+    const auto cdesc = sg_query_image_desc({rt.color_img_id});
+    const auto ddesc = sg_query_image_desc({rt.depth_img_id});
+    const sgl_context ctx =
+        sgl_context_for(cdesc.pixel_format, ddesc.pixel_format, cdesc.sample_count);
+    if (ctx.id == SG_INVALID_ID) {
+      log_error("begin_texture_mode: sgl context creation failed");
+      return;
+    }
+    rt.sgl_ctx_id = ctx.id;
+  }
   auto unwind_camera_stack = []() {
     if (graphics::metal_detail::g_camera_mode_depth <= 0)
       return;
@@ -1375,7 +1373,8 @@ inline void end_texture_mode() {
   // Restore the default sgl context (swapchain format).
   // The caller is responsible for starting the next pass
   // (via begin_drawing or another begin_texture_mode).
-  sgl_set_context(sgl_default_context());
+  if (graphics::metal_detail::g_sgl_ready)
+    sgl_set_context(sgl_default_context());
   graphics::metal_detail::g_in_texture_mode = false;
 }
 
@@ -1560,9 +1559,13 @@ inline void draw_render_texture(const graphics::RenderTextureType &rt, float x,
   }
 }
 
+namespace metal_texture_detail {
+inline sg_sampler make_sampler_for_filter(int filter, sg_wrap wrap);
+} // namespace metal_texture_detail
+
 inline void draw_texture_pro(TextureType tex, RectangleType src,
                              RectangleType dest, Vector2Type origin,
-                             float rotation, Color tint) {
+                             float rotation, Color tint, int filter) {
   if (tex.view_id == 0 || tex.width <= 0.0f || tex.height <= 0.0f)
     return;
 
@@ -1583,6 +1586,14 @@ inline void draw_texture_pro(TextureType tex, RectangleType src,
 
   sg_view tv = {tex.view_id};
   sg_sampler smp = {tex.sampler_id};
+  if (filter >= 0) {
+    static sg_sampler cache[3] = {};
+    const int slot = filter > 2 ? 2 : filter;
+    if (cache[slot].id == 0)
+      cache[slot] = metal_texture_detail::make_sampler_for_filter(
+          filter, SG_WRAP_CLAMP_TO_EDGE);
+    smp = cache[slot];
+  }
 
   push_rotation(dest.x, dest.y, rotation);
   sgl_enable_texture();
@@ -1646,7 +1657,7 @@ inline bool capture_render_texture(const graphics::RenderTextureType &rt,
 #endif
 }
 
-inline std::optional<RgbaCapture>
+inline std::optional<RGBACapture>
 capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
   if (rt.color_img_id == 0)
     return {};
@@ -1662,7 +1673,7 @@ capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
     free(data);
     return std::nullopt;
   }
-  RgbaCapture result{rt.width, rt.height, {data, data + size}};
+  RGBACapture result{rt.width, rt.height, {data, data + size}};
   free(data);
   return result;
 #elif defined(SOKOL_METAL)
@@ -1677,7 +1688,7 @@ capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
     free(data);
     return std::nullopt;
   }
-  RgbaCapture result{rt.width, rt.height, {data, data + size}};
+  RGBACapture result{rt.width, rt.height, {data, data + size}};
   free(data);
   return result;
 #else
@@ -1685,7 +1696,7 @@ capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
 #endif
 }
 
-inline std::optional<PngCapture>
+inline std::optional<PNGCapture>
 capture_render_texture_png(const graphics::RenderTextureType &rt) {
   if (rt.color_img_id == 0) return std::nullopt;
 #ifdef AFTER_HOURS_USE_VULKAN
@@ -1698,7 +1709,7 @@ capture_render_texture_png(const graphics::RenderTextureType &rt) {
     free(data);
     return std::nullopt;
   }
-  PngCapture result{{data, data + size}};
+  PNGCapture result{{data, data + size}};
   free(data);
   return result;
 #elif defined(SOKOL_METAL)
@@ -1711,7 +1722,7 @@ capture_render_texture_png(const graphics::RenderTextureType &rt) {
     free(data);
     return std::nullopt;
   }
-  PngCapture result{{data, data + size}};
+  PNGCapture result{{data, data + size}};
   free(data);
   return result;
 #else
@@ -1883,6 +1894,11 @@ inline TextureType load_texture(const char *path) {
   TextureType tex = metal_texture_detail::load_texture_from_pixels(pixels, w, h);
   stbi_image_free(pixels);
   return tex;
+}
+
+// sg_make_* is only valid once the backend is initialized.
+inline bool texture_is_usable() {
+  return graphics::metal_detail::g_initialized;
 }
 
 inline TextureType load_texture_from_rgba(const std::uint8_t *rgba, int w,
