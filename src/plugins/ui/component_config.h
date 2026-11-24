@@ -68,6 +68,7 @@ struct ComponentConfig {
 
   Padding padding;
   bool padding_is_default = false;
+  bool padding_explicitly_set = false;
   Margin margin;
   std::string label;
   bool is_absolute = false;
@@ -219,6 +220,10 @@ struct ComponentConfig {
   bool text_cut_disabled = false;
   bool text_paste_disabled = false;
 
+  // Text input: Escape blurs the field. Off lets the app use Escape for
+  // its own overlay (slash menu, autocomplete) without losing the caret.
+  bool text_escape_blurs = true;
+
   // Text input: hint shown while the bound string is empty.
   std::string placeholder;
   // Hint ink override; unset keeps theme.font_muted on both text widgets.
@@ -257,6 +262,7 @@ struct ComponentConfig {
   std::optional<texture_manager::Texture> icon_texture;
   std::optional<texture_manager::Rectangle> icon_source_rect;
   IconPosition icon_position = IconPosition::Left;
+  std::optional<ComponentSize> icon_size;
 
   // Nine-slice border configuration
   std::optional<NineSliceBorder> nine_slice_config;
@@ -312,6 +318,7 @@ struct ComponentConfig {
   ComponentConfig &with_padding(const Padding &padding_) {
     padding = padding_;
     padding_is_default = false;
+    padding_explicitly_set = true;
     return *this;
   }
   ComponentConfig &with_margin(const Margin &margin_) {
@@ -328,6 +335,7 @@ struct ComponentConfig {
   }
   ComponentConfig &with_padding(Spacing spacing) {
     padding_is_default = false;
+    padding_explicitly_set = true;
     auto gap_size = spacing_to_size(spacing);
     padding = Padding{.top = gap_size,
                       .left = gap_size,
@@ -412,6 +420,10 @@ struct ComponentConfig {
     icon_position = pos;
     return *this;
   }
+  ComponentConfig &with_icon_size(ComponentSize sz) {
+    icon_size = sz;
+    return *this;
+  }
 
   // NEW: Explicit background color APIs
   ComponentConfig &with_background(Theme::Usage usage) {
@@ -483,6 +495,11 @@ struct ComponentConfig {
   }
   ComponentConfig &with_slider_style(const SliderStyle &style) {
     slider_style = style;
+    return *this;
+  }
+
+  ComponentConfig &with_escape_blurs(bool blur = true) {
+    text_escape_blurs = blur;
     return *this;
   }
   ComponentConfig &with_toggle_indicators(const std::string &on,
@@ -1238,7 +1255,7 @@ struct ComponentConfig {
   }
 
   ComponentConfig &apply_automatic_defaults() {
-    if (!has_padding()) {
+    if (!has_padding() && !padding_explicitly_set) {
       padding = Padding{.top = DefaultSpacing::medium(),
                         .left = DefaultSpacing::medium(),
                         .bottom = DefaultSpacing::medium(),
@@ -1259,9 +1276,10 @@ struct ComponentConfig {
   ComponentConfig &apply_overrides_from(const ComponentConfig &overrides) {
     ComponentConfig &merged = *this;
 
-    if (overrides.has_padding()) {
+    if (overrides.has_padding() || overrides.padding_explicitly_set) {
       merged.padding = overrides.padding;
       merged.padding_is_default = overrides.padding_is_default;
+      merged.padding_explicitly_set = overrides.padding_explicitly_set;
     }
     if (overrides.has_margin())
       merged.margin = overrides.margin;
@@ -1481,6 +1499,8 @@ if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.deb
       merged.text_cut_disabled = true;
     if (overrides.text_paste_disabled)
       merged.text_paste_disabled = true;
+    if (!overrides.text_escape_blurs)
+      merged.text_escape_blurs = false;
     if (!overrides.placeholder.empty())
       if (merged.placeholder != overrides.placeholder) merged.placeholder = overrides.placeholder;
     if (overrides.placeholder_color.has_value())
@@ -1527,6 +1547,8 @@ if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.deb
       merged.icon_source_rect = overrides.icon_source_rect;
     if (overrides.icon_position != IconPosition::Left)
       merged.icon_position = overrides.icon_position;
+    if (overrides.icon_size.has_value())
+      merged.icon_size = overrides.icon_size;
 
     if (!overrides.extensions.empty())
       merged.extensions = overrides.extensions;

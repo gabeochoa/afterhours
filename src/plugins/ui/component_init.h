@@ -131,7 +131,8 @@ inline void overwrite_defaults(HasUIContext auto &ctx,
       config.with_size(ComponentSize{w1280(120), h720(44)});
     }
     // Default padding: Spacing::sm
-    bool padding_is_default = config.padding.top.dim == Dim::None &&
+    bool padding_is_default = !config.padding_explicitly_set &&
+                              config.padding.top.dim == Dim::None &&
                               config.padding.left.dim == Dim::None &&
                               config.padding.bottom.dim == Dim::None &&
                               config.padding.right.dim == Dim::None;

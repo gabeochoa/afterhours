@@ -1563,8 +1563,8 @@ struct HandleSelectOnFocus
     bool currently_focused = context->has_focus(entity.id);
     bool was_focused = last_focused_ids.contains(entity.id);
 
-    if (currently_focused && !was_focused) {
-      // Component just gained focus, trigger the click
+    if (currently_focused && !was_focused &&
+        context->focus_modality != FocusSource::Pointer) {
       hasClickListener.cb(entity);
       hasClickListener.down = true;
     }
@@ -1609,8 +1609,8 @@ private:
       bool currently_focused = context->has_focus(child.id);
       bool was_focused = last_focused_ids.contains(child.id);
 
-      if (currently_focused && !was_focused) {
-        // Component just gained focus, trigger the click
+      if (currently_focused && !was_focused &&
+          context->focus_modality != FocusSource::Pointer) {
         child_hasClickListener.cb(child);
         child_hasClickListener.down = true;
       }
