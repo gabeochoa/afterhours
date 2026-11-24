@@ -290,6 +290,8 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
     state.changed_since = true;
   }
 
+  detail::apply_accessibility(entity, config, AccessibleRole::Checkbox, label,
+                                state.on ? "on" : "off");
   value = state.on;
   ElementResult result{state.changed_since, entity, value};
   state.changed_since = false;
@@ -604,6 +606,8 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
     state.changed_since = true;
   }
 
+  detail::apply_accessibility(entity, config, AccessibleRole::Switch, label,
+                                state.on ? "on" : "off");
   value = state.on;
   ElementResult result{state.changed_since, entity, value};
   state.changed_since = false;
