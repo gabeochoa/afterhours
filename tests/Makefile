@@ -398,6 +398,7 @@ lighting_zones_test \
 	text_area_test \
 	text_area_wrap_cache_test \
 	text_input_test \
+	text_input_on_submit_test \
 	toast_test \
 	text_wrap_test \
 	label_word_wrap_test \
@@ -514,6 +515,7 @@ RAYLIB_TESTS := \
 	small_components_test \
 	text_area_test \
 	text_input_test \
+	text_input_on_submit_test \
 	focus_select_on_focus_test \
 	color_swatch_test \
 	editing_capability_test \
