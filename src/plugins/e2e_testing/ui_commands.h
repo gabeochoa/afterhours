@@ -415,47 +415,41 @@ struct HandleClickTextCommand : System<PendingE2ECommand> {
   }
 };
 
-// Handle 'focus_ui name' - focuses UI component by debug name (for tabbing)
 template <typename InputAction>
 struct HandleFocusUICommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
     if (cmd.is_consumed() || !cmd.is("focus_ui"))
       return;
-    if (!cmd.has_args(1)) {
-      cmd.fail("focus_ui requires component name");
+    std::string scope_name, scope_err;
+    auto pos = strip_trailing_scope(cmd, 0, 1, scope_name, scope_err);
+    if (!scope_err.empty()) { cmd.fail(scope_err); return; }
+    if (pos.empty()) { cmd.fail("focus_ui requires component name"); return; }
+    EntityID scope = -1;
+    if (!scope_or_done(cmd, "focus_ui", scope_name, false, scope)) return;
+    if (render_checkpoint_pending(cmd)) return;
+    auto res = resolve_ui_single(pos[0], scope, UIMatchKind::DebugName,
+                                 UIVisibility::Rendered);
+    if (!res.ambiguous.empty()) { cmd.fail(res.ambiguous); return; }
+    if (!res.entity) {
+      cmd.fail(std::format("UI component not found: {}", pos[0]));
       return;
     }
-    if (render_checkpoint_pending(cmd)) return;
-
-    const auto &name = cmd.arg(0);
-    auto query = ui_query()
-                     .whereHasComponent<ui::UIComponent>()
-                     .whereHasComponent<ui::UIComponentDebug>()
-                     .whereLambda([&](const Entity &e) {
-                       return e.get<ui::UIComponentDebug>().name() == name &&
-                              e.get<ui::UIComponent>().was_rendered_to_screen;
-                     })
-                     .first();
-
-    for (Entity &entity : query.gen()) {
-      auto &cmp = entity.get<ui::UIComponent>();
-      auto *ctx = EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
-      if (ctx) {
-        EntityID focus_target = cmp.id;
-        for (int child_id : cmp.children) {
-          auto child_opt =
-              ui::UICollectionHolder::getEntityForID(child_id);
-          if (child_opt.valid() &&
-              child_opt.asE().template has<ui::InFocusCluster>()) {
-            focus_target = child_id;
-          }
+    Entity &entity = res.entity.asE();
+    auto &cmp = entity.get<ui::UIComponent>();
+    auto *ctx = EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+    if (ctx) {
+      EntityID focus_target = cmp.id;
+      for (int child_id : cmp.children) {
+        auto child_opt = ui::UICollectionHolder::getEntityForID(child_id);
+        if (child_opt.valid() && child_opt.asE().template has<ui::InFocusCluster>()) {
+          focus_target = child_id;
         }
-        ctx->set_focus(focus_target);
-        cmd.consume();
-        return;
       }
+      ctx->set_focus(focus_target);
+      cmd.consume();
+      return;
     }
-    cmd.retry_with(std::format("UI component not found: {}", cmd.arg(0)));
+    cmd.fail(std::format("UI component not found: {}", pos[0]));
   }
 };
 
@@ -555,65 +549,51 @@ struct HandleArrowCommand : System<PendingE2ECommand> {
   }
 };
 
-// Handle 'expect_focused name' - asserts a component is focused
 template <typename InputAction>
 struct HandleExpectFocusedCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
     if (cmd.is_consumed() || !cmd.is("expect_focused"))
       return;
-    if (!cmd.has_args(1)) {
-      cmd.fail("expect_focused requires component name");
-      return;
-    }
-
+    std::string scope_name, scope_err;
+    auto pos = strip_trailing_scope(cmd, 0, 1, scope_name, scope_err);
+    if (!scope_err.empty()) { cmd.fail(scope_err); return; }
+    if (pos.empty()) { cmd.fail("expect_focused requires component name"); return; }
     auto *ctx = EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
-    if (!ctx) {
-      cmd.fail("UIContext not found");
+    if (!ctx) { cmd.fail("UIContext not found"); return; }
+    EntityID scope = -1;
+    if (!scope_or_done(cmd, "expect_focused", scope_name, true, scope))
+      return;
+    auto res = resolve_ui_single(pos[0], scope, UIMatchKind::DebugName,
+                                 UIVisibility::Any);
+    if (!res.ambiguous.empty()) { cmd.fail(res.ambiguous); return; }
+    if (!res.entity) {
+      cmd.retry_with(std::format("UI component not found: {}", pos[0]));
       return;
     }
-
-    const auto &name = cmd.arg(0);
-    auto query = ui_query()
-                     .whereHasComponent<ui::UIComponent>()
-                     .whereHasComponent<ui::UIComponentDebug>()
-                     .whereLambda([&](const Entity &e) {
-                       return e.get<ui::UIComponentDebug>().name() == name;
-                     })
-                     .first();
-
-    for (Entity &entity : query.gen()) {
-      auto &cmp = entity.get<ui::UIComponent>();
-      // Check the entity itself
-      if (ctx->has_focus(cmp.id)) {
+    Entity &entity = res.entity.asE();
+    auto &cmp = entity.get<ui::UIComponent>();
+    if (ctx->has_focus(cmp.id)) {
+      cmd.consume();
+      return;
+    }
+    for (int child_id : cmp.children) {
+      auto child_opt = ui::UICollectionHolder::getEntityForID(child_id);
+      if (child_opt.valid() &&
+          child_opt.asE().template has<ui::InFocusCluster>() &&
+          ctx->has_focus(child_id)) {
         cmd.consume();
         return;
       }
-      // Also check InFocusCluster children (matches focus_ui behavior:
-      // focus_ui drills into children with InFocusCluster and sets focus
-      // on the child, so expect_focused must check them too)
-      for (int child_id : cmp.children) {
-        auto child_opt = ui::UICollectionHolder::getEntityForID(child_id);
-        if (child_opt.valid() &&
-            child_opt.asE().template has<ui::InFocusCluster>() &&
-            ctx->has_focus(child_id)) {
-          cmd.consume();
-          return;
-        }
-      }
-      // Naming what DOES hold focus, and what set it. "not focused" alone
-      // sends the reader looking for a cause with nothing to go on.
-      std::string holder = "nothing";
-      if (ctx->focus_id != ctx->ROOT) {
-        auto opt = ui::UICollectionHolder::getEntityForID(ctx->focus_id);
-        holder = (opt.valid() && opt.asE().template has<ui::UIComponentDebug>())
-                     ? opt.asE().template get<ui::UIComponentDebug>().name()
-                     : std::format("entity {}", ctx->focus_id);
-      }
-      cmd.retry_with(std::format("'{}' is not focused, '{}' is. Focus set by {}",
-                                     name, holder, ctx->focus_origin()));
-      return;
     }
-    cmd.retry_with(std::format("UI component not found: {}", cmd.arg(0)));
+    std::string holder = "nothing";
+    if (ctx->focus_id != ctx->ROOT) {
+      auto opt = ui::UICollectionHolder::getEntityForID(ctx->focus_id);
+      holder = (opt.valid() && opt.asE().template has<ui::UIComponentDebug>())
+                   ? opt.asE().template get<ui::UIComponentDebug>().name()
+                   : std::format("entity {}", ctx->focus_id);
+    }
+    cmd.retry_with(std::format("'{}' is not focused, '{}' is. Focus set by {}",
+                               pos[0], holder, ctx->focus_origin()));
   }
 };
 
@@ -644,38 +624,32 @@ struct HandleExpectNoFocusCommand : System<PendingE2ECommand> {
   }
 };
 
-// Handle 'expect_hovered name' - asserts the named element is hovered.
 template <typename InputAction>
 struct HandleExpectHoveredCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
     if (cmd.is_consumed() || !cmd.is("expect_hovered"))
       return;
-    if (!cmd.has_args(1)) {
-      cmd.fail("expect_hovered requires component name");
-      return;
-    }
+    std::string scope_name, scope_err;
+    auto pos = strip_trailing_scope(cmd, 0, 1, scope_name, scope_err);
+    if (!scope_err.empty()) { cmd.fail(scope_err); return; }
+    if (pos.empty()) { cmd.fail("expect_hovered requires component name"); return; }
     auto *ctx = EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
-    if (!ctx) {
-      cmd.fail("UIContext not found");
+    if (!ctx) { cmd.fail("UIContext not found"); return; }
+    EntityID scope = -1;
+    if (!scope_or_done(cmd, "expect_hovered", scope_name, true, scope))
+      return;
+    auto res = resolve_ui_single(pos[0], scope, UIMatchKind::DebugName,
+                                 UIVisibility::Any);
+    if (!res.ambiguous.empty()) { cmd.fail(res.ambiguous); return; }
+    if (!res.entity) {
+      cmd.retry_with(std::format("UI component not found: {}", pos[0]));
       return;
     }
-    const auto &name = cmd.arg(0);
-    auto query = ui_query()
-                     .whereHasComponent<ui::UIComponent>()
-                     .whereHasComponent<ui::UIComponentDebug>()
-                     .whereLambda([&](const Entity &e) {
-                       return e.get<ui::UIComponentDebug>().name() == name;
-                     })
-                     .first();
-    for (Entity &entity : query.gen()) {
-      if (ctx->is_hot(entity.id)) {
-        cmd.consume();
-      } else {
-        cmd.retry_with(std::format("'{}' is not hovered", name));
-      }
-      return;
+    if (ctx->is_hot(res.entity->id)) {
+      cmd.consume();
+    } else {
+      cmd.retry_with(std::format("'{}' is not hovered", pos[0]));
     }
-    cmd.retry_with(std::format("UI component not found: {}", name));
   }
 };
 
@@ -774,38 +748,31 @@ struct HandleClickButtonCommand : System<PendingE2ECommand> {
   }
 };
 
-// Handle 'toggle_checkbox name' - toggles checkbox by debug name
 template <typename InputAction>
 struct HandleToggleCheckboxCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
     if (cmd.is_consumed() || !cmd.is("toggle_checkbox"))
       return;
-    if (!cmd.has_args(1)) {
-      cmd.fail("toggle_checkbox requires name");
+    std::string scope_name, scope_err;
+    auto pos = strip_trailing_scope(cmd, 0, 1, scope_name, scope_err);
+    if (!scope_err.empty()) { cmd.fail(scope_err); return; }
+    if (pos.empty()) { cmd.fail("toggle_checkbox requires name"); return; }
+    EntityID scope = -1;
+    if (!scope_or_done(cmd, "toggle_checkbox", scope_name, false, scope))
       return;
-    }
     if (render_checkpoint_pending(cmd)) return;
-
-    const auto &name = cmd.arg(0);
-    auto query = ui_query()
-                     .whereHasComponent<ui::UIComponent>()
-                     .whereHasComponent<ui::UIComponentDebug>()
-                     .whereHasComponent<ui::HasCheckboxState>()
-                     .whereLambda([&](const Entity &e) {
-                       return e.get<ui::UIComponentDebug>().name() == name &&
-                              e.get<ui::UIComponent>().was_rendered_to_screen;
-                     })
-                     .first();
-
-    for (Entity &entity : query.gen()) {
-      auto rect = get_screen_rect(entity);
-      float cx = rect.x + rect.width / 2;
-      float cy = rect.y + rect.height / 2;
-      test_input::simulate_click(cx, cy);
-      cmd.consume();
+    auto res = resolve_ui_single(
+        pos[0], scope, UIMatchKind::DebugName, UIVisibility::Rendered,
+        [](Entity &e) { return e.has<ui::HasCheckboxState>(); });
+    if (!res.ambiguous.empty()) { cmd.fail(res.ambiguous); return; }
+    if (!res.entity) {
+      cmd.fail(std::format("Checkbox not found: {}", pos[0]));
       return;
     }
-    cmd.retry_with(std::format("Checkbox not found: {}", cmd.arg(0)));
+    auto rect = get_screen_rect(res.entity.asE());
+    test_input::simulate_click(rect.x + rect.width / 2,
+                               rect.y + rect.height / 2);
+    cmd.consume();
   }
 };
 
@@ -838,19 +805,19 @@ struct HandleSetSliderCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
     if (cmd.is_consumed() || !cmd.is("set_slider"))
       return;
-    if (!cmd.has_args(2)) {
-      cmd.fail("set_slider requires name and value");
+    std::string scope_name, scope_err;
+    auto pos = strip_trailing_scope(cmd, 0, 2, scope_name, scope_err);
+    if (!scope_err.empty()) { cmd.fail(scope_err); return; }
+    if (pos.size() < 2) { cmd.fail("set_slider requires name and value"); return; }
+    float value = 0.f;
+    try {
+      value = std::stof(pos[1]);
+    } catch (...) {
+      cmd.fail(std::format("Invalid slider value: {}", pos[1]));
       return;
     }
     if (render_checkpoint_pending(cmd)) return;
 
-    auto value = cmd.maybe_arg_as<float>(1);
-    if (!value) {
-      cmd.fail(std::format("Invalid slider value: {}", cmd.arg(1)));
-      return;
-    }
-
-    // Phase is keyed on the line; reset_retry() clears Retry every frame.
     if (owner_line != cmd.line_number) {
       owner_line = cmd.line_number;
       phase = 0;
@@ -869,122 +836,99 @@ struct HandleSetSliderCommand : System<PendingE2ECommand> {
       return;
     }
 
-    const auto &name = cmd.arg(0);
-    auto query = ui_query()
-                     .whereHasComponent<ui::UIComponent>()
-                     .whereHasComponent<ui::UIComponentDebug>()
-                     .whereLambda([&](const Entity &e) {
-                       return e.get<ui::UIComponentDebug>().name() == name &&
-                              e.get<ui::UIComponent>().was_rendered_to_screen;
-                     })
-                     .first();
-
-    for (Entity &named : query.gen()) {
-      OptEntity target = find_state_under<ui::HasSliderState>(named);
-      if (!target.valid())
-        continue;
-      Entity &entity = target.asE();
-      // Press the handle's current centre, then move to the target centre.
-      auto rect = get_screen_rect(entity);
-      const float pct = std::clamp(*value, 0.f, 1.f);
-      const float current =
-          std::clamp(entity.get<ui::HasSliderState>().value, 0.f, 1.f);
-      const float handle_w = rect.width * 0.25f;
-      const float travel = rect.width - handle_w;
-      const float grab_x = rect.x + handle_w * 0.5f + current * travel;
-      // Half a pixel in: a press on the boundary can miss the rect.
-      target_x = std::min(rect.x + handle_w * 0.5f + pct * travel,
-                          rect.x + rect.width - 0.5f);
-      target_y = rect.y + rect.height / 2;
-      test_input::set_mouse_position(grab_x, target_y);
-      auto &m = input_injector::detail::mouse;
-      m.left_down = true;
-      m.just_pressed = true;
-      m.press_frames = 0; // no auto-release; phase 2 releases
-      m.active = true;
-      phase = 1;
-      cmd.retry();
+    EntityID scope = -1;
+    if (!scope_or_done(cmd, "set_slider", scope_name, false, scope)) return;
+    auto res = resolve_ui_single(
+        pos[0], scope, UIMatchKind::DebugName, UIVisibility::Rendered,
+        [](Entity &e) {
+          return find_state_under<ui::HasSliderState>(e).valid();
+        });
+    if (!res.ambiguous.empty()) { cmd.fail(res.ambiguous); return; }
+    if (!res.entity) {
+      cmd.fail(std::format("Slider not found: {}", pos[0]));
       return;
     }
-    cmd.retry_with(std::format("Slider not found: {}", cmd.arg(0)));
+    OptEntity target = find_state_under<ui::HasSliderState>(res.entity.asE());
+    Entity &entity = target.asE();
+    auto rect = get_screen_rect(entity);
+    const float pct = std::clamp(value, 0.f, 1.f);
+    const float current =
+        std::clamp(entity.get<ui::HasSliderState>().value, 0.f, 1.f);
+    const float handle_w = rect.width * 0.25f;
+    const float travel = rect.width - handle_w;
+    const float grab_x = rect.x + handle_w * 0.5f + current * travel;
+    target_x = std::min(rect.x + handle_w * 0.5f + pct * travel,
+                        rect.x + rect.width - 0.5f);
+    target_y = rect.y + rect.height / 2;
+    test_input::set_mouse_position(grab_x, target_y);
+    auto &m = input_injector::detail::mouse;
+    m.left_down = true;
+    m.just_pressed = true;
+    m.press_frames = 0;
+    m.active = true;
+    phase = 1;
+    cmd.retry();
   }
 };
 
-// Handle 'select_dropdown name option' - selects dropdown option by debug name
 template <typename InputAction>
 struct HandleSelectDropdownCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
     if (cmd.is_consumed() || !cmd.is("select_dropdown"))
       return;
-    if (!cmd.has_args(2)) {
-      cmd.fail("select_dropdown requires name and option");
+    std::string scope_name, scope_err;
+    auto pos = strip_trailing_scope(cmd, 0, 2, scope_name, scope_err);
+    if (!scope_err.empty()) { cmd.fail(scope_err); return; }
+    if (pos.size() < 2) { cmd.fail("select_dropdown requires name and option"); return; }
+    EntityID scope = -1;
+    if (!scope_or_done(cmd, "select_dropdown", scope_name, false, scope))
       return;
-    }
     if (render_checkpoint_pending(cmd)) return;
-
-    const auto &name = cmd.arg(0);
-    auto query = ui_query()
-                     .whereHasComponent<ui::UIComponent>()
-                     .whereHasComponent<ui::UIComponentDebug>()
-                     .whereHasComponent<ui::HasDropdownState>()
-                     .whereLambda([&](const Entity &e) {
-                       return e.get<ui::UIComponentDebug>().name() == name &&
-                              e.get<ui::UIComponent>().was_rendered_to_screen;
-                     })
-                     .first();
-
-    for (Entity &entity : query.gen()) {
-      // Click to open dropdown first
-      auto rect = get_screen_rect(entity);
-      float cx = rect.x + rect.width / 2;
-      float cy = rect.y + rect.height / 2;
-      test_input::simulate_click(cx, cy);
-      // Note: Selecting the actual option requires another frame
-      // TODO: Add wait + option click logic
-      cmd.consume();
+    auto res = resolve_ui_single(
+        pos[0], scope, UIMatchKind::DebugName, UIVisibility::Rendered,
+        [](Entity &e) { return e.has<ui::HasDropdownState>(); });
+    if (!res.ambiguous.empty()) { cmd.fail(res.ambiguous); return; }
+    if (!res.entity) {
+      cmd.fail(std::format("Dropdown not found: {}", pos[0]));
       return;
     }
-    cmd.retry_with(std::format("Dropdown not found: {}", cmd.arg(0)));
+    auto rect = get_screen_rect(res.entity.asE());
+    test_input::simulate_click(rect.x + rect.width / 2,
+                               rect.y + rect.height / 2);
+    cmd.consume();
   }
 };
 
-// Handle 'expect_checkbox name state' - asserts checkbox is checked/unchecked
 template <typename InputAction>
 struct HandleExpectCheckboxCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
     if (cmd.is_consumed() || !cmd.is("expect_checkbox"))
       return;
-    if (!cmd.has_args(2)) {
-      cmd.fail("expect_checkbox requires name and state");
+    std::string scope_name, scope_err;
+    auto pos = strip_trailing_scope(cmd, 0, 2, scope_name, scope_err);
+    if (!scope_err.empty()) { cmd.fail(scope_err); return; }
+    if (pos.size() < 2) { cmd.fail("expect_checkbox requires name and state"); return; }
+    bool expected =
+        pos[1] == "true" || pos[1] == "checked" || pos[1] == "1";
+    EntityID scope = -1;
+    if (!scope_or_done(cmd, "expect_checkbox", scope_name, true, scope))
+      return;
+    auto res = resolve_ui_single(
+        pos[0], scope, UIMatchKind::DebugName, UIVisibility::Any,
+        [](Entity &e) { return e.has<ui::HasCheckboxState>(); });
+    if (!res.ambiguous.empty()) { cmd.fail(res.ambiguous); return; }
+    if (!res.entity) {
+      cmd.retry_with(std::format("Checkbox not found: {}", pos[0]));
       return;
     }
-
-    bool expected =
-        cmd.arg(1) == "true" || cmd.arg(1) == "checked" || cmd.arg(1) == "1";
-    const auto &name = cmd.arg(0);
-
-    auto query = ui_query()
-                     .whereHasComponent<ui::UIComponent>()
-                     .whereHasComponent<ui::UIComponentDebug>()
-                     .whereHasComponent<ui::HasCheckboxState>()
-                     .whereLambda([&](const Entity &e) {
-                       return e.get<ui::UIComponentDebug>().name() == name;
-                     })
-                     .first();
-
-    for (Entity &entity : query.gen()) {
-      auto &checkbox = entity.get<ui::HasCheckboxState>();
-      if (checkbox.on == expected) {
-        cmd.consume();
-        return;
-      } else {
-        cmd.retry_with(std::format("Checkbox '{}' is {}, expected {}", name,
-                                   checkbox.on ? "checked" : "unchecked",
-                                   cmd.arg(1)));
-        return;
-      }
+    auto &checkbox = res.entity->template get<ui::HasCheckboxState>();
+    if (checkbox.on == expected) {
+      cmd.consume();
+    } else {
+      cmd.retry_with(std::format("Checkbox '{}' is {}, expected {}", pos[0],
+                                 checkbox.on ? "checked" : "unchecked",
+                                 pos[1]));
     }
-    cmd.retry_with(std::format("Checkbox not found: {}", cmd.arg(0)));
   }
 };
 
@@ -1064,43 +1008,44 @@ struct HandleExpectSliderCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
     if (cmd.is_consumed() || !cmd.is("expect_slider"))
       return;
-    if (!cmd.has_args(2)) {
-      cmd.fail("expect_slider requires name and value");
+    std::string scope_name, scope_err;
+    auto pos = strip_trailing_scope(cmd, 0, 2, scope_name, scope_err);
+    if (!scope_err.empty()) { cmd.fail(scope_err); return; }
+    if (pos.size() < 2) { cmd.fail("expect_slider requires name and value"); return; }
+    float expected = 0.f;
+    try {
+      expected = std::stof(pos[1]);
+    } catch (...) {
+      cmd.fail(std::format("Invalid slider value: {}", pos[1]));
       return;
     }
-
-    auto expected = cmd.maybe_arg_as<float>(1);
-    if (!expected) {
-      cmd.fail(std::format("Invalid slider value: {}", cmd.arg(1)));
-      return;
-    }
-    float tolerance = cmd.arg_as<float>(2, 0.01f);
-
-    const auto &name = cmd.arg(0);
-    auto query = ui_query()
-                     .whereHasComponent<ui::UIComponent>()
-                     .whereHasComponent<ui::UIComponentDebug>()
-
-                     .whereLambda([&](const Entity &e) {
-                       return e.get<ui::UIComponentDebug>().name() == name;
-                     })
-                     .first();
-
-    for (Entity &named : query.gen()) {
-      OptEntity target = find_state_under<ui::HasSliderState>(named);
-      if (!target.valid())
-        continue;
-      auto &slider = target.asE().get<ui::HasSliderState>();
-      if (std::abs(slider.value - *expected) <= tolerance) {
-        cmd.consume();
-        return;
-      } else {
-        cmd.retry_with(std::format("Slider '{}' is {}, expected {}", name,
-                                   slider.value, *expected));
-        return;
+    float tolerance = 0.01f;
+    if (pos.size() > 2) {
+      try {
+        tolerance = std::stof(pos[2]);
+      } catch (...) {
       }
     }
-    cmd.retry_with(std::format("Slider not found: {}", cmd.arg(0)));
+    EntityID scope = -1;
+    if (!scope_or_done(cmd, "expect_slider", scope_name, true, scope)) return;
+    auto res = resolve_ui_single(
+        pos[0], scope, UIMatchKind::DebugName, UIVisibility::Any,
+        [](Entity &e) {
+          return find_state_under<ui::HasSliderState>(e).valid();
+        });
+    if (!res.ambiguous.empty()) { cmd.fail(res.ambiguous); return; }
+    if (!res.entity) {
+      cmd.retry_with(std::format("Slider not found: {}", pos[0]));
+      return;
+    }
+    OptEntity target = find_state_under<ui::HasSliderState>(res.entity.asE());
+    auto &slider = target.asE().get<ui::HasSliderState>();
+    if (std::abs(slider.value - expected) <= tolerance) {
+      cmd.consume();
+    } else {
+      cmd.retry_with(std::format("Slider '{}' is {}, expected {}", pos[0],
+                                 slider.value, expected));
+    }
   }
 };
 
@@ -1198,52 +1143,46 @@ struct HandleReleaseActionCommand : System<PendingE2ECommand> {
   }
 };
 
-// Handle 'expect_input_text name "expected"' - asserts a text input's content
 template <typename InputAction>
 struct HandleExpectInputTextCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
     if (cmd.is_consumed() || !cmd.is("expect_input_text"))
       return;
-    if (!cmd.has_args(2)) {
+    std::string scope_name, scope_err;
+    auto pos = strip_trailing_scope(cmd, 0, 2, scope_name, scope_err);
+    if (!scope_err.empty()) { cmd.fail(scope_err); return; }
+    if (pos.size() < 2) {
       cmd.fail("expect_input_text requires component name and expected text");
       return;
     }
-
-    const auto &name = cmd.arg(0);
-    const auto &expected = cmd.arg(1);
-    auto query =
-        ui_query()
-            .whereHasComponent<ui::UIComponent>()
-            .whereHasComponent<ui::UIComponentDebug>()
-            .whereLambda([&](const Entity &e) {
-              return e.get<ui::UIComponentDebug>().name() == name &&
-                     (e.has<text_input::HasTextInputState>() ||
-                      e.has<text_input::HasTextAreaState>());
-            })
-            .first();
-
-    for (Entity &entity : query.gen()) {
-      // A text_area carries HasTextAreaState, not the single-line state;
-      // asking only for the latter made multi-line fields unassertable.
-      const std::string actual =
-          entity.has<text_input::HasTextInputState>()
-              ? entity.get<text_input::HasTextInputState>().text()
-              : entity.get<text_input::HasTextAreaState>().text();
-      if (actual == expected) {
-        cmd.consume();
-        return;
-      } else {
-        cmd.retry_with(std::format(
-            "Input '{}' text is \"{}\", expected \"{}\"", name,
-            actual, expected));
-        return;
-      }
+    EntityID scope = -1;
+    if (!scope_or_done(cmd, "expect_input_text", scope_name, true, scope))
+      return;
+    auto res = resolve_ui_single(
+        pos[0], scope, UIMatchKind::DebugName, UIVisibility::Any,
+        [](Entity &e) {
+          return e.has<text_input::HasTextInputState>() ||
+                 e.has<text_input::HasTextAreaState>();
+        });
+    if (!res.ambiguous.empty()) { cmd.fail(res.ambiguous); return; }
+    if (!res.entity) {
+      cmd.retry_with(std::format("Text input not found: {}", pos[0]));
+      return;
     }
-    cmd.retry_with(std::format("Text input not found: {}", name));
+    Entity &entity = res.entity.asE();
+    const std::string actual =
+        entity.has<text_input::HasTextInputState>()
+            ? entity.get<text_input::HasTextInputState>().text()
+            : entity.get<text_input::HasTextAreaState>().text();
+    if (actual == pos[1]) {
+      cmd.consume();
+    } else {
+      cmd.retry_with(std::format(
+          "Input '{}' text is \"{}\", expected \"{}\"", pos[0], actual, pos[1]));
+    }
   }
 };
 
-// Handle 'expect_selected_text name "text"' - asserts WHAT is selected rather
 // than which byte offsets. Offsets from a click depend on font metrics, so an
 // offset assertion on a clicked selection is really an assertion about the
 // font; this one says "double clicking there selected that word" and stays
@@ -1253,36 +1192,38 @@ struct HandleExpectSelectedTextCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
     if (cmd.is_consumed() || !cmd.is("expect_selected_text"))
       return;
-    if (!cmd.has_args(2)) {
+    std::string scope_name, scope_err;
+    auto pos = strip_trailing_scope(cmd, 0, 2, scope_name, scope_err);
+    if (!scope_err.empty()) { cmd.fail(scope_err); return; }
+    if (pos.size() < 2) {
       cmd.fail("expect_selected_text requires name and expected text");
       return;
     }
-    const auto &name = cmd.arg(0);
-    const auto &want = cmd.arg(1);
-
-    auto query = ui_query()
-                     .whereHasComponent<ui::UIComponentDebug>()
-                     .whereLambda([&](const Entity &e) {
-                       return e.get<ui::UIComponentDebug>().name() == name &&
-                              (e.has<text_input::HasTextInputState>() ||
-                               e.has<text_input::HasTextAreaState>());
-                     })
-                     .first();
-
-    for (Entity &entity : query.gen()) {
-      const std::string got =
-          entity.has<text_input::HasTextAreaState>()
-              ? entity.get<text_input::HasTextAreaState>().selected_text()
-              : entity.get<text_input::HasTextInputState>().selected_text();
-      if (got == want) {
-        cmd.consume();
-      } else {
-        cmd.retry_with(std::format("'{}' has \"{}\" selected, expected \"{}\"", name,
-                                   got, want));
-      }
+    EntityID scope = -1;
+    if (!scope_or_done(cmd, "expect_selected_text", scope_name, true, scope))
+      return;
+    auto res = resolve_ui_single(
+        pos[0], scope, UIMatchKind::DebugName, UIVisibility::Any,
+        [](Entity &e) {
+          return e.has<text_input::HasTextInputState>() ||
+                 e.has<text_input::HasTextAreaState>();
+        });
+    if (!res.ambiguous.empty()) { cmd.fail(res.ambiguous); return; }
+    if (!res.entity) {
+      cmd.retry_with(std::format("Text field not found: {}", pos[0]));
       return;
     }
-    cmd.retry_with(std::format("Text field not found: {}", name));
+    Entity &entity = res.entity.asE();
+    const std::string got =
+        entity.has<text_input::HasTextAreaState>()
+            ? entity.get<text_input::HasTextAreaState>().selected_text()
+            : entity.get<text_input::HasTextInputState>().selected_text();
+    if (got == pos[1]) {
+      cmd.consume();
+    } else {
+      cmd.retry_with(std::format("'{}' has \"{}\" selected, expected \"{}\"",
+                                 pos[0], got, pos[1]));
+    }
   }
 };
 
@@ -1433,63 +1374,60 @@ struct HandlePointerUICommand : System<PendingE2ECommand> {
   }
 };
 
-// Handle 'expect_input_selection name start end' - asserts selection range
 template <typename InputAction>
 struct HandleExpectInputSelectionCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
     if (cmd.is_consumed() || !cmd.is("expect_input_selection"))
       return;
-    if (!cmd.has_args(3)) {
+    std::string scope_name, scope_err;
+    auto pos = strip_trailing_scope(cmd, 0, 3, scope_name, scope_err);
+    if (!scope_err.empty()) { cmd.fail(scope_err); return; }
+    if (pos.size() < 3) {
       cmd.fail(
           "expect_input_selection requires name, start, and end positions");
       return;
     }
-
-    const auto &name = cmd.arg(0);
-    auto expected_start = cmd.maybe_arg_as<int>(1);
-    auto expected_end = cmd.maybe_arg_as<int>(2);
-    if (!expected_start || !expected_end) {
+    int expected_start = 0, expected_end = 0;
+    try {
+      expected_start = std::stoi(pos[1]);
+      expected_end = std::stoi(pos[2]);
+    } catch (...) {
       cmd.fail("expect_input_selection: start and end must be integers");
       return;
     }
-
-    // HasTextAreaState is a distinct component, not a HasTextInputState, so a
-    // query for the latter alone never matches a multiline field -- which made
-    // this assert unusable on exactly the widget most likely to need it.
-    auto query =
-        ui_query()
-            .whereHasComponent<ui::UIComponent>()
-            .whereHasComponent<ui::UIComponentDebug>()
-            .whereLambda([&](const Entity &e) {
-              return e.get<ui::UIComponentDebug>().name() == name &&
-                     (e.has<text_input::HasTextInputState>() ||
-                      e.has<text_input::HasTextAreaState>());
-            })
-            .first();
-
-    for (Entity &entity : query.gen()) {
-      const bool multiline = entity.has<text_input::HasTextAreaState>();
-      const auto sel_start =
-          multiline
-              ? entity.get<text_input::HasTextAreaState>().selection_start()
-              : entity.get<text_input::HasTextInputState>().selection_start();
-      const auto sel_end =
-          multiline
-              ? entity.get<text_input::HasTextAreaState>().selection_end()
-              : entity.get<text_input::HasTextInputState>().selection_end();
-      auto actual_start = static_cast<int>(sel_start);
-      auto actual_end = static_cast<int>(sel_end);
-      if (actual_start == *expected_start && actual_end == *expected_end) {
-        cmd.consume();
-        return;
-      } else {
-        cmd.retry_with(std::format(
-            "Input '{}' selection is [{}, {}), expected [{}, {})", name,
-            actual_start, actual_end, *expected_start, *expected_end));
-        return;
-      }
+    EntityID scope = -1;
+    if (!scope_or_done(cmd, "expect_input_selection", scope_name, true, scope))
+      return;
+    auto res = resolve_ui_single(
+        pos[0], scope, UIMatchKind::DebugName, UIVisibility::Any,
+        [](Entity &e) {
+          return e.has<text_input::HasTextInputState>() ||
+                 e.has<text_input::HasTextAreaState>();
+        });
+    if (!res.ambiguous.empty()) { cmd.fail(res.ambiguous); return; }
+    if (!res.entity) {
+      cmd.retry_with(std::format("Text input not found: {}", pos[0]));
+      return;
     }
-    cmd.retry_with(std::format("Text input not found: {}", name));
+    Entity &entity = res.entity.asE();
+    const bool multiline = entity.has<text_input::HasTextAreaState>();
+    const auto sel_start =
+        multiline
+            ? entity.get<text_input::HasTextAreaState>().selection_start()
+            : entity.get<text_input::HasTextInputState>().selection_start();
+    const auto sel_end =
+        multiline
+            ? entity.get<text_input::HasTextAreaState>().selection_end()
+            : entity.get<text_input::HasTextInputState>().selection_end();
+    auto actual_start = static_cast<int>(sel_start);
+    auto actual_end = static_cast<int>(sel_end);
+    if (actual_start == expected_start && actual_end == expected_end) {
+      cmd.consume();
+    } else {
+      cmd.retry_with(std::format(
+          "Input '{}' selection is [{}, {}), expected [{}, {})", pos[0],
+          actual_start, actual_end, expected_start, expected_end));
+    }
   }
 };
 
@@ -1783,31 +1721,23 @@ struct HandleAssertUICommand : System<PendingE2ECommand> {
     if (render_checkpoint_pending(cmd)) return;
 
     std::string name = cmd.args[0];
-
-    // Find entity by debug name. No visibility filter here: geometry
-    // assertions are how a script verifies clip behaviour itself (a
-    // scroll-clip test asserts a clipped row's position), so existence in
-    // the rendered tree is the right bar. Text matching filters instead.
-    auto opt = ui_query()
-        .whereHasComponent<ui::UIComponent>()
-        .whereHasComponent<ui::UIComponentDebug>()
-        .whereLambda([&](const Entity &e) {
-          return e.get<ui::UIComponentDebug>().name_value == name &&
-                 e.get<ui::UIComponent>().was_rendered_to_screen;
-        })
-        .gen_first();
-
-    if (!opt.has_value()) {
+    std::string scope_name, scope_err;
+    auto props = split_scope_props(cmd, 1, scope_name, scope_err);
+    if (!scope_err.empty()) { cmd.fail(scope_err); return; }
+    EntityID scope = -1;
+    if (!scope_or_done(cmd, "assert_ui", scope_name, true, scope)) return;
+    auto res = resolve_ui_single(name, scope, UIMatchKind::DebugName,
+                                 UIVisibility::Rendered);
+    if (!res.ambiguous.empty()) { cmd.fail(res.ambiguous); return; }
+    if (!res.entity) {
       cmd.retry();  // Element may not be rendered yet
       return;
     }
-
-    Entity &entity = opt.asE();
-    // Check each prop=value assertion
-    for (size_t i = 1; i < cmd.args.size(); i++) {
+    Entity &entity = res.entity.asE();
+    for (const std::string &p : props) {
       std::string prop, expected;
-      if (!parse_prop_assertion(cmd.args[i], prop, expected)) {
-        cmd.fail(std::format("assert_ui: malformed assertion '{}'", cmd.args[i]));
+      if (!parse_prop_assertion(p, prop, expected)) {
+        cmd.fail(std::format("assert_ui: malformed assertion '{}'", p));
         return;
       }
       std::string err = check_ui_property(entity, prop, expected);
@@ -1875,86 +1805,64 @@ struct HandleAssertUITextCommand : System<PendingE2ECommand> {
     if (render_checkpoint_pending(cmd)) return;
 
     std::string text = cmd.args[0];
-
-    // in=<debug_name> restricts the match to that element's subtree.
-    // A bare `absent` asserts no element carries the exact label (in scope).
-    EntityID scope = -1;
+    std::string scope_name, scope_err;
+    auto rest = split_scope_props(cmd, 1, scope_name, scope_err);
+    if (!scope_err.empty()) { cmd.fail(scope_err); return; }
     bool absent = false;
-    std::vector<size_t> prop_args;
-    for (size_t i = 1; i < cmd.args.size(); i++) {
-      if (cmd.args[i] == "absent") {
+    std::vector<std::string> props;
+    for (const std::string &tok : rest) {
+      if (tok == "absent") {
         absent = true;
         continue;
       }
       std::string prop, expected;
-      if (!parse_prop_assertion(cmd.args[i], prop, expected)) {
-        cmd.fail(std::format("assert_ui_text: malformed '{}'", cmd.args[i]));
+      if (!parse_prop_assertion(tok, prop, expected)) {
+        cmd.fail(std::format("assert_ui_text: malformed '{}'", tok));
         return;
       }
-      if (prop == "in") {
-        auto scope_opt = ui_query()
-            .whereHasComponent<ui::UIComponentDebug>()
-            .whereLambda([&](const Entity &e) {
-              return e.get<ui::UIComponentDebug>().name_value == expected;
-            })
-            .gen_first();
-        if (!scope_opt.has_value()) {
-          cmd.retry_with(std::format("assert_ui_text: scope '{}' not found", expected));
-          return;
-        }
-        scope = scope_opt.asE().id;
-      } else {
-        prop_args.push_back(i);
-      }
+      props.push_back(tok);
     }
-    if (absent && !prop_args.empty()) {
+    if (absent && !props.empty()) {
       cmd.fail("assert_ui_text: 'absent' cannot combine with property checks");
       return;
     }
-
-    // Collect every match. Checking the first one made the assertion depend
-    // on iteration order: a passing element elsewhere could not save it,
-    // and a passing one could not say which element it asserted.
-    std::vector<Entity *> matches;
-    auto query = ui_query()
-        .whereHasComponent<ui::UIComponent>()
-        .whereHasComponent<ui::HasLabel>()
-        .whereLambda([&](const Entity &e) {
-          return e.get<ui::HasLabel>().label == text &&
-                 e.get<ui::UIComponent>().was_rendered_to_screen &&
-                 is_partially_visible(e) &&
-                 (scope == -1 || is_within_scope(e, scope));
-        });
-    for (Entity &e : query.gen()) matches.push_back(&e);
-
+    EntityID scope = -1;
+    if (!scope_or_done(cmd, "assert_ui_text", scope_name, true, scope))
+      return;
+    auto candidates = resolve_ui_candidates(
+        text, scope, UIMatchKind::TextExact, UIVisibility::RenderedPartiallyVisible);
     if (absent) {
       if (cmd.frames_alive == 0) {
         cmd.retry();  // Let a frame render; absence before that proves nothing.
         return;
       }
-      if (matches.empty()) {
+      if (candidates.empty()) {
         cmd.consume();
         return;
       }
       cmd.retry_with(std::format("assert_ui_text \"{}\": {} matching element(s) still present",
-                                 text, matches.size()));
+                                 text, candidates.size()));
       return;
     }
-
-    if (matches.empty()) {
+    if (candidates.empty()) {
       cmd.retry();
       return;
     }
-    if (matches.size() > 1) {
-      cmd.fail(std::format("assert_ui_text \"{}\": {} elements match; add in=<scope> to name one",
-                          text, matches.size()));
+    if (candidates.size() > 1) {
+      std::string list;
+      for (Entity &e : candidates) {
+        if (!list.empty()) list += "; ";
+        list += describe_candidate(e);
+      }
+      cmd.fail(std::format("{} elements match '{}'; scope it with under=<scope> "
+                           "(in=<scope> accepted as alias) — candidates: {}",
+                           candidates.size(), text, list));
       return;
     }
-
-    Entity &entity = *matches[0];
-    for (size_t i : prop_args) {
+    Entity &entity = candidates[0].get();
+    for (const std::string &tok : props) {
       std::string prop, expected;
-      parse_prop_assertion(cmd.args[i], prop, expected);
+      parse_prop_assertion(tok, prop, expected);
       std::string err = check_ui_property(entity, prop, expected);
       if (!err.empty()) {
         cmd.retry_with(std::format("assert_ui_text \"{}\": {}", text, err));
