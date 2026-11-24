@@ -34,6 +34,18 @@ inline void note_component_mutation() {
   COMPONENT_MUTATION_GEN.fetch_add(1, std::memory_order_relaxed);
 }
 
+inline std::array<std::atomic<std::size_t>, max_num_components>
+    COMPONENT_MUTATION_GENS{};
+inline void note_component_mutation(ComponentID id) {
+  if (id < max_num_components)
+    COMPONENT_MUTATION_GENS[id].fetch_add(1, std::memory_order_relaxed);
+}
+inline std::size_t component_mutation_gen(ComponentID id) {
+  if (id >= max_num_components)
+    return 0;
+  return COMPONENT_MUTATION_GENS[id].load(std::memory_order_relaxed);
+}
+
 struct Entity {
   EntityID id;
   int entity_type = 0;
@@ -60,10 +72,9 @@ struct Entity {
   virtual ~Entity() {}
 
   void recycle(EntityID new_id) {
-    if (componentSet.any())
-      note_component_mutation();
     for (size_t i = componentSet.next_set(0); i < max_num_components;
          i = componentSet.next_set(i + 1)) {
+      note_component_mutation(i);
       componentArray[i].reset();
     }
     componentSet.reset();
@@ -145,9 +156,10 @@ struct Entity {
 #endif
       return;
     }
-    componentSet.set(components::get_type_id<T>(), false);
-    componentArray[components::get_type_id<T>()].reset();
-    note_component_mutation();
+    const ComponentID component_id = components::get_type_id<T>();
+    componentSet.set(component_id, false);
+    componentArray[component_id].reset();
+    note_component_mutation(component_id);
   }
 
   template <typename T, typename... TArgs> T &addComponent(TArgs &&...args) {
@@ -169,7 +181,7 @@ struct Entity {
     const ComponentID component_id = components::get_type_id<T>();
     componentArray[component_id] = std::move(component);
     componentSet.set(component_id, true);
-    note_component_mutation();
+    note_component_mutation(component_id);
 
 #if defined(AFTER_HOURS_DEBUG)
     log_trace("your set is now {}", componentSet.to_string());
