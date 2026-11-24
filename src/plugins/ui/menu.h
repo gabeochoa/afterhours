@@ -431,20 +431,19 @@ popover(HasUIContext auto &ctx, EntityParent ep_pair,
   init_component(ctx, ep_pair, root_config, ComponentType::Div, false,
                  "popover_root");
 
-  if (!open && !entity.template has<HasMenuState>())
-    return ElementResult{false, entity};
+  const bool was_open =
+      entity.template has<HasMenuState>() &&
+      entity.template get<HasMenuState>().was_open_last_frame;
+  if (!open && !was_open) return ElementResult{false, entity};
   auto &state = entity.template addComponentIfMissing<HasMenuState>();
-  if (!open && !state.was_open_last_frame)
-    return ElementResult{false, entity};
 
-  const bool was_open = state.was_open_last_frame;
-  const bool caller_open = open;
-  if (detail::dismiss_menu(ctx, state, open)) {
+  const bool dismissed = detail::dismiss_menu(ctx, state, open);
+  const bool final_frame = dismissed && open && was_open;
+  if (dismissed && !final_frame) {
     open = false;
-    state.was_open_last_frame = false;
-    if (!(caller_open && was_open))
-      return ElementResult{false, entity};
+    return ElementResult{false, entity};
   }
+  if (final_frame) open = false;
 
   const float width =
       config.size.x_axis.value > 0.f ? config.size.x_axis.value : anchor.width;
