@@ -1,3 +1,5 @@
+#include <afterhours/src/plugin.h>
+
 #include "ui_test_harness.h"
 
 #ifdef AFTER_HOURS_USE_RAYLIB
@@ -242,6 +244,19 @@ TEST(custom_config_plugin_needs_no_base_class) {
   auto &entities = coll.get_entities_for_mod();
   sm.tick(entities, 0.016f);
   CHECK_APPROX(coll.get_singleton_cmp_enforce<WeatherState>().wind, 2.5f);
+}
+
+TEST(plugin_h_provides_installable_plugin_types) {
+  static_assert(InstallablePlugin<WeatherPlugin>);
+  static_assert(developer::PluginCore<timer>);
+  static_assert(developer::plugin_ok<timer>);
+  EntityCollection coll;
+  EntityHelper::ScopedCollection scope(coll);
+  SystemManager sm;
+  PluginContext ctx(sm, coll);
+  ctx.use(WeatherPlugin{.wind = 3.f});
+  CHECK(coll.has_singleton<WeatherState>());
+  CHECK_APPROX(coll.get_singleton_cmp_enforce<WeatherState>().wind, 3.f);
 }
 
 TEST(timer_plugin_end_to_end) {
