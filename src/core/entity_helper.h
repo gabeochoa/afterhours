@@ -73,6 +73,7 @@ struct EntityHelper {
   static Entities &get_entities_for_mod() {
     return get_default_collection().get_entities_for_mod();
   }
+
   static const Entities &get_entities() {
     return get_default_collection().get_entities();
   }
@@ -199,6 +200,14 @@ struct EntityHelper {
     get_default_collection().delete_all_entities(include_permanent);
   }
 
+  static void reset_for_new_session() {
+    get_default_collection().reset_for_new_session();
+  }
+
+  static std::uint64_t session_generation() {
+    return get_default_collection().session_generation();
+  }
+
   static void forEachEntity(const std::function<ForEachFlow(Entity &)> &cb) {
     for (const auto &e : get_entities()) {
       if (!e)
@@ -230,5 +239,13 @@ struct EntityHelper {
     return get_default_collection().getEntityForIDEnforce(id);
   }
 };
+
+template <typename Component> bool has_singleton() {
+  return EntityHelper::has_singleton<Component>();
+}
+
+template <typename Component> Component &get_singleton() {
+  return EntityHelper::get_singleton_cmp_enforce<Component>();
+}
 
 } // namespace afterhours
