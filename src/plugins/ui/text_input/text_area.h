@@ -426,7 +426,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Render cursor when focused
   if (state.is_focused) {
-    bool show_cursor = update_blink(state, 0.016f);
+    bool show_cursor = update_blink(state, ctx.dt > 0.f ? ctx.dt : (1.f / 60.f));
 
     // Use computed padding for positioning
     float pad_left = field_cmp.computed_padd[Axis::left];
@@ -618,9 +618,15 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       const bool wants_newline = !config.text_area_single_line &&
                                  (!config.text_area_submit_on_enter || shift);
       if (wants_newline) {
-        if (editable && insert_newline(state)) {
-          reset_blink(state);
-          text_changed = true;
+        if (editable) {
+          state.push_undo_snapshot();
+          if (state.has_selection())
+            delete_selection(state);
+          if (insert_newline(state)) {
+            state.clear_selection();
+            reset_blink(state);
+            text_changed = true;
+          }
         }
       } else if (entity.template has<HasTextInputListener>()) {
         if (auto &listener = entity.template get<HasTextInputListener>();

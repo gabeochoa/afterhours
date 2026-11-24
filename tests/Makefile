@@ -96,8 +96,10 @@ ALL_TESTS := \
 	ui_update_lifecycle_single_test \
 	drag_preview_test \
 	drag_scroll_hit_test \
+	parent_gesture_test \
 	label_clip_test \
 	label_test \
+	scroll_clip_decoration_test \
 	animation_test \
 	reveal_test \
 	motion_config_test \
@@ -195,11 +197,13 @@ ALL_TESTS := \
 	e2e_key_command_test \
 	e2e_type_command_test \
 	overlay_layer_test \
+	popup_overlay_layer_test \
 	unhandled_command_test \
 	e2e_retry_test \
 	e2e_resize_steps_test \
 	e2e_render_checkpoint_test \
 	e2e_window_size_test \
+	e2e_app_test \
 	e2e_audio_commands_test \
 	e2e_audio_volume_test \
 	e2e_audio_volume_disabled_test \
@@ -209,10 +213,12 @@ ALL_TESTS := \
 	e2e_is_running_test \
 	e2e_defer_unknown_test \
 	e2e_pending_list_test \
+	e2e_unread_press_test \
 	e2e_results_test \
 	e2e_script_headers_test \
 	point_in_element_test \
 	e2e_ui_gestures_test \
+	e2e_name_lookup_test \
 	mouse_axis_action_test \
 	card_and_type_scale_test \
 	fixed_timestep_test \
@@ -314,6 +320,7 @@ lighting_zones_test \
 	color_swatch_test \
 	overlay_placement_test \
 	tooltip_test \
+	delayed_busy_test \
 	progress_bar_test \
 	psx_budget_test \
 	psx_backend_test \
@@ -422,6 +429,7 @@ endif
 
 RAYLIB_TESTS := \
 	auto_text_color_test \
+	e2e_app_test \
 	skeletal_test \
 	math3d_test \
 	value_types_test \
@@ -475,6 +483,7 @@ RAYLIB_TESTS := \
 	widget_retirement_test \
 	text_line_edit_test \
 	grapheme_edit_test \
+	delayed_busy_test \
 	progress_bar_test \
 	render_order_test \
 	setup_test \
@@ -503,6 +512,7 @@ RAYLIB_TESTS := \
 	mouse_axis_action_test \
 	unhandled_command_test \
 	overlay_layer_test \
+	popup_overlay_layer_test \
 	press_delay_test \
 	graphics_key_injection_test \
 	e2e_gamepad_test \
