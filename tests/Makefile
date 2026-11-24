@@ -336,6 +336,7 @@ lighting_zones_test \
 	random_engine_test \
 	render_order_test \
 	draw_over_test \
+	imm_draw_order_test \
 	scroll_smoothing_test \
 	scrollbar_gutter_test \
 	setup_test \
