@@ -150,7 +150,7 @@ struct modal : developer::Plugin {
         ClosedBy closed_by = ClosedBy::CloseRequest;
         bool show_close_button = true;
         size_t open_order = 0;
-        ui::FocusReturnToken previously_focused_element{};
+        EntityHandle previously_focused_element = EntityHandle::invalid();
         int render_layer = static_cast<int>(RenderLayer::Modal);
         std::string title;
 
@@ -163,7 +163,7 @@ struct modal : developer::Plugin {
 
         // Initialize modal state when opening
         void open_with(const ModalConfig &config,
-                       const ui::FocusReturnToken &focus_to_restore) {
+                       EntityHandle focus_to_restore) {
             result = DialogResult::Pending;
             backdrop_color = config.backdrop_color;
             closed_by = config.closed_by;
@@ -356,7 +356,7 @@ struct modal : developer::Plugin {
                     root.modal_stack.erase(it);
                 }
                 if (ctx.focus_id == ctx.ROOT || is_entity_in_tree(entity.id, ctx.focus_id))
-                    ctx.restore_focus_return(m.previously_focused_element);
+                    ctx.restore_focus(m.previously_focused_element);
                 m.phase = Modal::Phase::Hidden;
             };
 
@@ -364,7 +364,7 @@ struct modal : developer::Plugin {
                 if (m.exiting()) {
                     presence.to(1.f, config.enter_motion.value_or(motion::Spring::smooth()));
                 } else {
-                    m.open_with(config, ctx.capture_focus_return());
+                    m.open_with(config, ctx.capture_focus());
                     auto &root = get_modal_root();
                     m.open_order = root.modal_sequence++;
                     root.modal_stack.push_back(entity.id);
@@ -436,15 +436,20 @@ struct modal : developer::Plugin {
             // (Left/Right) and bottom/top sheets & banners.
             float sw = static_cast<float>(screen_w);
             float sh = static_cast<float>(screen_h);
-            float cx = (sw - width_px) / 2.0f;
-            float cy = (sh - height_px) / 2.0f;
+            const bool adaptive =
+                ctx.scaling_mode.value_or(UIStylingDefaults::get().scaling_mode) ==
+                ScalingMode::Adaptive;
+            const float pos_scale =
+                adaptive && ctx.theme.ui_scale > 0.f ? ctx.theme.ui_scale : 1.f;
+            float cx = (sw / pos_scale - width_px) / 2.0f;
+            float cy = (sh / pos_scale - height_px) / 2.0f;
             float x_pos = cx, y_pos = cy;
             switch (config.anchor) {
             case ModalAnchor::Center: break;
             case ModalAnchor::Top: y_pos = 0.f; break;
-            case ModalAnchor::Bottom: y_pos = sh - height_px; break;
+            case ModalAnchor::Bottom: y_pos = sh / pos_scale - height_px; break;
             case ModalAnchor::Left: x_pos = 0.f; break;
-            case ModalAnchor::Right: x_pos = sw - width_px; break;
+            case ModalAnchor::Right: x_pos = sw / pos_scale - width_px; break;
             }
 
             // Create the full-screen backdrop at the layout root. Its layer
@@ -969,7 +974,7 @@ struct modal : developer::Plugin {
                     auto &m = opt->template get<Modal>();
                     if (context->focus_id == context->ROOT ||
                         detail::is_entity_in_tree(id, context->focus_id))
-                        context->restore_focus_return(m.previously_focused_element);
+                        context->restore_focus(m.previously_focused_element);
                     m.was_open_last_frame = false;
                     m.pending_close = false;
                     m.phase = Modal::Phase::Hidden;

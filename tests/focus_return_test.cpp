@@ -23,12 +23,11 @@ TEST(capture_move_restore_lands_on_the_captured_control) {
   h.begin_frame();
 
   h.context().set_focus(a.id);
-  FocusReturnToken token = h.context().capture_focus_return();
-  CHECK(token.valid());
-  CHECK(token.handle.is_valid());
+  EntityHandle token = h.context().capture_focus();
+  CHECK(token.is_valid());
 
   h.context().set_focus(b.id);
-  CHECK(h.context().restore_focus_return(token));
+  CHECK(h.context().restore_focus(token));
   CHECK(h.context().focus_id == a.id);
 }
 
@@ -39,11 +38,11 @@ TEST(restore_after_delete_is_a_safe_no_op) {
   h.begin_frame();
 
   h.context().set_focus(a.id);
-  FocusReturnToken token = h.context().capture_focus_return();
+  EntityHandle token = h.context().capture_focus();
   h.context().set_focus(b.id);
   delete_entity(h, a);
 
-  CHECK(!h.context().restore_focus_return(token));
+  CHECK(!h.context().restore_focus(token));
   CHECK(h.context().focus_id == b.id);
 }
 
@@ -55,7 +54,7 @@ TEST(restore_does_not_follow_a_reused_id) {
 
   h.context().set_focus(a.id);
   const EntityID dead_id = a.id;
-  FocusReturnToken token = h.context().capture_focus_return();
+  EntityHandle token = h.context().capture_focus();
   h.context().set_focus(b.id);
   delete_entity(h, a);
 
@@ -63,7 +62,7 @@ TEST(restore_does_not_follow_a_reused_id) {
   CHECK(c.id == dead_id);
   h.begin_frame();
 
-  CHECK(!h.context().restore_focus_return(token));
+  CHECK(!h.context().restore_focus(token));
   CHECK(h.context().focus_id == b.id);
 }
 
@@ -75,22 +74,22 @@ TEST(restore_refuses_a_control_that_cannot_take_focus) {
   h.begin_frame();
 
   h.context().set_focus(b.id);
-  FocusReturnToken token = h.context().capture_focus_return();
+  EntityHandle token = h.context().capture_focus();
   h.context().set_focus(a.id);
 
-  CHECK(!h.context().restore_focus_return(token));
+  CHECK(!h.context().restore_focus(token));
   CHECK(h.context().focus_id == a.id);
 }
 
 TEST(capture_with_nothing_focused_is_an_empty_token) {
   ImmTestHarness h;
-  FocusReturnToken token = h.context().capture_focus_return();
+  EntityHandle token = h.context().capture_focus();
   Entity &b = make_focusable(h);
   h.begin_frame();
   h.context().set_focus(b.id);
 
-  CHECK(!token.valid());
-  CHECK(!h.context().restore_focus_return(token));
+  CHECK(token.is_invalid());
+  CHECK(!h.context().restore_focus(token));
   CHECK(h.context().focus_id == b.id);
 }
 
@@ -99,16 +98,15 @@ TEST(capture_before_merge_still_generation_checks) {
   Entity &a = make_focusable(h);
 
   h.context().set_focus(a.id);
-  FocusReturnToken token = h.context().capture_focus_return();
-  CHECK(token.valid());
-  CHECK(token.handle.is_valid());
+  EntityHandle token = h.context().capture_focus();
+  CHECK(token.is_valid());
 
   delete_entity(h, a);
   Entity &b = make_focusable(h);
   h.begin_frame();
   h.context().set_focus(b.id);
 
-  CHECK(!h.context().restore_focus_return(token));
+  CHECK(!h.context().restore_focus(token));
   CHECK(h.context().focus_id == b.id);
 }
 

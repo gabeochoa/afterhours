@@ -96,6 +96,35 @@ struct HasClickActivationMode : BaseComponent {
   explicit HasClickActivationMode(ClickActivationMode mode_) : mode(mode_) {}
 };
 
+struct ShortcutBinding {
+  int action = -1;
+  std::function<bool(Entity &)> handler;
+};
+struct HasShortcuts : BaseComponent {
+  std::vector<ShortcutBinding> bindings;
+  HasShortcuts() = default;
+  explicit HasShortcuts(std::vector<ShortcutBinding> b)
+      : bindings(std::move(b)) {}
+  void add(int action, std::function<bool(Entity &)> handler) {
+    bindings.push_back(ShortcutBinding{action, std::move(handler)});
+  }
+  bool dispatch(int action, Entity &self) {
+    for (auto &b : bindings) {
+      if (b.action != action || !b.handler)
+        continue;
+      if (b.handler(self))
+        return true;
+    }
+    return false;
+  }
+  bool handles(int action) const {
+    for (const auto &b : bindings)
+      if (b.action == action && b.handler)
+        return true;
+    return false;
+  }
+};
+
 // Invisible to hit-testing: never hot or active, the element behind is picked.
 // Not with_skip_tabbing, which is keyboard focus order only.
 struct IgnorePointerEvents : BaseComponent {};
@@ -285,6 +314,9 @@ struct HasImage : BaseComponent {
   std::optional<afterhours::texture_manager::Rectangle> source_rect;
   afterhours::texture_manager::HasTexture::Alignment alignment =
       afterhours::texture_manager::HasTexture::Alignment::Center;
+  // Per-draw filter override (graphics::TEXTURE_FILTER_*); nullopt = the
+  // texture's own filter, which is also how batching stays unchanged.
+  std::optional<int> filter;
 
   HasImage(
       afterhours::texture_manager::Texture tex,
@@ -338,6 +370,10 @@ struct HasUIModifiers : BaseComponent {
   float origin_x = 0.5f;
   float origin_y = 0.5f;
 
+  Vector2Type rotation_center(RectangleType rect) const {
+    return {rect.x + rect.width * origin_x, rect.y + rect.height * origin_y};
+  }
+
   RectangleType apply_modifier(RectangleType rect) const {
     // Apply scale first
     float s = scale;
@@ -358,6 +394,11 @@ struct HasUIModifiers : BaseComponent {
     }
     return rect;
   }
+};
+
+struct HasHitExpand : BaseComponent {
+  float pad_x = 0.f;
+  float pad_y = 0.f;
 };
 
 // Shadow styles for UI elements
@@ -581,6 +622,7 @@ struct HasScrollView : BaseComponent {
   // content read zero on frame one and quietly built everything.
   std::optional<Vector2Type> viewport_size;
   float scroll_speed = 20.0f;         // Pixels per scroll wheel notch
+  float scroll_speed_precise = 20.0f;
   // Fraction of the remaining distance covered per 60fps frame. 1.0 (default)
   // snaps, matching the behaviour before smoothing existed; ~0.25 glides.
   float scroll_smoothing = 1.0f;
@@ -620,6 +662,14 @@ struct HasScrollView : BaseComponent {
   }
   void scroll_to_left() {
     scroll_offset.x = scroll_target.x = last_eased_offset.x = 0.f;
+  }
+
+  // Jump to a content offset in one call, on both axes at once. Clamped to
+  // the measured extents; an unmeasured view takes the raw value and clamps
+  // on its first measure (same sentinel rule as the ends).
+  void scroll_to(Vector2Type offset) {
+    scroll_offset = scroll_target = last_eased_offset = offset;
+    clamp_scroll();
   }
   void scroll_to_right() {
     scroll_offset.x = scroll_target.x = last_eased_offset.x = right_offset();
@@ -693,6 +743,7 @@ struct HasScrollView : BaseComponent {
 
   // Off for a view that supplies its own bar, or where one would be noise.
   bool show_scrollbar = true;
+  bool scrollbar_gutter = false;
   // Set while the thumb is held. The drag owns scroll_offset until released.
   bool dragging_scrollbar = false;
   bool drag_is_vertical = true;
@@ -714,7 +765,8 @@ struct HasScrollView : BaseComponent {
 // text). Rows are in the caller's unscaled units.
 struct HasVirtualListIndex : BaseComponent {
   std::vector<float> heights;
-  std::vector<float> prefix; // prefix[i] = height of rows [0, i)
+  // double: a float32 prefix sum drifts by hundreds of px at 100k rows
+  std::vector<double> prefix; // prefix[i] = height of rows [0, i)
   // The pending re-measure range [dirty_from, dirty_to). Its empty value is
   // the union identity [kDirtyEmpty, 0), so invalidate is an unconditional
   // min/max with no empty case to branch on.
@@ -799,6 +851,7 @@ struct HasClipChildren : BaseComponent {};
 
 // Tag IDs for UI overlay input exclusivity.
 enum class UITag : TagId {
+  DrawOnly = 41,
   InputExclusivity =
       40, // Entity's tree receives exclusive input, blocking all
           // other entities. Used by overlay components (dropdowns,

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../../animation/instant.h"
 #include "../../clipboard.h"
 #include "../text_selection.h"
 #include "../text_units.h"
@@ -214,6 +215,8 @@ inline void move_cursor_right(AnyTextInputState auto &s) {
 
 // Update blink timer, returns true if cursor visible
 inline bool update_blink(AnyTextInputState auto &s, float dt) {
+  if (motion::is_instant())
+    return true;
   s.cursor_blink_timer += dt;
   if (s.cursor_blink_timer >= s.cursor_blink_rate * 2.0f)
     s.cursor_blink_timer = 0.0f;
