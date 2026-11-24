@@ -11,6 +11,9 @@
 #include <cstdint>
 #include <cstdlib>
 #include <limits>
+#include <string>
+#include <utility>
+#include <vector>
 
 // TODO eventually match this exactly 1-1 with UI input system so we can share
 // concepts
@@ -34,6 +37,12 @@ inline std::array<int, 512> synthetic_press_count{};
 inline std::array<int, 512> synthetic_press_delay{};
 inline std::array<int, 512> synthetic_release_count{};
 inline std::array<int, 512> synthetic_release_delay{};
+inline std::array<bool, 512> synthetic_press_read{};
+inline std::vector<std::string> unread_presses;
+
+inline void note_unread_press(std::string label) {
+  unread_presses.push_back(std::move(label));
+}
 
 struct MouseState {
   Position pos{}; // Uses Position from concepts.h (satisfies HasPosition)
@@ -136,6 +145,7 @@ inline void set_key_down(int key) {
     detail::synthetic_press_count[key]++;
     detail::synthetic_press_delay[key] = 1;
     detail::key_press_queue.push({key, 1});
+    detail::synthetic_press_read[key] = false;
   }
 }
 
@@ -162,7 +172,10 @@ inline void set_key_up(int key) {
 
 /// Check if key is synthetically held
 inline bool is_key_down(int key) {
-  return key >= 0 && key < 512 && detail::synthetic_keys[key];
+  if (key < 0 || key >= 512 || !detail::synthetic_keys[key])
+    return false;
+  detail::synthetic_press_read[key] = true;
+  return true;
 }
 
 /// Check if a synthetic key press is available this frame.
@@ -172,8 +185,11 @@ inline bool is_key_down(int key) {
 inline bool consume_press(int key) {
   if (key < 0 || key >= 512)
     return false;
-  return detail::synthetic_press_count[key] > 0 &&
-         detail::synthetic_press_delay[key] == 0;
+  const bool pressed = detail::synthetic_press_count[key] > 0 &&
+                       detail::synthetic_press_delay[key] == 0;
+  if (pressed)
+    detail::synthetic_press_read[key] = true;
+  return pressed;
 }
 
 /// Pop the next mature injected key press, or 0 when none is ready.
@@ -362,12 +378,18 @@ inline bool is_mouse_button_pressed() {
   return pressed;
 }
 inline bool is_mouse_button_down() {
+  if (detail::mouse.just_pressed)
+    detail::mouse.press_read = true;
   return detail::mouse.active && detail::mouse.left_down;
 }
 inline bool is_mouse_right_button_down() {
+  if (detail::mouse.right_just_pressed)
+    detail::mouse.right_press_read = true;
   return detail::mouse.active && detail::mouse.right_down;
 }
 inline bool is_mouse_middle_button_down() {
+  if (detail::mouse.middle_just_pressed)
+    detail::mouse.middle_press_read = true;
   return detail::mouse.active && detail::mouse.middle_down;
 }
 inline bool is_mouse_middle_button_pressed() {
@@ -466,7 +488,9 @@ inline void reset_frame() {
     if (detail::synthetic_press_delay[i] > 0) {
       detail::synthetic_press_delay[i]--;
     } else if (detail::synthetic_press_count[i] > 0) {
-      detail::synthetic_press_count[i]--;
+      if (--detail::synthetic_press_count[i] == 0 &&
+          !detail::synthetic_press_read[i])
+        detail::note_unread_press("key '" + key_to_name(i) + "'");
     }
     if (detail::synthetic_release_delay[i] > 0) {
       detail::synthetic_release_delay[i]--;
@@ -496,6 +520,12 @@ inline void reset_frame() {
   detail::key_press_queue = std::move(matured);
 }
 
+inline std::vector<std::string> take_unread_presses() {
+  std::vector<std::string> out = std::move(detail::unread_presses);
+  detail::unread_presses.clear();
+  return out;
+}
+
 /// Clear all synthetic input state
 inline void reset_all() {
   detail::synthetic_keys.fill(false);
@@ -504,6 +534,8 @@ inline void reset_all() {
   detail::synthetic_release_count.fill(0);
   detail::synthetic_release_delay.fill(0);
   std::queue<detail::QueuedPress>().swap(detail::key_press_queue);
+  detail::synthetic_press_read.fill(false);
+  detail::unread_presses.clear();
   detail::mouse = {};
   detail::pending_click = {};
   detail::key_hold = {};
