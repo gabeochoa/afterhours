@@ -20,12 +20,14 @@ using namespace afterhours;
 
 int main(int argc, char **argv) {
     int test_frames = 0;
-    for (int i = 1; i < argc; ++i)
+    for (int i = 1; i < argc; ++i) {
         if (!std::strcmp(argv[i], "--test-frames") && i + 1 < argc)
             test_frames = std::atoi(argv[++i]);
-    if (test_frames > 0)
-        raylib::SetConfigFlags(raylib::FLAG_WINDOW_HIDDEN);
-    graphics::set_config_flags(graphics::FLAG_WINDOW_RESIZABLE);
+        else if (!std::strncmp(argv[i], "--test-frames=", 14))
+            test_frames = std::atoi(argv[i] + 14);
+    }
+    graphics::set_config_flags(graphics::FLAG_WINDOW_RESIZABLE |
+                               (test_frames > 0 ? raylib::FLAG_WINDOW_HIDDEN : 0));
     graphics::init_window(1280, 720, "model_loading");
     graphics::set_target_fps(60);
 

@@ -171,9 +171,8 @@ int main(int argc, char **argv) {
             test_frames = std::max(0, atoi(argv[i] + 14));
     }
 
-    if (test_frames > 0)
-        raylib::SetConfigFlags(raylib::FLAG_WINDOW_HIDDEN);
-    graphics::set_config_flags(graphics::FLAG_WINDOW_RESIZABLE);
+    graphics::set_config_flags(graphics::FLAG_WINDOW_RESIZABLE |
+                               (test_frames > 0 ? raylib::FLAG_WINDOW_HIDDEN : 0));
     graphics::init_window(1280, 720, "model_stress");
     graphics::set_target_fps(0);
 
