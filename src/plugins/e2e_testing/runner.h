@@ -188,6 +188,11 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
         if (cmd.name == "type") {
             cmd.args.push_back(args.rest());
             cmd.wait_seconds = (cmd.args[0].size() + 2) * frame;
+        } else if (cmd.name == "expect_unread_key") {
+            cmd.args.push_back(args.next());
+            if (key_from_name(cmd.args[0]) == 0 || !args.empty())
+                args.error = "expect_unread_key requires one key name";
+            cmd.wait_ticks = 3; // let the injected press expire before checking
         } else if (cmd.name == "key" || cmd.name == "select_all") {
             std::string arg = args.next();
             if (cmd.name == "select_all") {
@@ -320,10 +325,14 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
                 cmd.name == "toggle_checkbox" || cmd.name == "expect_focused" ||
                 cmd.name == "right_click_ui" || cmd.name == "right_click_text";
             if (scoped_ui && !args.empty()) {
+                const auto start = static_cast<size_t>(iss.tellg());
                 std::vector<std::string> tokens;
-                const bool starts_quoted =
-                    args.input.peek() == '"';
-                while (!args.empty()) tokens.push_back(args.next());
+                std::vector<size_t> starts;
+                const bool starts_quoted = args.input.peek() == '"';
+                while (!args.empty()) {
+                    starts.push_back(static_cast<size_t>(iss.tellg()));
+                    tokens.push_back(args.next());
+                }
                 std::vector<std::string> scopes;
                 while (tokens.size() > 1 &&
                        (tokens.back().starts_with("under=") ||
@@ -334,10 +343,10 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
                 if (starts_quoted) {
                     for (auto &t : tokens) cmd.args.push_back(std::move(t));
                 } else if (!tokens.empty()) {
-                    std::string joined = tokens[0];
-                    for (size_t i = 1; i < tokens.size(); ++i)
-                        joined += " " + tokens[i];
-                    cmd.args.push_back(std::move(joined));
+                    // Free text is literal, including repeated spaces and quotes.
+                    const size_t end = scopes.empty() ? line.size() :
+                        line.find_last_not_of(" \t", starts[tokens.size()] - 1) + 1;
+                    cmd.args.push_back(line.substr(start, end - start));
                 }
                 for (auto it = scopes.rbegin(); it != scopes.rend(); ++it)
                     cmd.args.push_back(std::move(*it));
@@ -447,17 +456,31 @@ class E2ERunner {
                  script_results_.size(), commands_.size());
     }
 
+    std::optional<std::string> expected_unread;
+
     void fail_unread_presses() {
         for (const auto &label : input_injector::take_unread_presses()) {
+            if (expected_unread == label) {
+                expected_unread.reset();
+                continue;
+            }
             failed_ = true;
             current_script_errors_++;
             log_warn("[E2E ERROR] {} (line {}): injected press {} was never "
                      "read by any system",
                      current_script_name(), last_dispatched_line, label);
         }
+        if (expected_unread) {
+            failed_ = true;
+            current_script_errors_++;
+            log_warn("[E2E ERROR] {} (line {}): expected {} to expire unread",
+                     current_script_name(), last_dispatched_line, *expected_unread);
+            expected_unread.reset();
+        }
     }
 
     void reset() {
+        expected_unread.reset();
         test_input::reset_all();
         key_release_detail::reset();
         index_ = 0;
@@ -520,11 +543,12 @@ class E2ERunner {
 
         fail_unread_presses();
 
-        if (!wall_deadline || std::chrono::steady_clock::now() >= *wall_deadline)
-            elapsed_time_ += dt;
-
-        // Timeout check (only active time, not wait time)
-        if (timeout_seconds_ > 0 && elapsed_time_ > timeout_seconds_) {
+        if (!wall_deadline) elapsed_time_ += dt;
+        // Cleanup observes a wall deadline on the next system update. Charge
+        // only real time past it, not a full simulated tick for that handoff.
+        const float wall_overrun = wall_deadline ? std::max(0.f,
+            std::chrono::duration<float>(std::chrono::steady_clock::now() - *wall_deadline).count()) : 0.f;
+        if (timeout_seconds_ > 0 && elapsed_time_ + wall_overrun > timeout_seconds_) {
             timed_out_ = true;
             failed_ = true;
             current_script_errors_++;
@@ -789,6 +813,10 @@ class E2ERunner {
         auto &pending = entity.addComponent<PendingE2ECommand>();
         pending_cmds_.push_back(EntityHelper::getEntityAsSharedPtr(entity));
         pending.name = cmd.name;
+        if (cmd.name == "expect_unread_key") {
+            pending.name = "key";
+            expected_unread = "key '" + key_to_name(key_from_name(cmd.args[0])) + "'";
+        }
         pending.args = cmd.args;
         pending.line_number = cmd.line_number;
         pending.wait_until_seconds = cmd.wait_until_seconds;
