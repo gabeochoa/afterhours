@@ -363,4 +363,54 @@ TEST(virtual_list_overscan_survives_apply_overrides) {
             .virtual_list_overscan == 0);
 }
 
+// A float32 prefix sum drifted -369px at 100k x 25.6px rows (-13.6px at
+// 8192, floatinghotel's case); double accumulation must stay < 0.5px.
+TEST(measured_extents_do_not_drift_at_large_n) {
+  for (const size_t n : {size_t{8192}, size_t{100000}}) {
+    ImmTestHarness h;
+    EntityID list_id = -1;
+    h.begin_frame();
+    auto list = virtual_list(
+        h.context(), mk(h.root(), 0), n, [](size_t) { return 25.6f; },
+        [&](size_t, Entity &) {},
+        ComponentConfig{}
+            .with_size(ComponentSize{pixels(300), pixels(200)})
+            .with_debug_name("vl_drift"));
+    list_id = list.id();
+    h.layout_only();
+    const Entity &ent = AutoLayout::to_ent_static(list_id);
+    const double exact = static_cast<double>(25.6f) * static_cast<double>(n);
+    CHECK(std::abs(static_cast<double>(virtual_rows_total(ent)) - exact) <
+          0.5);
+    CHECK(std::abs(static_cast<double>(virtual_row_offset(ent, n)) - exact) <
+          0.5);
+    CHECK(std::abs(static_cast<double>(virtual_row_offset(ent, n / 2)) -
+                   exact / 2) < 0.5);
+  }
+  // Varying heights, so a uniform-multiply shortcut cannot pass this.
+  ImmTestHarness h;
+  constexpr size_t n = 100000;
+  auto height_of = [](size_t i) {
+    return i % 3 == 0 ? 40.2f : i % 3 == 1 ? 25.6f : 18.75f;
+  };
+  double exact = 0.0, exact_mid = 0.0;
+  for (size_t i = 0; i < n; i++) {
+    exact += static_cast<double>(height_of(i));
+    if (i < n / 2) exact_mid = exact;
+  }
+  h.begin_frame();
+  auto list = virtual_list(
+      h.context(), mk(h.root(), 0), n, height_of, [&](size_t, Entity &) {},
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(300), pixels(200)})
+          .with_debug_name("vl_drift_var"));
+  h.layout_only();
+  const Entity &ent = AutoLayout::to_ent_static(list.id());
+  CHECK(std::abs(static_cast<double>(virtual_rows_total(ent)) - exact) < 0.5);
+  CHECK(std::abs(static_cast<double>(virtual_row_offset(ent, n / 2)) -
+                 exact_mid) < 0.5);
+  // Small lists unchanged.
+  CHECK_APPROX(virtual_row_offset(ent, 3), 40.2f + 25.6f + 18.75f);
+}
+
 int main() { return ui_test::run_registered_tests("virtual_list"); }
