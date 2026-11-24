@@ -12,7 +12,9 @@
 #include <unordered_set>
 #include <vector>
 
+#ifdef AFTER_HOURS_ENTITY_ALLOC_DEBUG
 #include "../debug_allocator.h"
+#endif
 #include "../logging.h"
 #include "../type_name.h"
 #include "base_component.h"
