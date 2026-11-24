@@ -714,6 +714,67 @@ ElementResult circular_progress(HasUIContext auto &ctx, EntityParent ep_pair,
   return ElementResult{false, entity, normalized};
 }
 
+struct DelayedBusy {
+  float delay = 0.25f;
+  float min_visible = 0.0f;
+  float sweep_period = 1.0f;
+
+  void start() {
+    elapsed_time = 0.f;
+    drain = 0.f;
+    shown = false;
+    finished = false;
+    started = true;
+  }
+
+  void update(float dt) {
+    if (!started) return;
+    if (!std::isfinite(dt) || dt < 0.f) dt = 0.f;
+    if (finished) {
+      drain = std::max(0.f, drain - dt);
+      return;
+    }
+    elapsed_time += dt;
+    if (elapsed_time >= delay) shown = true;
+  }
+
+  void finish() {
+    if (!started || finished) return;
+    finished = true;
+    if (shown) drain = std::max(0.f, delay + min_visible - elapsed_time);
+  }
+
+  [[nodiscard]] bool visible() const {
+    return started && shown && (!finished || drain > 0.f);
+  }
+
+  [[nodiscard]] float indeterminate() const {
+    const float period = sweep_period > 0.f ? sweep_period : 1.f;
+    return std::fmod(elapsed_time / period, 1.f);
+  }
+
+  [[nodiscard]] float elapsed() const { return elapsed_time; }
+
+private:
+  float elapsed_time = 0.f;
+  float drain = 0.f;
+  bool shown = false;
+  bool finished = false;
+  bool started = false;
+};
+
+inline ElementResult
+delayed_busy(HasUIContext auto &ctx, EntityParent ep_pair,
+             DelayedBusy &busy, float value,
+             ComponentConfig config = ComponentConfig()) {
+  auto [entity, parent] = deref(ep_pair);
+  if (!busy.visible()) return ElementResult{false, entity};
+  if (value >= 0.f)
+    return progress_bar(ctx, ep_pair, value, std::move(config));
+  return circular_progress(ctx, ep_pair, busy.indeterminate(),
+                           std::move(config));
+}
+
 
 /// Stepper — cycles through string options with < and > arrow buttons.
 ///
