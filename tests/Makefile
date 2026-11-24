@@ -74,6 +74,7 @@ ALL_TESTS := \
 	scroll_input_gate_test \
 	middle_click_test \
 	wheel_input_test \
+	click_count_test \
 	wheel_delta_kind_test \
 	command_picker_test \
 	command_picker_ui_test \
@@ -459,6 +460,7 @@ RAYLIB_TESTS := \
 	wrappers_test \
 	window_focus_test \
 	window_state_test \
+	click_count_test \
 	edit_keys_test \
 	default_font_test \
 	font_display_size_test \

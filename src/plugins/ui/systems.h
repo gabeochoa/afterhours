@@ -260,68 +260,13 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
     theme_defaults.begin_frame();
     context.theme = theme_defaults.get_theme();
 
-    // Mouse input handling
-    {
-      const auto prev_pos = context.mouse.pos;
-      context.mouse.pos = input::get_mouse_position();
-      // A backend with no cursor yet (pre-init sokol) can report NaN; pin
-      // it off-screen so every read below sees the pre-event position.
-      if (!std::isfinite(context.mouse.pos.x) ||
-          !std::isfinite(context.mouse.pos.y)) {
-        context.mouse.pos = input::MousePosition{-1.f, -1.f};
-      }
-      context.mouse.moved_this_frame = context.mouse.moved_since(prev_pos);
-      // No dead zone here, unlike moved_this_frame: a drag has to track every
-      // pixel. Both ends must be finite or the subtraction yields NaN, which a
-      // caller would then accumulate into its own state permanently.
-      const bool have_both =
-          std::isfinite(context.mouse.pos.x) &&
-          std::isfinite(context.mouse.pos.y) && std::isfinite(prev_pos.x) &&
-          std::isfinite(prev_pos.y);
-      context.mouse.delta =
-          have_both ? input::MousePosition{context.mouse.pos.x - prev_pos.x,
-                                           context.mouse.pos.y - prev_pos.y}
-                    : input::MousePosition{0.f, 0.f};
-      // Nothing has claimed focus yet this frame.
-      context.focus_source = FocusSource::Grab;
-      const bool prev_mouse_down = context.mouse.left_down;
-      context.mouse.left_down = input::is_mouse_button_down(0);
-      context.mouse.just_pressed = !prev_mouse_down && context.mouse.left_down;
-      context.mouse.just_released = prev_mouse_down && !context.mouse.left_down;
-
-      const bool prev_right_down = context.mouse.right_down;
-      context.mouse.right_down = input::is_mouse_button_down(1);
-      context.mouse.right_just_pressed =
-          !prev_right_down && context.mouse.right_down;
-      context.mouse.right_just_released =
-          prev_right_down && !context.mouse.right_down;
-
-      const bool prev_middle_down = context.mouse.middle_down;
-      context.mouse.middle_down = input::is_mouse_button_down(2);
-      context.mouse.middle_just_pressed =
-          !prev_middle_down && context.mouse.middle_down;
-      context.mouse.middle_just_released =
-          prev_middle_down && !context.mouse.middle_down;
-
-      if (context.mouse.just_pressed) {
-        context.mouse.press_pos = context.mouse.pos;
-        context.mouse.press_moved = false;
-        // A click on the already-focused widget does not move focus, so
-        // set_focus never sees it.
-        context.has_interacted = true;
-      }
-
-      if (!context.mouse.left_down) {
-        context.mouse.press_moved = false;
-      } else if (!context.mouse.press_moved) {
-        const float dx = context.mouse.pos.x - context.mouse.press_pos.x;
-        const float dy = context.mouse.pos.y - context.mouse.press_pos.y;
-        const float dist_sq = (dx * dx) + (dy * dy);
-        const float threshold = MousePointerState::press_drag_threshold_px;
-        if (dist_sq > (threshold * threshold)) {
-          context.mouse.press_moved = true;
-        }
-      }
+    context.mouse.update(dt, context.hot_id);
+    // Nothing has claimed focus yet this frame.
+    context.focus_source = FocusSource::Grab;
+    // A click on the already-focused widget does not move focus, so
+    // set_focus never sees it.
+    if (context.mouse.just_pressed) {
+      context.has_interacted = true;
     }
 
     {
