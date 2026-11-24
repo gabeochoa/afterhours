@@ -149,6 +149,14 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
                                       pixels(default_component_size.y));
   }
 
+  const Padding requested_padding = config.padding;
+  const bool caller_set_padding = requested_padding.top.dim != Dim::None ||
+                                  requested_padding.left.dim != Dim::None ||
+                                  requested_padding.bottom.dim != Dim::None ||
+                                  requested_padding.right.dim != Dim::None;
+  if (caller_set_padding)
+    config.padding = Padding{};
+
   config.flex_direction = FlexDirection::Row;
   init_component(ctx, ep_pair, config, ComponentType::TextInput, false,
                  "text_input");
@@ -264,12 +272,18 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
                           : pixels(field_h * 0.5f);
       field_cmp.enable_font(fn, fs, true);
 
-      float pad_h = field_h * 0.125f;
-      float pad_w = field_h * 0.35f;
-      field_cmp.set_desired_padding(Padding{.top = pixels(pad_h),
-                                            .bottom = pixels(pad_h),
-                                            .left = pixels(pad_w),
-                                            .right = pixels(pad_w)});
+      float pad_w;
+      if (caller_set_padding) {
+        field_cmp.set_desired_padding(requested_padding);
+        pad_w = field_cmp.computed_padd[Axis::left];
+      } else {
+        float pad_h = field_h * 0.125f;
+        pad_w = field_h * 0.35f;
+        field_cmp.set_desired_padding(Padding{.top = pixels(pad_h),
+                                              .bottom = pixels(pad_h),
+                                              .left = pixels(pad_w),
+                                              .right = pixels(pad_w)});
+      }
       field_cmp.padding_is_default = true;
 
       // draw_text_in_rect adds DRAW_TEXT_MARGIN internally; subtract it so
