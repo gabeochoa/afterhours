@@ -249,4 +249,12 @@ struct EntityHelper {
   }
 };
 
+template <typename Component> bool has_singleton() {
+  return EntityHelper::has_singleton<Component>();
+}
+
+template <typename Component> Component &get_singleton() {
+  return EntityHelper::get_singleton_cmp_enforce<Component>();
+}
+
 } // namespace afterhours
