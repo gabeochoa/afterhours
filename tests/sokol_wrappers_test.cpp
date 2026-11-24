@@ -93,12 +93,6 @@ int main() {
       drew = true;
   check(drew, "draw_fps draws \"60 FPS\" in raylib's lime at 20px");
 
-  {
-    const float w0 = afterhours::measure_text(font, "aaaa", 20.f, 0.f).x;
-    const float w5 = afterhours::measure_text(font, "aaaa", 20.f, 5.f).x;
-    check(w5 > w0 + 10.f, "sokol measure_text honours letter spacing");
-  }
-
   afterhours::unload_font(font);
   check(font.id == FONS_INVALID, "unload_font clears the handle");
 

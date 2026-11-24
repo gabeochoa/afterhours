@@ -96,6 +96,35 @@ struct HasClickActivationMode : BaseComponent {
   explicit HasClickActivationMode(ClickActivationMode mode_) : mode(mode_) {}
 };
 
+struct ShortcutBinding {
+  int action = -1;
+  std::function<bool(Entity &)> handler;
+};
+struct HasShortcuts : BaseComponent {
+  std::vector<ShortcutBinding> bindings;
+  HasShortcuts() = default;
+  explicit HasShortcuts(std::vector<ShortcutBinding> b)
+      : bindings(std::move(b)) {}
+  void add(int action, std::function<bool(Entity &)> handler) {
+    bindings.push_back(ShortcutBinding{action, std::move(handler)});
+  }
+  bool dispatch(int action, Entity &self) {
+    for (auto &b : bindings) {
+      if (b.action != action || !b.handler)
+        continue;
+      if (b.handler(self))
+        return true;
+    }
+    return false;
+  }
+  bool handles(int action) const {
+    for (const auto &b : bindings)
+      if (b.action == action && b.handler)
+        return true;
+    return false;
+  }
+};
+
 // Invisible to hit-testing: never hot or active, the element behind is picked.
 // Not with_skip_tabbing, which is keyboard focus order only.
 struct IgnorePointerEvents : BaseComponent {};
@@ -285,6 +314,9 @@ struct HasImage : BaseComponent {
   std::optional<afterhours::texture_manager::Rectangle> source_rect;
   afterhours::texture_manager::HasTexture::Alignment alignment =
       afterhours::texture_manager::HasTexture::Alignment::Center;
+  // Per-draw filter override (graphics::TEXTURE_FILTER_*); nullopt = the
+  // texture's own filter, which is also how batching stays unchanged.
+  std::optional<int> filter;
 
   HasImage(
       afterhours::texture_manager::Texture tex,
@@ -362,6 +394,11 @@ struct HasUIModifiers : BaseComponent {
     }
     return rect;
   }
+};
+
+struct HasHitExpand : BaseComponent {
+  float pad_x = 0.f;
+  float pad_y = 0.f;
 };
 
 // Shadow styles for UI elements
@@ -585,6 +622,7 @@ struct HasScrollView : BaseComponent {
   // content read zero on frame one and quietly built everything.
   std::optional<Vector2Type> viewport_size;
   float scroll_speed = 20.0f;         // Pixels per scroll wheel notch
+  float scroll_speed_precise = 20.0f;
   // Fraction of the remaining distance covered per 60fps frame. 1.0 (default)
   // snaps, matching the behaviour before smoothing existed; ~0.25 glides.
   float scroll_smoothing = 1.0f;
@@ -697,6 +735,7 @@ struct HasScrollView : BaseComponent {
 
   // Off for a view that supplies its own bar, or where one would be noise.
   bool show_scrollbar = true;
+  bool scrollbar_gutter = false;
   // Set while the thumb is held. The drag owns scroll_offset until released.
   bool dragging_scrollbar = false;
   bool drag_is_vertical = true;
