@@ -1618,6 +1618,7 @@ typedef struct sapp_event {
     float mouse_dy;                     // relative vertical mouse movement since last frame, always valid
     float scroll_x;                     // horizontal mouse wheel scroll distance, valid in MOUSE_SCROLL events
     float scroll_y;                     // vertical mouse wheel scroll distance, valid in MOUSE_SCROLL events
+    bool scroll_precise;                // true for precise (trackpad) deltas, valid in MOUSE_SCROLL events
     int num_touches;                    // number of valid items in the touches[] array
     sapp_touchpoint touches[SAPP_MAX_TOUCHPOINTS];  // current touch points, valid in TOUCHES_BEGIN, TOUCHES_MOVED, TOUCHES_ENDED
     int window_width;                   // current window- and framebuffer sizes in pixels, always valid
@@ -6088,6 +6089,7 @@ static void _sapp_gl_make_current(void) {
         }
         if ((_sapp_absf(dx) > 0.0f) || (_sapp_absf(dy) > 0.0f)) {
             _sapp_init_event(SAPP_EVENTTYPE_MOUSE_SCROLL);
+            _sapp.event.scroll_precise = event.hasPreciseScrollingDeltas;
             _sapp.event.modifiers = _sapp_macos_mods(event);
             _sapp.event.scroll_x = dx;
             _sapp.event.scroll_y = dy;
@@ -7308,6 +7310,7 @@ _SOKOL_PRIVATE EM_BOOL _sapp_emsc_wheel_cb(int emsc_type, const EmscriptenWheelE
             case DOM_DELTA_PAGE:  scale = -10.0f; break; // FIXME: this is a guess
             default:              scale = -0.1f; break;  // shouldn't happen
         }
+        _sapp.event.scroll_precise = (emsc_event->deltaMode == DOM_DELTA_PIXEL);
         _sapp.event.scroll_x = scale * (float)emsc_event->deltaX;
         _sapp.event.scroll_y = scale * (float)emsc_event->deltaY;
         consume_event |= _sapp_call_event(&_sapp.event);
