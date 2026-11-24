@@ -98,6 +98,7 @@ ALL_TESTS := \
 	drag_scroll_hit_test \
 	label_clip_test \
 	label_test \
+	scroll_clip_decoration_test \
 	animation_test \
 	reveal_test \
 	motion_config_test \
