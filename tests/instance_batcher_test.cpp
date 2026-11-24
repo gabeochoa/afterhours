@@ -11,6 +11,8 @@
 #include <cstdio>
 #include <random>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace raylib {
 #include <raylib.h>
@@ -76,6 +78,7 @@ int main() {
     printf("instance_batcher_test: %d/%d checks passed\n", checks_passed, checks_run);
     return 1;
   }
+
   const ModelType &tree = models.get("tree");
   const ModelType &lantern = models.get("lantern");
 
@@ -168,6 +171,110 @@ int main() {
     check(segments == "tree:0x1O tree:0x3B lantern:1x2B ",
           "mixed group flushes owned then borrowed segments: " + segments);
     check(mixed.copies() == 0, "a mixed flush empties the groups");
+    auto fill = [&](InstanceBatcher &b) {
+      for (const Copy &c : scene)
+        b.add(*c.model, c.pos, c.yaw, {c.scale, c.scale, c.scale});
+      b.add(tree, {9, 9, 9}, 0.f, {1, 1, 1}, 7);
+    };
+    InstanceBatcher drained, flushed;
+    fill(drained);
+    fill(flushed);
+    auto collect = [&](InstanceBatcher &b, bool do_drain) {
+      std::string seen;
+      std::vector<raylib::Matrix> mats;
+      auto visit = [&](const ModelType &m, uint32_t key,
+                       std::span<const MatrixType> ts) {
+        seen += std::string(&m == &tree ? "tree" : "lantern") + ":" +
+                std::to_string(key) + "x" + std::to_string(ts.size()) + ":";
+        for (const MatrixType &t : ts) {
+          seen += std::to_string(t.m12) + "," + std::to_string(t.m14) + ";";
+          mats.push_back(t);
+        }
+      };
+      if (do_drain) {
+        b.drain(visit);
+      } else {
+        raylib::RenderTexture2D scratch = raylib::LoadRenderTexture(8, 8);
+        raylib::BeginTextureMode(scratch);
+        b.flush(shader, visit);
+        raylib::EndTextureMode();
+        raylib::UnloadRenderTexture(scratch);
+      }
+      return std::pair{seen, mats};
+    };
+    auto [drained_seen, drained_mats] = collect(drained, true);
+    auto [flushed_seen, flushed_mats] = collect(flushed, false);
+    check(drained_seen == flushed_seen,
+          "drain groups match what flush would draw: " + drained_seen);
+    check(drained_mats.size() == 6 && flushed_mats.size() == 6,
+          "drain count matches");
+    bool same = drained_mats.size() == flushed_mats.size();
+    for (size_t i = 0; same && i < drained_mats.size(); i++)
+      same = max_abs_diff(drained_mats[i], flushed_mats[i]) < 1e-6f;
+    check(same, "drained transforms match flush transforms");
+    check(drained.copies() == 0 && drained.group_count() == 0,
+          "batcher is empty after drain");
+    drained.add(tree, {0, 0, 0}, 0.f, {1, 1, 1});
+    check(drained.copies() == 1 && drained.group_count() == 1,
+          "batcher is reusable after drain");
+    drained.clear();
+
+    // drain must emit borrowed-only groups too: borrowed spans are stored
+    // separately from owned transforms, so skipping empty-transform groups
+    // would strand them and copies() would never reach 0.
+    {
+      InstanceBatcher drain_borrowed;
+      drain_borrowed.borrow(tree, caller);
+      check(drain_borrowed.copies() == 3 && drain_borrowed.group_count() == 1,
+            "borrowed-only group counts before drain");
+      std::string drain_segments;
+      const MatrixType *drain_ptr = nullptr;
+      drain_borrowed.drain([&](const ModelType &m, uint32_t key,
+                               std::span<const MatrixType> ts) {
+        drain_segments += std::string(&m == &tree ? "tree" : "lantern") +
+                          ":" + std::to_string(key) + "x" +
+                          std::to_string(ts.size()) +
+                          (ts.data() == caller.data() ? "B " : "O ");
+        drain_ptr = ts.data();
+      });
+      check(drain_segments == "tree:0x3B ",
+            "drain emits a borrowed-only group as-is: " + drain_segments);
+      check(drain_ptr == caller.data(),
+            "drain hands back the caller's own span, uncopied");
+      check(drain_borrowed.copies() == 0 && drain_borrowed.group_count() == 0,
+            "copies reach 0 after draining a borrowed-only group");
+      check(caller.size() == 3,
+            "drain never frees or consumes the caller's buffer");
+    }
+
+    // Mixed owned+borrowed in the same group drain as owned first, then
+    // each borrowed span, and tint state resets like clear() (#310).
+    {
+      InstanceBatcher drain_mixed;
+      drain_mixed.add(tree, {-1, 0, 0}, 0.f, {1, 1, 1}, 0,
+                      Color{255, 0, 0, 255});
+      drain_mixed.borrow(tree, caller);
+      check(drain_mixed.copies() == 4 && drain_mixed.group_count() == 1,
+            "mixed owned+borrowed same group counts before drain");
+      std::string drain_segments;
+      drain_mixed.drain([&](const ModelType &m, uint32_t key,
+                            std::span<const MatrixType> ts) {
+        drain_segments += std::string(&m == &tree ? "tree" : "lantern") +
+                          ":" + std::to_string(key) + "x" +
+                          std::to_string(ts.size()) +
+                          (ts.data() == caller.data() ? "B " : "O ");
+      });
+      check(drain_segments == "tree:0x1O tree:0x3B ",
+            "drain emits mixed group owned then borrowed: " +
+                drain_segments);
+      check(drain_mixed.copies() == 0 && drain_mixed.group_count() == 0,
+            "copies reach 0 after draining a mixed group");
+      drain_mixed.add(tree, {0, 0, 0}, 0.f, {1, 1, 1});
+      check(drain_mixed.copies() == 1,
+            "batcher is reusable after draining a mixed group");
+      drain_mixed.clear();
+      check(drain_mixed.copies() == 0, "clear empties a refilled group");
+    }
   }
 
   // Same frame two ways: batched, and one draw_model per copy.
@@ -208,6 +315,7 @@ int main() {
             std::abs(pa[i].b - pb[i].b) + std::abs(pa[i].a - pb[i].a);
     if (d > 6) differ++;
   }
+
   printf("  %d covered pixels, %d differ\n", covered, differ);
   check(covered > 2000, "the scene is on screen");
   check(differ <= covered / 200, "batched frame matches draw_model per copy");
@@ -246,6 +354,248 @@ int main() {
 
   raylib::UnloadImage(batched);
   raylib::UnloadImage(direct);
+
+  {
+    struct TintedCopy {
+      raylib::Vector3 pos;
+      Color tint;
+    };
+    TintedCopy tinted_scene[] = {{{-2, 0, 0}, {255, 0, 0, 255}},
+                                 {{2, 0, 0}, {0, 0, 255, 255}}};
+    InstanceBatcher tinted;
+    for (const TintedCopy &c : tinted_scene)
+      tinted.add(tree, c.pos, 0.f, {1, 1, 1}, 0, c.tint);
+    check(tinted.copies() == 2 && tinted.group_count() == 1,
+          "tinted copies group by model");
+    auto render_tinted = [&](bool batched_tint) {
+      raylib::BeginTextureMode(rt);
+      raylib::ClearBackground({0, 0, 0, 0});
+      raylib::BeginMode3D(cam);
+      if (batched_tint) {
+        tinted.flush(shader);
+      } else {
+        for (const TintedCopy &c : tinted_scene)
+          draw_model(tree, c.pos, 0.f, {1, 1, 1}, c.tint);
+      }
+      raylib::EndMode3D();
+      raylib::EndTextureMode();
+      raylib::Image img = raylib::LoadImageFromTexture(rt.texture);
+      raylib::ImageFormat(&img, raylib::PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+      return img;
+    };
+    raylib::Image tint_batched = render_tinted(true);
+    raylib::Image tint_direct = render_tinted(false);
+    auto *pt = static_cast<raylib::Color *>(tint_batched.data);
+    auto *pd = static_cast<raylib::Color *>(tint_direct.data);
+    int tint_differ = 0, tint_covered = 0;
+    long left_r = 0, left_b = 0, right_r = 0, right_b = 0, left_n = 0, right_n = 0;
+    for (int y = 0; y < 256; y++) {
+      for (int x = 0; x < 256; x++) {
+        int i = y * 256 + x;
+        if (pt[i].a > 0 || pd[i].a > 0) tint_covered++;
+        int d = std::abs(pt[i].r - pd[i].r) + std::abs(pt[i].g - pd[i].g) +
+                std::abs(pt[i].b - pd[i].b) + std::abs(pt[i].a - pd[i].a);
+        if (d > 6) tint_differ++;
+        if (pt[i].a > 0) {
+          if (x < 128) {
+            left_r += pt[i].r; left_b += pt[i].b; left_n++;
+          } else {
+            right_r += pt[i].r; right_b += pt[i].b; right_n++;
+          }
+        }
+      }
+    }
+    printf("  tint: %d covered, %d differ, left R-B %ld, right R-B %ld\n",
+           tint_covered, tint_differ,
+           left_n ? (left_r - left_b) / left_n : 0,
+           right_n ? (right_r - right_b) / right_n : 0);
+    check(tint_covered > 1000, "tinted scene is on screen");
+    check(tint_differ <= tint_covered / 200,
+          "tinted batched frame matches draw_model with tints");
+    check(left_n > 0 && right_n > 0 && left_r > left_b && right_b > right_r,
+          "per-instance tint reaches pixels (red left, blue right)");
+    raylib::UnloadImage(tint_batched);
+    raylib::UnloadImage(tint_direct);
+  }
+
+  // Borrowed segment in a tinted group: it has no tint data, so it must
+  // draw through the tinted path with white tints — matching an untinted
+  // draw_model on the right, not the owned copy's red on the left.
+  {
+    std::vector<MatrixType> borrowed_ts{
+        model_transform({2, 0, 0}, 0.f, {1, 1, 1})};
+    InstanceBatcher tinted_borrow;
+    tinted_borrow.add(tree, {-2, 0, 0}, 0.f, {1, 1, 1}, 0,
+                      Color{255, 0, 0, 255});
+    tinted_borrow.borrow(tree, borrowed_ts);
+    check(tinted_borrow.copies() == 2 && tinted_borrow.group_count() == 1,
+          "tinted owned + borrowed copies share one group");
+    auto render_tinted_borrow = [&](bool batched_mode) {
+      raylib::BeginTextureMode(rt);
+      raylib::ClearBackground({0, 0, 0, 0});
+      raylib::BeginMode3D(cam);
+      if (batched_mode) {
+        tinted_borrow.flush(shader);
+      } else {
+        draw_model(tree, {-2, 0, 0}, 0.f, {1, 1, 1}, Color{255, 0, 0, 255});
+        draw_model(tree, {2, 0, 0}, 0.f, {1, 1, 1});
+      }
+      raylib::EndMode3D();
+      raylib::EndTextureMode();
+      raylib::Image img = raylib::LoadImageFromTexture(rt.texture);
+      raylib::ImageFormat(&img, raylib::PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+      return img;
+    };
+    raylib::Image tb_batched = render_tinted_borrow(true);
+    check(tinted_borrow.copies() == 0,
+          "tinted borrowed flush empties the group");
+    raylib::Image tb_direct = render_tinted_borrow(false);
+    auto *ptb = static_cast<raylib::Color *>(tb_batched.data);
+    auto *ptd = static_cast<raylib::Color *>(tb_direct.data);
+    int tb_covered = 0, tb_differ = 0;
+    long tb_left_rb = 0, tb_right_rb = 0, tb_left_n = 0, tb_right_n = 0;
+    for (int y = 0; y < 256; y++) {
+      for (int x = 0; x < 256; x++) {
+        int i = y * 256 + x;
+        if (ptb[i].a > 0 || ptd[i].a > 0) tb_covered++;
+        int d = std::abs(ptb[i].r - ptd[i].r) + std::abs(ptb[i].g - ptd[i].g) +
+                std::abs(ptb[i].b - ptd[i].b) + std::abs(ptb[i].a - ptd[i].a);
+        if (d > 6) tb_differ++;
+        if (ptb[i].a > 0) {
+          if (x < 128) {
+            tb_left_rb += ptb[i].r - ptb[i].b;
+            tb_left_n++;
+          } else {
+            tb_right_rb += ptb[i].r - ptb[i].b;
+            tb_right_n++;
+          }
+        }
+      }
+    }
+    printf("  tinted-borrow: %d covered, %d differ, left R-B %ld, right "
+           "R-B %ld\n",
+           tb_covered, tb_differ, tb_left_n ? tb_left_rb / tb_left_n : 0,
+           tb_right_n ? tb_right_rb / tb_right_n : 0);
+    check(tb_covered > 1000, "tinted borrowed scene is on screen");
+    check(tb_differ <= tb_covered / 200,
+          "borrowed segment in a tinted group matches untinted draw_model");
+    check(tb_left_n > 0 && tb_right_n > 0 &&
+              tb_left_rb / tb_left_n > tb_right_rb / tb_right_n,
+          "owned copy is redder than the white-tinted borrowed copy");
+    raylib::UnloadImage(tb_batched);
+    raylib::UnloadImage(tb_direct);
+  }
+
+  {
+    InstanceBatcher mixed;
+    mixed.add(tree, {-3, 0, 0}, 0.f, {0.8f, 0.8f, 0.8f});
+    mixed.add(lantern, {3, 0, 0}, 0.f, {1, 1, 1});
+    auto render_mixed = [&](bool mixed_mode) {
+      raylib::BeginTextureMode(rt);
+      raylib::ClearBackground({0, 0, 0, 0});
+      raylib::BeginMode3D(cam);
+      if (mixed_mode) {
+        mixed.flush(shader);
+        draw_model(tree, {0, 0, 0}, 45.f, {0.7f, 0.7f, 0.7f});
+        mixed.add(tree, {0, 0, 2.5f}, 90.f, {0.6f, 0.6f, 0.6f});
+        mixed.flush(shader);
+      } else {
+        draw_model(tree, {-3, 0, 0}, 0.f, {0.8f, 0.8f, 0.8f});
+        draw_model(lantern, {3, 0, 0}, 0.f, {1, 1, 1});
+        draw_model(tree, {0, 0, 0}, 45.f, {0.7f, 0.7f, 0.7f});
+        draw_model(tree, {0, 0, 2.5f}, 90.f, {0.6f, 0.6f, 0.6f});
+      }
+      raylib::EndMode3D();
+      raylib::EndTextureMode();
+      raylib::Image img = raylib::LoadImageFromTexture(rt.texture);
+      raylib::ImageFormat(&img, raylib::PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+      return img;
+    };
+    raylib::Image mixed_img = render_mixed(true);
+    raylib::Image plain_img = render_mixed(false);
+    auto *pm = static_cast<raylib::Color *>(mixed_img.data);
+    auto *pp = static_cast<raylib::Color *>(plain_img.data);
+    int mixed_covered = 0, mixed_differ = 0;
+    for (int i = 0; i < 256 * 256; i++) {
+      if (pm[i].a > 0 || pp[i].a > 0) mixed_covered++;
+      int d = std::abs(pm[i].r - pp[i].r) + std::abs(pm[i].g - pp[i].g) +
+              std::abs(pm[i].b - pp[i].b) + std::abs(pm[i].a - pp[i].a);
+      if (d > 6) mixed_differ++;
+    }
+    printf("  mixed: %d covered, %d differ\n", mixed_covered, mixed_differ);
+    check(mixed_covered > 1500, "mixed instanced+plain scene is on screen");
+    check(mixed_differ <= mixed_covered / 200,
+          "instanced, plain, instanced sequence matches all-plain");
+    raylib::UnloadImage(mixed_img);
+    raylib::UnloadImage(plain_img);
+  }
+
+  {
+    InstanceBatcher owned;
+    owned.add(tree, {0, 0, 0}, 0.f, {1, 1, 1});
+    raylib::BeginTextureMode(rt);
+    raylib::ClearBackground({0, 0, 0, 0});
+    raylib::BeginMode3D(cam);
+    owned.flush();
+    raylib::EndMode3D();
+    raylib::EndTextureMode();
+    check(owned.copies() == 0, "flush() with owned default shader empties groups");
+    raylib::Image img = raylib::LoadImageFromTexture(rt.texture);
+    raylib::ImageFormat(&img, raylib::PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+    auto *po = static_cast<raylib::Color *>(img.data);
+    int owned_covered = 0;
+    for (int i = 0; i < 256 * 256; i++)
+      if (po[i].a > 0) owned_covered++;
+    printf("  owned shader: %d covered\n", owned_covered);
+    check(owned_covered > 500, "owned default shader draws the scene");
+    raylib::UnloadImage(img);
+  }
+
+  // Draining a tinted group must reset tint state like clear() does: an
+  // untinted copy added after the drain draws white, not the stale tint.
+  {
+    InstanceBatcher b;
+    b.add(tree, {0, 0, 0}, 0.f, {1, 1, 1}, 0, Color{255, 0, 0, 255});
+    b.add(tree, {2, 0, 0}, 0.f, {1, 1, 1}, 0, Color{0, 0, 255, 255});
+    b.drain([](const ModelType &, uint32_t,
+               std::span<const MatrixType>) {});
+    check(b.copies() == 0 && b.group_count() == 0,
+          "drain empties a tinted group");
+    b.add(tree, {0, 0, 0}, 0.f, {1, 1, 1});
+    auto render_after_drain = [&](bool batched_after) {
+      raylib::BeginTextureMode(rt);
+      raylib::ClearBackground({0, 0, 0, 0});
+      raylib::BeginMode3D(cam);
+      if (batched_after) {
+        b.flush(shader);
+      } else {
+        draw_model(tree, {0, 0, 0}, 0.f, {1, 1, 1});
+      }
+      raylib::EndMode3D();
+      raylib::EndTextureMode();
+      raylib::Image img = raylib::LoadImageFromTexture(rt.texture);
+      raylib::ImageFormat(&img, raylib::PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+      return img;
+    };
+    raylib::Image after_batched = render_after_drain(true);
+    raylib::Image after_direct = render_after_drain(false);
+    auto *pab = static_cast<raylib::Color *>(after_batched.data);
+    auto *pad = static_cast<raylib::Color *>(after_direct.data);
+    int after_covered = 0, after_differ = 0;
+    for (int i = 0; i < 256 * 256; i++) {
+      if (pab[i].a > 0 || pad[i].a > 0) after_covered++;
+      int d = std::abs(pab[i].r - pad[i].r) + std::abs(pab[i].g - pad[i].g) +
+              std::abs(pab[i].b - pad[i].b) + std::abs(pab[i].a - pad[i].a);
+      if (d > 6) after_differ++;
+    }
+    printf("  drain-tint: %d covered, %d differ\n", after_covered, after_differ);
+    check(after_covered > 500, "untinted copy after drain is on screen");
+    check(after_differ <= after_covered / 200,
+          "untinted copy after a tinted drain draws untinted");
+    raylib::UnloadImage(after_batched);
+    raylib::UnloadImage(after_direct);
+  }
+
   raylib::UnloadRenderTexture(rt);
   raylib::UnloadShader(shader);
   models.unload_all();
