@@ -290,6 +290,7 @@ lighting_zones_test \
 	auto_text_color_test \
 	scissor_coalescing_test \
 	blend_batch_test \
+	draw_coalesce_test \
 	focus_origin_test \
 	tab_order_test \
 	reset_focus_test \
