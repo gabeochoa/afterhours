@@ -317,6 +317,8 @@ inline std::vector<std::unique_ptr<SystemBase>> make_post_layout_systems() {
                   ui::TrackIfComponentWillBeRendered<InputAction>>());
     systems.push_back(std::make_unique<ui::HandleTabbing<InputAction>>());
     systems.push_back(
+        std::make_unique<ui::DispatchShortcuts<InputAction>>());
+    systems.push_back(
         std::make_unique<ui::InputExclusivitySystem<InputAction>>());
     systems.push_back(
         std::make_unique<ui::ResolveHitTarget<InputAction>>());
