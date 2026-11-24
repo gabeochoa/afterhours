@@ -75,6 +75,21 @@ TEST(first_returns_one) {
   CHECK(f.size() == 1);
 }
 
+TEST(where_lambda_if) {
+  EntityCollection ec = make_tagged(3);
+  auto all = EntityQuery(ec)
+                 .whereHasComponent<Tag>()
+                 .whereLambdaIf(false, [](const Entity &) { return false; })
+                 .gen();
+  CHECK(all.size() == 3);
+
+  auto none = EntityQuery(ec)
+                  .whereHasComponent<Tag>()
+                  .whereLambdaIf(true, [](const Entity &) { return false; })
+                  .gen();
+  CHECK(none.size() == 0);
+}
+
 // take(n) with more requested than available returns all available.
 TEST(take_more_than_available) {
   EntityCollection ec = make_tagged(2);
