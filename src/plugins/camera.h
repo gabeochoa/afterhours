@@ -108,4 +108,36 @@ struct camera : developer::Plugin {
 static_assert(developer::PluginCore<camera>,
               "camera must implement the core plugin interface");
 
+struct CameraPlugin {
+  Vector2Type target{0.f, 0.f};
+  Vector2Type offset{0.f, 0.f};
+  float rotation = 0.f;
+  float zoom = 0.75f;
+  bool with_begin_end = false;
+
+  void install(PluginContext &ctx) const {
+    const bool existed = ctx.collection.has_singleton<camera::HasCamera>();
+    auto &cam = ctx.ensure_singleton<camera::HasCamera>();
+    if (!existed) {
+#ifdef AFTER_HOURS_USE_RAYLIB
+      cam.camera.target = target;
+      cam.camera.offset = offset;
+      cam.camera.rotation = rotation;
+      cam.camera.zoom = zoom;
+#else
+      (void)cam;
+#endif
+    }
+    if (with_begin_end) {
+#ifdef AFTER_HOURS_USE_RAYLIB
+      ctx.add_system(Stage::PreRender,
+                     std::make_unique<camera::BeginCameraMode>());
+      ctx.add_system(Stage::OverlayRender,
+                     std::make_unique<camera::EndCameraMode>());
+#endif
+    }
+  }
+};
+static_assert(InstallablePlugin<CameraPlugin>);
+
 } // namespace afterhours

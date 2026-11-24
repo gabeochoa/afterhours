@@ -553,4 +553,32 @@ struct pathfinding : developer::Plugin {
 static_assert(developer::PluginCore<pathfinding>,
               "pathfinding must implement the core plugin interface");
 
+struct PathfindingPlugin {
+  pathfinding::Algorithm algorithm = pathfinding::Algorithm::BFS;
+  std::function<bool(pathfinding::Vec2)> walkability_checker{};
+  std::function<float(pathfinding::Vec2, pathfinding::Vec2)> distance_fn{};
+  std::function<std::vector<pathfinding::Vec2>(pathfinding::Vec2)>
+      get_neighbors_fn{};
+  std::function<float(pathfinding::Vec2, pathfinding::Vec2)> step_cost_fn{};
+
+  void install(PluginContext &ctx) const {
+    const bool existed =
+        ctx.collection.has_singleton<pathfinding::ProvidesPathfinding>();
+    auto &provider =
+        ctx.ensure_singleton<pathfinding::ProvidesPathfinding>();
+    if (!existed) {
+      provider.current_algorithm = algorithm;
+      if (walkability_checker) provider.walkability_checker = walkability_checker;
+      if (distance_fn) provider.distance_fn = distance_fn;
+      if (get_neighbors_fn) provider.get_neighbors_fn = get_neighbors_fn;
+      if (step_cost_fn) provider.step_cost_fn = step_cost_fn;
+    }
+    ctx.add_system(Stage::Update,
+                   std::make_unique<pathfinding::PathfindingRequestSystem>());
+    ctx.add_system(Stage::Update,
+                   std::make_unique<pathfinding::PathfindingResponseSystem>());
+  }
+};
+static_assert(InstallablePlugin<PathfindingPlugin>);
+
 } // namespace afterhours

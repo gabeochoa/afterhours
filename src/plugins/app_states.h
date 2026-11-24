@@ -130,4 +130,27 @@ struct app_states : developer::Plugin {
 static_assert(developer::PluginCore<app_states>,
               "app_states must implement the core plugin interface");
 
+template <typename E, typename Action = int> struct AppStatesPlugin {
+  E initial{};
+  std::vector<app_states::Transition<E, Action>> transitions{};
+  typename app_states::State<E>::Hook on_enter{};
+  typename app_states::State<E>::Hook on_exit{};
+
+  void install(PluginContext &ctx) const {
+    const bool existed =
+        ctx.collection.has_singleton<app_states::HasState<E>>();
+    auto &has_state =
+        ctx.ensure_singleton<app_states::HasState<E>>(initial);
+    if (!existed) {
+      if (on_enter) has_state.state.on_enter(on_enter);
+      if (on_exit) has_state.state.on_exit(on_exit);
+    }
+    if (!transitions.empty()) {
+      ctx.add_system(Stage::Update,
+                     std::make_unique<app_states::TransitionSystem<E, Action>>(
+                         transitions));
+    }
+  }
+};
+
 } // namespace afterhours

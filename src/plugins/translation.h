@@ -368,5 +368,20 @@ struct translation_plugin : developer::Plugin {
 //       MyFontNameGetter>>, "translation_plugin must implement the core plugin
 //       interface");
 
+template <typename StringKeyEnum, typename ParamEnum, typename FontIDEnum,
+          typename FontNameGetter>
+struct TranslationPlugin {
+  using PluginType =
+      translation_plugin<StringKeyEnum, ParamEnum, FontIDEnum, FontNameGetter>;
+  typename PluginType::LanguageMap translations{};
+  Language default_language = Language::English;
+  std::map<ParamEnum, std::string> param_name_map{};
+
+  void install(PluginContext &ctx) const {
+    ctx.ensure_singleton<typename PluginType::ProvidesTranslation>(
+        translations, default_language, param_name_map);
+  }
+};
+
 } // namespace translation
 } // namespace afterhours

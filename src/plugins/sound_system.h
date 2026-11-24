@@ -1078,4 +1078,22 @@ struct sound_system : developer::Plugin {
 static_assert(developer::PluginCore<sound_system>,
               "sound_system must implement the core plugin interface");
 
+struct SoundPlugin {
+    int default_alias_copies = 4;
+
+    void install(PluginContext &ctx) const {
+        const bool existed =
+            ctx.collection.has_singleton<sound_system::SoundEmitter>();
+        auto &emitter = ctx.ensure_singleton<sound_system::SoundEmitter>();
+        if (!existed) emitter.default_alias_copies = default_alias_copies;
+        ctx.add_system(Stage::Update,
+                       std::make_unique<sound_system::SoundPlaybackSystem>());
+        ctx.add_system(Stage::Update,
+                       std::make_unique<sound_system::FadeUpdateSystem>());
+        ctx.add_system(Stage::Update,
+                       std::make_unique<sound_system::MusicUpdateSystem>());
+    }
+};
+static_assert(InstallablePlugin<SoundPlugin>);
+
 }  // namespace afterhours
