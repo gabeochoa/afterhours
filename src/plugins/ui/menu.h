@@ -59,7 +59,7 @@ inline constexpr int kNoMenuSelection = -1;
 struct HasMenuState : BaseComponent {
   bool was_open_last_frame = false;
   EntityID panel = -1;
-  EntityID restore_focus = -1;
+  EntityHandle restore_focus = EntityHandle::invalid();
 };
 
 namespace detail {
@@ -74,7 +74,7 @@ bool dismiss_menu(Ctx &ctx, HasMenuState &state, bool open) {
   if constexpr (magic_enum::enum_contains<Action>("MenuBack"))
     escape = inside && ctx.pressed(Action::MenuBack);
   if (open && inside && !escape && !outside_press) return false;
-  if (inside) ctx.set_focus(state.restore_focus);
+  if (inside) ctx.restore_focus(state.restore_focus);
   state.was_open_last_frame = false;
   auto panel = UICollectionHolder::getEntityForID(state.panel);
   if (panel.valid()) panel.asE().template addComponentIfMissing<ShouldHide>();
@@ -361,7 +361,7 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
 
   state.panel = list.ent().id;
   if (!state.was_open_last_frame) {
-    state.restore_focus = ctx.focus_id;
+    state.restore_focus = ctx.capture_focus();
     ctx.set_focus(state.panel);
   }
   if (chosen != kNoMenuSelection) open = false;
@@ -482,7 +482,7 @@ popover(HasUIContext auto &ctx, EntityParent ep_pair,
 
   state.panel = panel.ent().id;
   if (!was_open) {
-    state.restore_focus = ctx.focus_id;
+    state.restore_focus = ctx.capture_focus();
     ctx.set_focus(state.panel);
   }
   state.was_open_last_frame = open;

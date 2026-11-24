@@ -352,6 +352,28 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     focus_id = id;
   }
 
+  [[nodiscard]] EntityHandle capture_focus() const {
+    if (focus_id == ROOT)
+      return EntityHandle::invalid();
+    OptEntity e = UICollectionHolder::getEntityForID(focus_id);
+    return e.has_value() ? UICollectionHolder::handle_for(e.asE())
+                         : EntityHandle::invalid();
+  }
+
+  bool restore_focus(EntityHandle handle) {
+    if (handle.is_invalid())
+      return false;
+    OptEntity e = UICollectionHolder::resolve(handle);
+    if (!e.has_value())
+      return false;
+    Entity &target = e.asE();
+    if (target.template is_missing<UIComponent>() ||
+        target.template has_any<DoesNotTakeFocus, ShouldHide>())
+      return false;
+    set_focus(target.id, FocusSource::Explicit);
+    return true;
+  }
+
   // :focus-visible: the ring exists for users who cannot see a pointer.
   [[nodiscard]] bool focus_visible() const {
     return focus_modality != FocusSource::Pointer;
