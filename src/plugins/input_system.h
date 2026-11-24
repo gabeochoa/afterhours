@@ -1260,7 +1260,7 @@ struct input : developer::Plugin {
 
     struct InputCollector : public BaseComponent {
         DeviceActivity device_activity;
-InputActivity activity;
+        InputActivity activity;
         AxisEdges axis_edges;
         std::vector<input::ActionDone> inputs;
         std::vector<input::ActionDone> inputs_pressed;
