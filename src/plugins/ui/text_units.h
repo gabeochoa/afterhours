@@ -114,6 +114,7 @@ inline bool is_valid_utf8(std::string_view text) {
 // Invalid sequences become U+FFFD (maximal subpart); valid passes through.
 inline std::string sanitize_utf8(std::string_view text) {
   std::string out;
+  out.reserve(text.size());
   for (size_t i = 0; i < text.size();) {
     bool valid = false;
     const size_t n = text_units_detail::utf8_unit_length(text, i, valid);

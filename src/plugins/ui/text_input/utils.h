@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../../animation/instant.h"
 #include "../../clipboard.h"
 #include "../text_selection.h"
 #include "../text_units.h"
@@ -216,6 +217,8 @@ inline void move_cursor_right(AnyTextInputState auto &s) {
 
 // Update blink timer, returns true if cursor visible
 inline bool update_blink(AnyTextInputState auto &s, float dt) {
+  if (motion::is_instant())
+    return true;
   s.cursor_blink_timer += dt;
   if (s.cursor_blink_timer >= s.cursor_blink_rate * 2.0f)
     s.cursor_blink_timer = 0.0f;
@@ -620,9 +623,9 @@ template <typename State> inline void insert_newline_if_multiline(State &s) {
 /// insert_char.
 template <typename State>
 inline void insert_pasted_text(State &s, const std::string &clip) {
-  const std::string clean =
-      is_valid_utf8(clip) ? clip : sanitize_utf8(clip);
-  const std::string &text = clean;
+  std::string sanitized;
+  const std::string &text =
+      is_valid_utf8(clip) ? clip : (sanitized = sanitize_utf8(clip));
   for (size_t i = 0; i < text.size();) {
     const int cp = utf8_to_codepoint(text, i);
     const size_t len = utf8_char_length(text, i);
