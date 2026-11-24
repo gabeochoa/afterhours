@@ -131,7 +131,8 @@ inline void overwrite_defaults(HasUIContext auto &ctx,
       config.with_size(ComponentSize{w1280(120), h720(44)});
     }
     // Default padding: Spacing::sm
-    bool padding_is_default = config.padding.top.dim == Dim::None &&
+    bool padding_is_default = !config.padding_explicitly_set &&
+                              config.padding.top.dim == Dim::None &&
                               config.padding.left.dim == Dim::None &&
                               config.padding.bottom.dim == Dim::None &&
                               config.padding.right.dim == Dim::None;
@@ -234,7 +235,9 @@ inline void apply_accessibility(Entity &entity, const ComponentConfig &config,
 }
 
 inline void apply_flags(Entity &entity, const ComponentConfig &config) {
-  entity.get<UIComponent>().skip_when_tabbing = config.skip_when_tabbing;
+  entity.toggleTag(UITag::DrawOnly, config.draw_only);
+  entity.get<UIComponent>().skip_when_tabbing =
+      config.skip_when_tabbing || config.draw_only;
   entity.get<UIComponent>().focus_ring_offset = config.focus_ring_offset;
   entity.get<UIComponent>().focus_ring_thickness = config.focus_ring_thickness;
   if (config.consumes_directional_input)
@@ -557,6 +560,9 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
   }
   if (config.skip_hover_override.has_value() && entity.has<HasColor>())
     entity.get<HasColor>().skip_hover_override = *config.skip_hover_override;
+  if (config.bg_inset.has_value() && entity.has<HasColor>()) {
+    entity.get<HasColor>().bg_inset = config.bg_inset;
+  }
   if (config.image_tint.has_value()) {
     entity.toggleComponent<HasImageTint>(true, *config.image_tint)->color =
         *config.image_tint;
@@ -565,9 +571,12 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
   }
   // opacity has no "unset" value, so in overlay mode a default 1.0 is treated
   // as "not mentioned" rather than "make it opaque".
-  if (!overlay || config.opacity != 1.0f) {
-    entity.addComponentIfMissing<HasOpacity>().value =
-        std::clamp(config.opacity, 0.0f, 1.0f);
+  const bool clear_opacity = config.draw_only && config.opacity == 1.0f;
+  const bool set_opacity =
+      !clear_opacity && (!overlay || config.opacity != 1.0f);
+  if (clear_opacity || set_opacity) {
+    if (auto *opacity = entity.toggleComponent<HasOpacity>(set_opacity))
+      opacity->value = std::clamp(config.opacity, 0.0f, 1.0f);
   }
   // Apply cursor type if specified
   if (config.cursor_type.has_value()) {
@@ -680,12 +689,16 @@ Entity &parent, const ComponentConfig &config,
 
   if (entity.is_missing<UIComponent>()) {
     entity.addComponent<ui::UIComponent>(entity.id).set_parent(parent.id);
-    entity.addComponent<UIComponentDebug>(debug_name);
+    if (!config.draw_only)
+      entity.addComponent<UIComponentDebug>(debug_name);
 
     created = true;
   }
+  if (config.draw_only)
+    entity.removeComponentIfExists<UIComponentDebug>();
 
-  if (!config.debug_name.empty()) {
+  if (!entity.has<UIComponentDebug>()) {
+  } else if (!config.debug_name.empty()) {
     entity.get<UIComponentDebug>().set(config.debug_name);
   } else if (!config.label.empty()) {
     // Auto-derive debug name from label: "<label> <component_type>"
@@ -714,6 +727,7 @@ Entity &parent, const ComponentConfig &config,
     mods.origin_x = config.origin_x;
     mods.origin_y = config.origin_y;
   }
+  entity.addComponentIfMissing<HasThemeSnapshot>().theme = ctx.theme;
   apply_label(ctx, entity, config);
   apply_accessibility(entity, config,
                       default_accessible_role(component_type));

@@ -112,6 +112,7 @@ struct EntityHelper {
   static Entities &get_entities_for_mod() {
     return get_default_collection().get_entities_for_mod();
   }
+
   static const Entities &get_entities() {
     return get_default_collection().get_entities();
   }
@@ -236,6 +237,14 @@ struct EntityHelper {
 
   static void delete_all_entities(const bool include_permanent) {
     get_default_collection().delete_all_entities(include_permanent);
+  }
+
+  static void reset_for_new_session() {
+    get_default_collection().reset_for_new_session();
+  }
+
+  static std::uint64_t session_generation() {
+    return get_default_collection().session_generation();
   }
 
   static void forEachEntity(const std::function<ForEachFlow(Entity &)> &cb) {
