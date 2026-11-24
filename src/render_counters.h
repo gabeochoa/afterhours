@@ -6,7 +6,7 @@
 
 namespace afterhours::render_counters {
 
-// Texture/RT creations happen outside the batched render pass, so backends
+// GPU resource creations happen outside the batched render pass, so backends
 // stash them here and BatchedRenderer drains the stash into its per-frame
 // stats. Empty when profiling is compiled out, so callers cost nothing.
 #if AFTERHOURS_ENABLE_PROFILING
