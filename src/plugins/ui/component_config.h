@@ -6,6 +6,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 #include "../../warn_once.h"
 #include "../autolayout.h"
@@ -67,6 +68,7 @@ struct ComponentConfig {
 
   Padding padding;
   bool padding_is_default = false;
+  bool padding_explicitly_set = false;
   Margin margin;
   std::string label;
   bool is_absolute = false;
@@ -89,6 +91,7 @@ struct ComponentConfig {
   // + scroll)
   Overflow overflow_x = Overflow::Visible;
   Overflow overflow_y = Overflow::Visible;
+  bool scrollbar_gutter = false;
 
   // Background color settings
   Theme::Usage color_usage = Theme::Usage::Default;
@@ -131,6 +134,7 @@ struct ComponentConfig {
   std::optional<float> focus_ring_thickness;
   bool ignore_pointer_events = false; // invisible to hit-testing
   bool inert = false;
+  bool draw_only = false;
   bool takes_focus = true;
   bool hoverable = false;
   // User data, not localizable copy: the pseudo-locale stress leaves this
@@ -160,7 +164,12 @@ struct ComponentConfig {
   // is known. An absolute number cannot say "above whatever contains me".
   int render_layer_offset = 0;
 
-  // Custom-draw callbacks (see HasOnDraw), receiving the final rect.
+  // Custom-draw callbacks (see HasOnDraw): bg draws behind the widget's fill,
+  // fg on top of all its primitives, both receiving the widget's final rect.
+  // Focus-scoped shortcuts (see ui::HasShortcuts): handlers that fire when
+  // this element or a descendant holds focus and the bound action is
+  // pressed. Copied onto the entity by apply_flags each frame.
+  std::vector<ShortcutBinding> shortcuts;
   std::string tooltip_text;
   float tooltip_delay = 0.5f;
   overlay::Placement tooltip_placement = overlay::Placement::Below;
@@ -211,8 +220,14 @@ struct ComponentConfig {
   bool text_cut_disabled = false;
   bool text_paste_disabled = false;
 
+  // Text input: Escape blurs the field. Off lets the app use Escape for
+  // its own overlay (slash menu, autocomplete) without losing the caret.
+  bool text_escape_blurs = true;
+
   // Text input: hint shown while the bound string is empty.
   std::string placeholder;
+  // Hint ink override; unset keeps theme.font_muted on both text widgets.
+  std::optional<Color> placeholder_color;
 
   std::optional<std::string> checkbox_checked_indicator;
   std::optional<std::string> checkbox_unchecked_indicator;
@@ -247,6 +262,7 @@ struct ComponentConfig {
   std::optional<texture_manager::Texture> icon_texture;
   std::optional<texture_manager::Rectangle> icon_source_rect;
   IconPosition icon_position = IconPosition::Left;
+  std::optional<ComponentSize> icon_size;
 
   // Nine-slice border configuration
   std::optional<NineSliceBorder> nine_slice_config;
@@ -302,6 +318,7 @@ struct ComponentConfig {
   ComponentConfig &with_padding(const Padding &padding_) {
     padding = padding_;
     padding_is_default = false;
+    padding_explicitly_set = true;
     return *this;
   }
   ComponentConfig &with_margin(const Margin &margin_) {
@@ -318,6 +335,7 @@ struct ComponentConfig {
   }
   ComponentConfig &with_padding(Spacing spacing) {
     padding_is_default = false;
+    padding_explicitly_set = true;
     auto gap_size = spacing_to_size(spacing);
     padding = Padding{.top = gap_size,
                       .left = gap_size,
@@ -402,6 +420,10 @@ struct ComponentConfig {
     icon_position = pos;
     return *this;
   }
+  ComponentConfig &with_icon_size(ComponentSize sz) {
+    icon_size = sz;
+    return *this;
+  }
 
   // NEW: Explicit background color APIs
   ComponentConfig &with_background(Theme::Usage usage) {
@@ -473,6 +495,11 @@ struct ComponentConfig {
   }
   ComponentConfig &with_slider_style(const SliderStyle &style) {
     slider_style = style;
+    return *this;
+  }
+
+  ComponentConfig &with_escape_blurs(bool blur = true) {
+    text_escape_blurs = blur;
     return *this;
   }
   ComponentConfig &with_toggle_indicators(const std::string &on,
@@ -728,6 +755,10 @@ struct ComponentConfig {
     inert = on;
     return *this;
   }
+  ComponentConfig &with_draw_only(bool on = true) {
+    draw_only = on;
+    return *this;
+  }
   ComponentConfig &with_takes_focus(bool takes = true) {
     takes_focus = takes;
     return *this;
@@ -735,6 +766,18 @@ struct ComponentConfig {
   ComponentConfig &with_hoverable(bool on = true) {
     hoverable = on;
     return *this;
+  }
+
+  ComponentConfig &with_shortcut(int action,
+                                 std::function<bool(Entity &)> handler) {
+    shortcuts.push_back(ShortcutBinding{action, std::move(handler)});
+    return *this;
+  }
+  template <typename Action>
+    requires std::is_enum_v<Action>
+  ComponentConfig &with_shortcut(Action action,
+                                 std::function<bool(Entity &)> handler) {
+    return with_shortcut(static_cast<int>(action), std::move(handler));
   }
   ComponentConfig &with_pseudo_locale_exempt(bool exempt = true) {
     pseudo_locale_exempt = exempt;
@@ -825,6 +868,10 @@ struct ComponentConfig {
     placeholder = std::move(hint);
     return *this;
   }
+  ComponentConfig &with_placeholder_color(Color color) {
+    placeholder_color = color;
+    return *this;
+  }
   /// Flex wrap: lets CHILDREN flow onto a new row/column. NOT text wrapping --
   /// adding this to a label that overflows does nothing. Use
   /// with_text_overflow(TextOverflow::Wrap) for text.
@@ -865,6 +912,11 @@ struct ComponentConfig {
   ComponentConfig &with_overflow(Overflow overflow) {
     overflow_x = overflow;
     overflow_y = overflow;
+    return *this;
+  }
+
+  ComponentConfig &with_scrollbar_gutter(bool enabled = true) {
+    scrollbar_gutter = enabled;
     return *this;
   }
 
@@ -1203,7 +1255,7 @@ struct ComponentConfig {
   }
 
   ComponentConfig &apply_automatic_defaults() {
-    if (!has_padding()) {
+    if (!has_padding() && !padding_explicitly_set) {
       padding = Padding{.top = DefaultSpacing::medium(),
                         .left = DefaultSpacing::medium(),
                         .bottom = DefaultSpacing::medium(),
@@ -1224,9 +1276,10 @@ struct ComponentConfig {
   ComponentConfig &apply_overrides_from(const ComponentConfig &overrides) {
     ComponentConfig &merged = *this;
 
-    if (overrides.has_padding()) {
+    if (overrides.has_padding() || overrides.padding_explicitly_set) {
       merged.padding = overrides.padding;
       merged.padding_is_default = overrides.padding_is_default;
+      merged.padding_explicitly_set = overrides.padding_explicitly_set;
     }
     if (overrides.has_margin())
       merged.margin = overrides.margin;
@@ -1273,6 +1326,8 @@ struct ComponentConfig {
       merged.ignore_pointer_events = true;
     if (overrides.inert)
       merged.inert = true;
+    if (overrides.draw_only)
+      merged.draw_only = true;
     if (!overrides.takes_focus)
       merged.takes_focus = false;
     if (overrides.hoverable)
@@ -1281,6 +1336,8 @@ struct ComponentConfig {
       merged.pseudo_locale_exempt = true;
     if (overrides.selects_on_focus())
       merged.select_on_focus = overrides.select_on_focus;
+    if (!overrides.shortcuts.empty())
+      merged.shortcuts = overrides.shortcuts;
     if (overrides.has_click_activation_override())
       merged.click_activation = overrides.click_activation;
 
@@ -1387,6 +1444,8 @@ if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.deb
       merged.overflow_x = overrides.overflow_x;
     if (overrides.overflow_y != Overflow::Visible)
       merged.overflow_y = overrides.overflow_y;
+    if (overrides.scrollbar_gutter)
+      merged.scrollbar_gutter = true;
 
     // Colour and corner detail
     if (overrides.hover_color.has_value())
@@ -1440,8 +1499,12 @@ if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.deb
       merged.text_cut_disabled = true;
     if (overrides.text_paste_disabled)
       merged.text_paste_disabled = true;
+    if (!overrides.text_escape_blurs)
+      merged.text_escape_blurs = false;
     if (!overrides.placeholder.empty())
       if (merged.placeholder != overrides.placeholder) merged.placeholder = overrides.placeholder;
+    if (overrides.placeholder_color.has_value())
+      merged.placeholder_color = overrides.placeholder_color;
     if (overrides.text_area_line_height.has_value())
       merged.text_area_line_height = overrides.text_area_line_height;
     // Defaults true; see auto_text_color.
@@ -1484,6 +1547,8 @@ if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.deb
       merged.icon_source_rect = overrides.icon_source_rect;
     if (overrides.icon_position != IconPosition::Left)
       merged.icon_position = overrides.icon_position;
+    if (overrides.icon_size.has_value())
+      merged.icon_size = overrides.icon_size;
 
     if (!overrides.extensions.empty())
       merged.extensions = overrides.extensions;
@@ -1548,6 +1613,8 @@ if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.deb
       custom_text_color = parent.custom_text_color;
       auto_text_color = parent.auto_text_color;
     }
+    if (parent.placeholder_color.has_value())
+      placeholder_color = parent.placeholder_color;
     // Same rule: a composite dropped the caller's edge and corner silently.
     if (parent.roundness.has_value())
       roundness = parent.roundness;
