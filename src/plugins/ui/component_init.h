@@ -560,6 +560,9 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
   }
   if (config.skip_hover_override.has_value() && entity.has<HasColor>())
     entity.get<HasColor>().skip_hover_override = *config.skip_hover_override;
+  if (config.bg_inset.has_value() && entity.has<HasColor>()) {
+    entity.get<HasColor>().bg_inset = config.bg_inset;
+  }
   if (config.image_tint.has_value()) {
     entity.toggleComponent<HasImageTint>(true, *config.image_tint)->color =
         *config.image_tint;
