@@ -12,6 +12,7 @@
 
 #include "entity.h"
 #include "entity_helper.h"
+#include "hash.h"
 #include "pointer_policy.h"
 
 namespace afterhours::snapshot {
@@ -57,16 +58,16 @@ inline std::vector<EntityRecord> take_entities(const Options &opt = {}) {
   return out;
 }
 
-// Snapshot one component type into a pointer-free DTO type.
+// Snapshot one component type into a pointer-free serializable type.
 //
 // This avoids copying components (which may be intentionally non-copyable).
-// Instead, you provide a converter from `const Component&` -> `DTO`.
-template <typename Component, typename DTO, typename Converter>
-inline std::vector<ComponentRecord<DTO>>
+// Instead, you provide a converter from `const Component&` -> `Serializable`.
+template <typename Component, typename Serializable, typename Converter>
+inline std::vector<ComponentRecord<Serializable>>
 take_components(Converter &&convert, const Options &opt = {}) {
-  static_assert_pointer_free_types<DTO>();
-  static_assert(std::is_copy_constructible_v<DTO>,
-                "snapshot DTOs must be CopyConstructible");
+  static_assert_pointer_free_types<Serializable>();
+  static_assert(std::is_copy_constructible_v<Serializable>,
+                "snapshot serializables must be CopyConstructible");
   static_assert(std::is_base_of_v<BaseComponent, Component>,
                 "Component must inherit from BaseComponent");
 
@@ -74,7 +75,7 @@ take_components(Converter &&convert, const Options &opt = {}) {
     EntityHelper::merge_entity_arrays();
   }
 
-  std::vector<ComponentRecord<DTO>> out;
+  std::vector<ComponentRecord<Serializable>> out;
   const Entities &ents = EntityHelper::get_entities();
   for (const auto &sp : ents) {
     if (!sp)
@@ -85,7 +86,7 @@ take_components(Converter &&convert, const Options &opt = {}) {
     const EntityHandle h = EntityHelper::handle_for(e);
     if (!h.valid())
       continue;
-    out.push_back(ComponentRecord<DTO>{.entity = h,
+    out.push_back(ComponentRecord<Serializable>{.entity = h,
                                        .value = convert(e.get<Component>())});
   }
   return out;
@@ -125,11 +126,6 @@ inline void append_token(std::string &out, const std::string &v) {
   out += ':';
   out += v;
 }
-inline std::uint64_t fnv1a(const std::string &s) {
-  std::uint64_t h = 14695981039346656037ull;
-  for (unsigned char c : s) { h ^= c; h *= 1099511628211ull; }
-  return h;
-}
 inline void sort_fields(std::vector<Field> &f) {
   std::sort(f.begin(), f.end());
 }
@@ -152,7 +148,8 @@ inline std::string CanonicalSnapshot::encode() const {
   return out;
 }
 inline std::uint64_t CanonicalSnapshot::hash() const {
-  return detail::fnv1a(encode());
+  const std::string encoded = encode();
+  return core_hash({reinterpret_cast<const std::uint8_t *>(encoded.data()), encoded.size()});
 }
 
 // IdentityFn: std::string(const EntityHandle &). Throws on empty/duplicate.
@@ -182,10 +179,10 @@ CanonicalSnapshot canonicalize(const std::vector<EntityRecord> &records,
   return out;
 }
 
-// FieldsFn: std::vector<Field>(const DTO &). Names are prefixed "<name>.".
-template <typename DTO, typename IdentityFn, typename FieldsFn>
+// FieldsFn: std::vector<Field>(const Serializable &). Names are prefixed "<name>.".
+template <typename Serializable, typename IdentityFn, typename FieldsFn>
 void add_components(CanonicalSnapshot &snap,
-                    const std::vector<ComponentRecord<DTO>> &records,
+                    const std::vector<ComponentRecord<Serializable>> &records,
                     IdentityFn &&identity_of, const std::string &name,
                     FieldsFn &&fields_of) {
   std::unordered_map<std::string, std::size_t> by_id;
