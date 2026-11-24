@@ -99,6 +99,7 @@ ALL_TESTS := \
 	parent_gesture_test \
 	label_clip_test \
 	label_test \
+	tooltip_truncated_test \
 	batched_text_overflow_test \
 	scroll_clip_decoration_test \
 	animation_test \
@@ -290,6 +291,7 @@ lighting_zones_test \
 	auto_text_color_test \
 	scissor_coalescing_test \
 	blend_batch_test \
+	draw_coalesce_test \
 	focus_origin_test \
 	tab_order_test \
 	reset_focus_test \
@@ -380,6 +382,7 @@ lighting_zones_test \
 	texture_usable_raylib_test \
 	per_draw_filter_test \
 	stepper_test \
+	bg_inset_test \
 	styling_test \
 	system_tags_test \
 	should_run_overload_test \
