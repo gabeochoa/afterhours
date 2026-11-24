@@ -371,6 +371,41 @@ TEST(enter_breaks_the_line_by_default) {
   CHECK(!submitted);
 }
 
+TEST(caret_blink_uses_seconds_and_is_steady_under_instant) {
+  ti::HasTextAreaState s{std::string("ab")};
+  CHECK(ti::update_blink(s, 0.2f));
+  CHECK(ti::update_blink(s, 0.2f));
+  CHECK(!ti::update_blink(s, 0.2f));
+  motion::set_instant(true);
+  ti::HasTextAreaState s2{std::string("ab")};
+  bool steady = true;
+  for (int i = 0; i < 10; ++i) steady &= ti::update_blink(s2, 0.2f);
+  motion::set_instant(false);
+  CHECK(steady);
+}
+
+TEST(enter_replaces_selection_and_is_one_undo_step) {
+  ImmTestHarness h;
+  std::string text = "abcd";
+  Entity *area = nullptr;
+  auto emit = [&] {
+    auto r = text_area(h.context(), mk(h.root(), 0), text, area_config(200.f, 100.f));
+    area = &r.ent();
+  };
+  h.begin_frame(); emit(); h.layout_only();
+  if (UIComponent *f = h.find("text_area_field")) h.context().focus_id = f->id;
+  CHECK(area && area->has<ti::HasTextAreaState>());
+  if (!area || !area->has<ti::HasTextAreaState>()) return;
+  auto &s = area->get<ti::HasTextAreaState>();
+  s.cursor_position = 2;
+  s.selection_anchor = 0;
+  h.context().last_action = ui_test::TestInputAction::WidgetPress;
+  h.begin_frame(); emit(); h.layout_only();
+  CHECK(text == "\ncd");
+  CHECK(s.undo());
+  CHECK(s.text() == "abcd");
+}
+
 // Chat-composer mode: Enter sends and must NOT leave a newline behind, or the
 // draft the app reads back has a stray break in it.
 TEST(submit_on_enter_sends_without_breaking) {
