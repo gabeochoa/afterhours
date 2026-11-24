@@ -293,6 +293,99 @@ int main() {
   }
 
   {
+    const Timeline tl{.keys = {{0.f, 0.f},
+                               {.08f, 6.f},
+                               {.16f, -6.f},
+                               {.22f, 4.f},
+                               {.28f, 0.f}}};
+    bool same = true;
+    for (float t = 0.f; t <= 0.281f; t += 0.01f)
+      same = same && near(tl.at(t), tl.at(t));
+    check(same && near(tl.at(0.12f), 0.f) && near(tl.at(0.04f), 3.f),
+          "sampling a timeline descending matches ascending at the same t");
+    const Timeline loop{.keys = {{0.f, 0.f}, {0.9f, 360.f}},
+                        .repeat = Repeat::Loop};
+    check(near(loop.at(-0.45f), 180.f),
+          "loop wraps a negative time the same way as a positive one");
+    const Timeline pp{.keys = {{0.f, 1.f}, {0.5f, 0.5f}},
+                      .repeat = Repeat::PingPong};
+    check(near(pp.at(-0.25f), 0.75f),
+          "pingpong wraps a negative time forward-then-back");
+  }
+
+  {
+    afterhours::motion::Track<float> tr;
+    tr.from(0.f).to(6.f, Timeline{.keys = {{0.f, 0.f},
+                                            {.08f, 1.f},
+                                            {.16f, -1.f},
+                                            {.28f, 0.f}}});
+    tr.seek(0.12f);
+    check(near(tr.value(), 0.f), "seek to a mid key reads its value");
+    tr.seek(0.04f);
+    check(near(tr.value(), 3.f), "seek backwards reads the earlier value");
+    tr.seek(5.f);
+    check(near(tr.value(), 0.f), "seek past the end clamps for once");
+  }
+
+  {
+    afterhours::motion::Track<float> tr;
+    int completions = 0;
+    tr.from(0.f)
+        .to(6.f, Timeline{.keys = {{0.f, 0.f}, {0.28f, 1.f}}})
+        .on_complete([&] { completions++; });
+    tr.advance(0.14f);
+    const float mid = tr.value();
+    check(near(mid, 3.f), "forward half reaches the midpoint");
+    tr.reverse();
+    check(tr.reversed(), "reverse() reports the flipped direction");
+    tr.advance(0.07f);
+    check(near(tr.value(), 1.5f), "reversed playback steps back");
+    tr.advance(0.2f);
+    check(!tr.active() && near(tr.value(), 0.f) && completions == 1,
+          "reversed playback ends on the start value and completes");
+    tr.reverse();
+    check(tr.active(), "reverse() on a finished timeline resumes it");
+    tr.advance(0.14f);
+    check(near(tr.value(), 3.f), "resumed-backwards track replays the midpoint");
+    tr.advance(0.2f);
+    check(!tr.active() && near(tr.value(), 6.f),
+          "toggling forward again ends on the target value");
+  }
+
+  {
+    auto walk = [](bool backwards, std::vector<float> &out) {
+      afterhours::motion::Track<float> tr;
+      tr.from(0.f)
+          .to(6.f, Timeline{.keys = {{0.f, 0.f},
+                                      {.1f, 1.f},
+                                      {.2f, -1.f},
+                                      {.3f, 0.f}}});
+      const float dt = 0.05f;
+      if (!backwards) {
+        for (int i = 0; i < 6; ++i) {
+          tr.advance(dt);
+          out.push_back(tr.value());
+        }
+      } else {
+        tr.advance(0.3f);
+        tr.reverse();
+        for (int i = 0; i < 6; ++i) {
+          tr.advance(dt);
+          out.push_back(tr.value());
+        }
+      }
+    };
+    std::vector<float> fwd, bwd;
+    walk(false, fwd);
+    walk(true, bwd);
+    bool same = fwd.size() == 6 && bwd.size() == 6;
+    for (size_t i = 0; same && i < 5; ++i)
+      same = near(fwd[i], bwd[4 - i]);
+    check(same,
+          "forward walk and reversed walk sample the same values at the same times");
+  }
+
+  {
     afterhours::motion::Track<ColorType> tr;
     tr.from(ColorType{0, 0, 0, 255})
         .to(ColorType{255, 255, 255, 255},
@@ -344,6 +437,22 @@ int main() {
     run(tr, 2.f);
     check(steps.size() >= 4 && steps.back() == 4,
           "on_step fires for each quantised step and ends on the last");
+  }
+
+  {
+    afterhours::animation::set_instant(true);
+    afterhours::motion::Track<float> tr;
+    tr.from(0.f).to(5.f, Spring{});
+    check(near(tr.value(), 5.f),
+          "instant to() lands immediately, before any advance");
+    afterhours::animation::set_instant(false);
+  }
+
+  {
+    afterhours::motion::Track<float> tr;
+    tr.delay(1.f);
+    check(!tr.active() && near(tr.value(), 0.f),
+          "delay() before any to() is a no-op (logs an error)");
   }
 
   {
