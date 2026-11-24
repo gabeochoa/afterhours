@@ -99,6 +99,7 @@ ALL_TESTS := \
 	parent_gesture_test \
 	label_clip_test \
 	label_test \
+	tooltip_truncated_test \
 	batched_text_overflow_test \
 	scroll_clip_decoration_test \
 	animation_test \
