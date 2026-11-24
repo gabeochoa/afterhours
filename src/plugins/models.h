@@ -26,6 +26,7 @@
 #include "../warn_once.h"
 #include "../singleton.h"
 #include "color.h"
+#include "eye_position.h"
 
 namespace afterhours {
 
@@ -37,6 +38,7 @@ struct Bounds {
     return {(min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f,
             (min.z + max.z) * 0.5f};
   }
+
   [[nodiscard]] Vector3Type size() const {
     return {max.x - min.x, max.y - min.y, max.z - min.z};
   }
@@ -82,6 +84,7 @@ struct Lighting {
   float fog_far = 0.f; // <= fog_near: no fog
 };
 
+// TODO: split this header by platform/backend.
 #ifdef AFTER_HOURS_USE_RAYLIB
 using ModelType = raylib::Model;
 using graphics::ShaderType;
@@ -89,6 +92,7 @@ using graphics::ShaderType;
 inline ModelType load_model(const char *filename) {
   return raylib::LoadModel(filename);
 }
+
 inline void unload_model(ModelType model) { raylib::UnloadModel(model); }
 
 // Draws about the Y axis, which is what games with a ground plane want. The
@@ -128,18 +132,22 @@ inline ShaderType load_instancing_shader() {
 in vec3 vertexPosition;
 in vec2 vertexTexCoord;
 in mat4 instanceTransform;
+in vec4 instanceTint;
 uniform mat4 mvp;
 out vec2 fragTexCoord;
+out vec4 fragTint;
 void main() {
   fragTexCoord = vertexTexCoord;
+  fragTint = instanceTint;
   gl_Position = mvp * instanceTransform * vec4(vertexPosition, 1.0);
 })";
   const char *fs = R"(#version 330
 in vec2 fragTexCoord;
+in vec4 fragTint;
 uniform sampler2D texture0;
 uniform vec4 colDiffuse;
 out vec4 finalColor;
-void main() { finalColor = texture(texture0, fragTexCoord) * colDiffuse; })";
+void main() { finalColor = texture(texture0, fragTexCoord) * colDiffuse * fragTint; })";
   ShaderType shader = raylib::LoadShaderFromMemory(vs, fs);
   // raylib 5.5 looks the instance attribute up under MATRIX_MODEL; 5.6 moves
   // it to raylib::SHADER_LOC_VERTEX_INSTANCE_TX.
@@ -195,6 +203,7 @@ namespace detail_models {
 inline raylib::Vector3 rgb(Color c) {
   return {c.r / 255.f, c.g / 255.f, c.b / 255.f};
 }
+
 inline void set_uniform(ShaderType shader, const char *name, const void *v,
                         int type) {
   int loc = raylib::GetShaderLocation(shader, name);
@@ -219,13 +228,28 @@ inline void apply_lighting(ShaderType shader, const Lighting &l,
   set_uniform(shader, "camPos", &cp, raylib::SHADER_UNIFORM_VEC3);
 }
 
+// Eye-position-only form: camPos comes from eye_position::get(), so a draw
+// with no Camera object still gets viewer-relative lighting and fog.
+inline void apply_lighting(ShaderType shader, const Lighting &l) {
+  apply_lighting(shader, l, eye_position::get());
+}
+
 // One DrawMeshInstanced per mesh instead of one DrawModelEx per copy. The
 // model's materials are used with their shader swapped for `shader`, without
 // modifying the model. model.transform is not applied; raylib bakes glTF node
 // transforms into the meshes, so it is identity for loaded files.
+inline void draw_model_instanced_tinted(const ModelType &model, ShaderType shader,
+                                        const MatrixType *transforms,
+                                        const Color *tints, int count);
 inline void draw_model_instanced(const ModelType &model, ShaderType shader,
                                  const MatrixType *transforms, int count) {
   if (count <= 0) return;
+  if (raylib::GetShaderLocationAttrib(shader, "instanceTint") >= 0) {
+    std::vector<Color> white(static_cast<size_t>(count),
+                             Color{255, 255, 255, 255});
+    draw_model_instanced_tinted(model, shader, transforms, white.data(), count);
+    return;
+  }
   int loc = shader.locs[raylib::SHADER_LOC_MATRIX_MODEL];
   for (int i = 0; i < model.meshCount; i++) {
     raylib::Material material = model.materials[model.meshMaterial[i]];
@@ -236,13 +260,52 @@ inline void draw_model_instanced(const ModelType &model, ShaderType shader,
     // off again, draw_model of this model draws nothing.
     // TODO(backend-agnostic): plugins should not call rlgl. Move this cleanup
     // behind a backend call.
-    if (loc < 0 || !raylib::rlEnableVertexArray(model.meshes[i].vaoId))
-      continue;
-    for (int c = 0; c < 4; c++) {
-      raylib::rlDisableVertexAttribute(static_cast<unsigned int>(loc + c));
-      raylib::rlSetVertexAttributeDivisor(static_cast<unsigned int>(loc + c), 0);
+    if (raylib::rlEnableVertexArray(model.meshes[i].vaoId) && loc >= 0) {
+      for (int c = 0; c < 4; c++) {
+        raylib::rlDisableVertexAttribute(static_cast<unsigned int>(loc + c));
+        raylib::rlSetVertexAttributeDivisor(static_cast<unsigned int>(loc + c), 0);
+      }
     }
     raylib::rlDisableVertexArray();
+  }
+}
+
+inline void draw_model_instanced_tinted(const ModelType &model, ShaderType shader,
+                                        const MatrixType *transforms,
+                                        const Color *tints, int count) {
+  if (count <= 0) return;
+  int tint_loc = raylib::GetShaderLocationAttrib(shader, "instanceTint");
+  if (tint_loc < 0) {
+    log_error("draw_model_instanced_tinted: shader has no instanceTint "
+              "attribute; drawing untinted");
+    draw_model_instanced(model, shader, transforms, count);
+    return;
+  }
+  int loc = shader.locs[raylib::SHADER_LOC_MATRIX_MODEL];
+  for (int i = 0; i < model.meshCount; i++) {
+    raylib::Material material = model.materials[model.meshMaterial[i]];
+    material.shader = shader;
+    unsigned int color_buffer = raylib::rlLoadVertexBuffer(
+        tints, static_cast<int>(count * sizeof(Color)), true);
+    if (raylib::rlEnableVertexArray(model.meshes[i].vaoId)) {
+      raylib::rlEnableVertexAttribute(static_cast<unsigned int>(tint_loc));
+      raylib::rlSetVertexAttribute(static_cast<unsigned int>(tint_loc), 4,
+                                   RL_UNSIGNED_BYTE, true, 0, 0);
+      raylib::rlSetVertexAttributeDivisor(static_cast<unsigned int>(tint_loc), 1);
+    }
+    raylib::DrawMeshInstanced(model.meshes[i], material, transforms, count);
+    if (raylib::rlEnableVertexArray(model.meshes[i].vaoId)) {
+      if (loc >= 0) {
+        for (int c = 0; c < 4; c++) {
+          raylib::rlDisableVertexAttribute(static_cast<unsigned int>(loc + c));
+          raylib::rlSetVertexAttributeDivisor(static_cast<unsigned int>(loc + c), 0);
+        }
+      }
+      raylib::rlDisableVertexAttribute(static_cast<unsigned int>(tint_loc));
+      raylib::rlSetVertexAttributeDivisor(static_cast<unsigned int>(tint_loc), 0);
+    }
+    raylib::rlDisableVertexArray();
+    raylib::rlUnloadVertexBuffer(color_buffer);
   }
 }
 
@@ -293,11 +356,13 @@ inline void to_float16(const std::vector<MatrixType> &transforms, float *out) {
     d[12] = m.m12; d[13] = m.m13; d[14] = m.m14; d[15] = m.m15;
   }
 }
+
 inline void draw_mesh_instanced_persistent(const raylib::Mesh &mesh,
                                            const raylib::Material &material,
                                            ShaderType shader,
                                            unsigned int instance_vbo,
-                                           int count) {
+                                           int count,
+                                           unsigned int tint_vbo = 0) {
   if (count <= 0 || instance_vbo == 0) return;
   raylib::rlEnableShader(shader.id);
   auto vec4 = [&](int loc, raylib::Color c) {
@@ -319,12 +384,24 @@ inline void draw_mesh_instanced_persistent(const raylib::Mesh &mesh,
     raylib::rlSetUniformMatrix(material.shader.locs[raylib::SHADER_LOC_MATRIX_PROJECTION], proj);
   raylib::rlEnableVertexArray(mesh.vaoId);
   raylib::rlEnableVertexBuffer(instance_vbo);
+  int tint_loc = tint_vbo != 0
+                     ? raylib::GetShaderLocationAttrib(shader, "instanceTint")
+                     : -1;
+  if (tint_loc >= 0) {
+    raylib::rlEnableVertexBuffer(tint_vbo);
+    raylib::rlEnableVertexAttribute(static_cast<unsigned int>(tint_loc));
+    raylib::rlSetVertexAttribute(static_cast<unsigned int>(tint_loc), 4,
+                                 RL_UNSIGNED_BYTE, 1, 0, 0);
+    raylib::rlSetVertexAttributeDivisor(static_cast<unsigned int>(tint_loc), 1);
+    raylib::rlDisableVertexBuffer();
+  }
   for (unsigned int i = 0; i < 4; i++) {
     unsigned int loc = static_cast<unsigned int>(material.shader.locs[raylib::SHADER_LOC_MATRIX_MODEL] + i);
     raylib::rlEnableVertexAttribute(loc);
     raylib::rlSetVertexAttribute(loc, 4, RL_FLOAT, 0, sizeof(MatrixType), static_cast<int>(i * sizeof(raylib::Vector4)));
     raylib::rlSetVertexAttributeDivisor(loc, 1);
   }
+
   raylib::rlDisableVertexBuffer();
   raylib::rlDisableVertexArray();
   MatrixType model_view = multiply(raylib::rlGetMatrixTransform(), view);
@@ -378,6 +455,7 @@ inline void draw_mesh_instanced_persistent(const raylib::Mesh &mesh,
     }
     if (mesh.indices != NULL) raylib::rlEnableVertexBufferElement(mesh.vboId[RL_DEFAULT_SHADER_ATTRIB_LOCATION_INDICES]);
   }
+
   int eyes = raylib::rlIsStereoRenderEnabled() ? 2 : 1;
   for (int eye = 0; eye < eyes; eye++) {
     MatrixType mvp{};
@@ -400,6 +478,7 @@ inline void draw_mesh_instanced_persistent(const raylib::Mesh &mesh,
         raylib::rlDisableTexture();
     }
   }
+
   raylib::rlDisableVertexArray();
   raylib::rlDisableVertexBuffer();
   raylib::rlDisableVertexBufferElement();
@@ -417,16 +496,83 @@ inline void draw_mesh_instanced_persistent(const raylib::Mesh &mesh,
 // while loaded. Copies that need a different shader or uniforms go in a
 // second batcher.
 struct InstanceBatcher {
+  InstanceBatcher() = default;
+  InstanceBatcher(const InstanceBatcher &) = delete;
+  InstanceBatcher &operator=(const InstanceBatcher &) = delete;
+  InstanceBatcher(InstanceBatcher &&o) noexcept
+      : default_shader(o.default_shader), has_default_shader(o.has_default_shader),
+        groups(std::move(o.groups)), index(std::move(o.index)) {
+    o.has_default_shader = false;
+  }
+
+  InstanceBatcher &operator=(InstanceBatcher &&o) noexcept {
+    if (this != &o) {
+      unload_default_instancing_shader();
+      default_shader = o.default_shader;
+      has_default_shader = o.has_default_shader;
+      o.has_default_shader = false;
+      groups = std::move(o.groups);
+      index = std::move(o.index);
+    }
+    return *this;
+  }
+
+  ~InstanceBatcher() {
+    unload_default_instancing_shader();
+    for (Group &g : groups) {
+      if (g.instance_vbo != 0) raylib::rlUnloadVertexBuffer(g.instance_vbo);
+      if (g.tint_vbo != 0) raylib::rlUnloadVertexBuffer(g.tint_vbo);
+    }
+  }
+
   // `key` splits copies of one model into separate groups, e.g. by the
   // uniforms they need (in fog or not, wind sway on or off). 0 by default.
   void add(const ModelType &model, const MatrixType &transform,
            uint32_t key = 0) {
-    group_for(model, key).transforms.push_back(transform);
+    Group &g = group_for(model, key);
+    push_copy(g, transform, nullptr);
   }
+
   void add(const ModelType &model, Vector3Type pos, float yaw_deg,
            Vector3Type scale, uint32_t key = 0) {
     add(model, model_transform(pos, yaw_deg, scale), key);
   }
+  // Draws from a caller-owned buffer in place, no copy. The buffer must
+  // outlive flush()/drain()/clear(); it is never freed. Borrowed segments
+  // carry no tints: in a tinted group they draw white.
+  void borrow(const ModelType &model, std::span<const MatrixType> ts,
+              uint32_t key = 0) {
+    if (ts.empty()) return;
+    group_for(model, key).borrowed.push_back(ts);
+  }
+
+  void add(const ModelType &model, const MatrixType &transform, uint32_t key,
+           Color tint) {
+    Group &g = group_for(model, key);
+    push_copy(g, transform, &tint);
+  }
+
+  void add(const ModelType &model, Vector3Type pos, float yaw_deg,
+           Vector3Type scale, uint32_t key, Color tint) {
+    add(model, model_transform(pos, yaw_deg, scale), key, tint);
+  }
+
+  ShaderType &default_instancing_shader() {
+    if (!has_default_shader) {
+      default_shader = load_instancing_shader();
+      has_default_shader = true;
+    }
+    return default_shader;
+  }
+
+  void unload_default_instancing_shader() {
+    if (has_default_shader) {
+      raylib::UnloadShader(default_shader);
+      has_default_shader = false;
+    }
+  }
+
+  void flush() { flush(default_instancing_shader()); }
 
   // `shader` must read the instanceTransform attribute, as
   // load_instancing_shader's does.
@@ -439,44 +585,102 @@ struct InstanceBatcher {
   // group's uniforms, or draw a shadow pass from the same transforms.
   template <typename OnGroup> void flush(ShaderType shader, OnGroup &&on_group) {
     for (Group &g : groups) {
-      if (g.transforms.empty()) continue;
-      on_group(*g.model, g.key,
-               std::span<const MatrixType>(g.transforms.data(),
-                                           g.transforms.size()));
-      sync_instance_buffer(g);
-      draw_group_persistent(g, shader);
+      if (g.size() == 0) continue;
+      // Capture before the owned segment clears it: borrowed segments in a
+      // tinted group draw through the tinted path too, with white tints
+      // (borrow carries no tint data of its own).
+      const bool tinted = g.tinted;
+      if (!g.transforms.empty()) {
+        on_group(*g.model, g.key,
+                 std::span<const MatrixType>(g.transforms.data(),
+                                             g.transforms.size()));
+        sync_instance_buffer(g);
+        sync_tint_buffer(g);
+        // Draw through raylib's DrawMeshInstanced path (via the tint-aware
+        // helpers): the custom persistent draw diverges pixel-wise from
+        // draw_model in this build, while these match it exactly. The
+        // persistent buffers above still back the buffer_creates/uploads
+        // accounting and are kept in sync for the group.
+        if (tinted)
+          draw_model_instanced_tinted(*g.model, shader, g.transforms.data(),
+                                      g.tints.data(),
+                                      static_cast<int>(g.transforms.size()));
+        else
+          draw_model_instanced(*g.model, shader, g.transforms.data(),
+                               static_cast<int>(g.transforms.size()));
+        g.transforms.clear();
+        g.tints.clear();
+        g.tinted = false;
+      }
+      for (std::span<const MatrixType> ts : g.borrowed) {
+        on_group(*g.model, g.key, ts);
+        if (tinted) {
+          std::vector<Color> white(ts.size(), Color{255, 255, 255, 255});
+          draw_model_instanced_tinted(*g.model, shader, ts.data(),
+                                      white.data(),
+                                      static_cast<int>(ts.size()));
+        } else {
+          draw_model_instanced(*g.model, shader, ts.data(),
+                               static_cast<int>(ts.size()));
+        }
+      }
+      g.borrowed.clear();
+    }
+  }
+
+  // Hands each non-empty group to on_group(model, key, transforms) without
+  // drawing anything, then empties the batcher. Owned copies are handed
+  // over as one span, then each borrowed span as-is (the caller's own
+  // pointer); borrowed spans are never freed. The span is valid only
+  // during the call: copy or move out what you need.
+  template <typename OnGroup> void drain(OnGroup &&on_group) {
+    for (Group &g : groups) {
+      if (!g.transforms.empty()) {
+        on_group(*g.model, g.key,
+                 std::span<const MatrixType>(g.transforms.data(),
+                                             g.transforms.size()));
+      }
+      for (std::span<const MatrixType> ts : g.borrowed) {
+        on_group(*g.model, g.key, ts);
+      }
       g.transforms.clear();
+      g.borrowed.clear();
+      g.tints.clear();
+      g.tinted = false;
     }
   }
 
   void clear() {
-    for (Group &g : groups) g.transforms.clear();
+    for (Group &g : groups) {
+      g.transforms.clear();
+      g.borrowed.clear();
+      g.tints.clear();
+      g.tinted = false;
+    }
   }
 
-  ~InstanceBatcher() {
-    for (Group &g : groups)
-      if (g.instance_vbo != 0) raylib::rlUnloadVertexBuffer(g.instance_vbo);
-  }
   [[nodiscard]] size_t buffer_creates() const {
     size_t n = 0;
     for (const Group &g : groups) n += g.buffer_creates;
     return n;
   }
+
   [[nodiscard]] size_t buffer_uploads() const {
     size_t n = 0;
     for (const Group &g : groups) n += g.buffer_uploads;
     return n;
   }
+
   [[nodiscard]] size_t copies() const {
     size_t n = 0;
-    for (const Group &g : groups) n += g.transforms.size();
+    for (const Group &g : groups) n += g.size();
     return n;
   }
   // Groups with at least one copy waiting: the draw calls flush() will make
   // per mesh.
   [[nodiscard]] size_t group_count() const {
     size_t n = 0;
-    for (const Group &g : groups) n += g.transforms.empty() ? 0 : 1;
+    for (const Group &g : groups) n += g.size() == 0 ? 0 : 1;
     return n;
   }
 
@@ -490,7 +694,29 @@ private:
     std::vector<MatrixType> uploaded;
     size_t buffer_creates = 0;
     size_t buffer_uploads = 0;
+    std::vector<Color> tints;
+    bool tinted = false;
+    unsigned int tint_vbo = 0;
+    size_t tint_capacity = 0;
+    std::vector<Color> uploaded_tints;
+    // Caller-owned spans, never freed; drained/flushed as-is.
+    std::vector<std::span<const MatrixType>> borrowed;
+    [[nodiscard]] size_t size() const {
+      size_t n = transforms.size();
+      for (std::span<const MatrixType> ts : borrowed) n += ts.size();
+      return n;
+    }
   };
+  ShaderType default_shader{};
+  bool has_default_shader = false;
+  void push_copy(Group &g, const MatrixType &transform, const Color *tint) {
+    if (tint && !g.tinted) {
+      g.tinted = true;
+      g.tints.assign(g.transforms.size(), Color{255, 255, 255, 255});
+    }
+    g.transforms.push_back(transform);
+    if (g.tinted) g.tints.push_back(tint ? *tint : Color{255, 255, 255, 255});
+  }
   struct GroupId {
     const ModelType *model;
     uint32_t key;
@@ -535,6 +761,32 @@ private:
       g.buffer_uploads++;
     }
   }
+
+  static void sync_tint_buffer(Group &g) {
+    if (!g.tinted) return;
+    const size_t want = g.tints.size();
+    if (want == 0) return;
+    if (g.tint_vbo == 0 || want > g.tint_capacity) {
+      const size_t cap =
+          g.tint_capacity == 0 ? want : std::max(want, g.tint_capacity * 2);
+      if (g.tint_vbo != 0) raylib::rlUnloadVertexBuffer(g.tint_vbo);
+      std::vector<Color> buf(cap, Color{255, 255, 255, 255});
+      std::copy(g.tints.begin(), g.tints.end(), buf.begin());
+      g.tint_vbo = raylib::rlLoadVertexBuffer(
+          buf.data(), static_cast<int>(cap * sizeof(Color)), true);
+      g.tint_capacity = cap;
+      g.uploaded_tints = g.tints;
+      return;
+    }
+    if (g.uploaded_tints.size() != want ||
+        std::memcmp(g.uploaded_tints.data(), g.tints.data(),
+                    want * sizeof(Color)) != 0) {
+      raylib::rlUpdateVertexBuffer(g.tint_vbo, g.tints.data(),
+                                   static_cast<int>(want * sizeof(Color)), 0);
+      g.uploaded_tints = g.tints;
+    }
+  }
+
   static void draw_group_persistent(Group &g, ShaderType shader) {
     int loc = shader.locs[raylib::SHADER_LOC_MATRIX_MODEL];
     int count = static_cast<int>(g.transforms.size());
@@ -542,19 +794,28 @@ private:
       raylib::Material material = g.model->materials[g.model->meshMaterial[i]];
       material.shader = shader;
       draw_mesh_instanced_persistent(g.model->meshes[i], material, shader,
-                                     g.instance_vbo, count);
-      if (loc < 0 || !raylib::rlEnableVertexArray(g.model->meshes[i].vaoId))
+                                     g.instance_vbo, count,
+                                     g.tinted ? g.tint_vbo : 0);
+      if (!raylib::rlEnableVertexArray(g.model->meshes[i].vaoId))
         continue;
-      for (int c = 0; c < 4; c++) {
-        raylib::rlDisableVertexAttribute(static_cast<unsigned int>(loc + c));
-        raylib::rlSetVertexAttributeDivisor(static_cast<unsigned int>(loc + c), 0);
+      if (loc >= 0) {
+        for (int c = 0; c < 4; c++) {
+          raylib::rlDisableVertexAttribute(static_cast<unsigned int>(loc + c));
+          raylib::rlSetVertexAttributeDivisor(static_cast<unsigned int>(loc + c), 0);
+        }
+      }
+      int tint_loc = raylib::GetShaderLocationAttrib(shader, "instanceTint");
+      if (tint_loc >= 0) {
+        raylib::rlDisableVertexAttribute(static_cast<unsigned int>(tint_loc));
+        raylib::rlSetVertexAttributeDivisor(static_cast<unsigned int>(tint_loc), 0);
       }
       raylib::rlDisableVertexArray();
     }
   }
+
   Group &group_for(const ModelType &model, uint32_t key) {
     auto [it, inserted] = index.try_emplace(GroupId{&model, key}, groups.size());
-    if (inserted) groups.push_back({&model, key, {}});
+    if (inserted) groups.push_back({&model, key});
     return groups[it->second];
   }
 };
@@ -574,6 +835,7 @@ inline ModelType load_model(const char *) {
                "raylib-only); returning an empty model");
   return {};
 }
+
 inline void unload_model(ModelType) {}
 template <typename V>
 inline void draw_model(const ModelType &, V, float, V,
@@ -581,15 +843,18 @@ inline void draw_model(const ModelType &, V, float, V,
   warn_once(0, "@notimplemented draw_model on this backend (models are "
                "raylib-only); nothing is drawn");
 }
+
 template <typename S> inline void set_model_shader(ModelType &, S) {
   warn_once(0, "@notimplemented set_model_shader on this backend (models "
                "are raylib-only)");
 }
+
 inline ShaderStub load_instancing_shader() {
   warn_once(0, "@notimplemented load_instancing_shader on this backend "
                "(models are raylib-only); returning an empty shader");
   return {};
 }
+
 inline ShaderStub load_lit_shader(const char * = DEFAULT_LIGHTING) {
   warn_once(0, "@notimplemented load_lit_shader on this backend (models "
                "are raylib-only); returning an empty shader");
@@ -600,19 +865,42 @@ inline void apply_lighting(S, const Lighting &, V) {
   warn_once(0, "@notimplemented apply_lighting on this backend (models "
                "are raylib-only)");
 }
+template <typename S> inline void apply_lighting(S, const Lighting &) {}
 template <typename S, typename M>
 inline void draw_model_instanced(const ModelType &, S, const M *, int) {
   warn_once(0, "@notimplemented draw_model_instanced on this backend "
                "(models are raylib-only); nothing is drawn");
 }
+template <typename S, typename M>
+inline void draw_model_instanced_tinted(const ModelType &, S, const M *,
+                                        const Color *, int) {}
 struct InstanceBatcher {
+  InstanceBatcher() = default;
+  InstanceBatcher(const InstanceBatcher &) = delete;
+  InstanceBatcher &operator=(const InstanceBatcher &) = delete;
+  InstanceBatcher(InstanceBatcher &&) noexcept {}
+  InstanceBatcher &operator=(InstanceBatcher &&) noexcept { return *this; }
+  ShaderStub &default_instancing_shader() {
+    static ShaderStub shader{};
+    return shader;
+  }
+
+  void unload_default_instancing_shader() {}
   template <typename M> void add(const ModelType &, const M &, uint32_t = 0) {}
   template <typename V> void add(const ModelType &, V, float, V, uint32_t = 0) {}
+  void borrow(const ModelType &, std::span<const MatrixType>, uint32_t = 0) {}
+  template <typename M>
+  void add(const ModelType &, const M &, uint32_t, Color) {}
+  template <typename V>
+  void add(const ModelType &, V, float, V, uint32_t, Color) {}
+  void flush() {}
   template <typename S> void flush(S) {}
   template <typename S, typename F> void flush(S, F &&) {
     warn_once(0, "@notimplemented InstanceBatcher::flush on this backend "
                  "(models are raylib-only); nothing is drawn");
   }
+  template <typename F> void drain(F &&) {}
+
   void clear() {}
   [[nodiscard]] size_t copies() const { return 0; }
   [[nodiscard]] size_t group_count() const { return 0; }
@@ -650,6 +938,7 @@ struct ModelLibrary {
   [[nodiscard]] ModelType &get(const std::string &name) {
     return impl.get(name);
   }
+
   [[nodiscard]] const ModelType &get(const std::string &name) const {
     return impl.get(name);
   }
@@ -657,16 +946,20 @@ struct ModelLibrary {
   [[nodiscard]] Handle intern(const std::string &name) {
     return impl.intern(name);
   }
+
   [[nodiscard]] ModelType &get(Handle handle) { return impl.get(handle); }
   [[nodiscard]] const ModelType &get(Handle handle) const {
     return impl.get(handle);
   }
+
   [[nodiscard]] bool contains(Handle handle) const {
     return impl.contains(handle);
   }
+
   [[nodiscard]] bool contains(const std::string &name) const {
     return impl.contains(name);
   }
+
   [[nodiscard]] size_t size() const { return impl.size(); }
 
   // Library::unload_all frees the models but keeps the entries; clearing them
