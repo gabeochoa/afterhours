@@ -617,6 +617,34 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     return a;
   }
 
+  bool dispatch_focused_shortcut(InputAction action) {
+    if (action == InputAction::None)
+      return false;
+    const int wanted = static_cast<int>(action);
+    EntityID cur = focus_id;
+    for (int depth = 0; depth < 64 && cur != ROOT && cur >= 0; depth++) {
+      OptEntity opt = UICollectionHolder::getEntityForID(cur);
+      if (!opt.has_value())
+        break;
+      Entity &e = opt.asE();
+      if (is_input_allowed(cur) && e.template has<HasShortcuts>() &&
+          e.template get<HasShortcuts>().dispatch(wanted, e)) {
+        last_action = InputAction::None;
+        last_action_modifiers = 0;
+        const auto idx = magic_enum::enum_index<InputAction>(action);
+        if (idx.has_value()) {
+          all_actions.reset(idx.value());
+          all_actions_repeat.reset(idx.value());
+        }
+        return true;
+      }
+      if (!e.template has<UIComponent>())
+        break;
+      cur = e.template get<UIComponent>().parent;
+    }
+    return false;
+  }
+
   // Does the focused element own WidgetUp/WidgetDown? When true they belong to
   // it and must not move focus.
   [[nodiscard]] bool focused_consumes_directional_input() const {

@@ -96,6 +96,35 @@ struct HasClickActivationMode : BaseComponent {
   explicit HasClickActivationMode(ClickActivationMode mode_) : mode(mode_) {}
 };
 
+struct ShortcutBinding {
+  int action = -1;
+  std::function<bool(Entity &)> handler;
+};
+struct HasShortcuts : BaseComponent {
+  std::vector<ShortcutBinding> bindings;
+  HasShortcuts() = default;
+  explicit HasShortcuts(std::vector<ShortcutBinding> b)
+      : bindings(std::move(b)) {}
+  void add(int action, std::function<bool(Entity &)> handler) {
+    bindings.push_back(ShortcutBinding{action, std::move(handler)});
+  }
+  bool dispatch(int action, Entity &self) {
+    for (auto &b : bindings) {
+      if (b.action != action || !b.handler)
+        continue;
+      if (b.handler(self))
+        return true;
+    }
+    return false;
+  }
+  bool handles(int action) const {
+    for (const auto &b : bindings)
+      if (b.action == action && b.handler)
+        return true;
+    return false;
+  }
+};
+
 // Invisible to hit-testing: never hot or active, the element behind is picked.
 // Not with_skip_tabbing, which is keyboard focus order only.
 struct IgnorePointerEvents : BaseComponent {};

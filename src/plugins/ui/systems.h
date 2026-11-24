@@ -1132,6 +1132,15 @@ template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
 };
 
 template <typename InputAction>
+struct DispatchShortcuts : System<UIContext<InputAction>> {
+  virtual void for_each_with(Entity &, UIContext<InputAction> &context,
+                             float) override {
+    if (context.last_action == InputAction::None)
+      return;
+    context.dispatch_focused_shortcut(context.last_action);
+  }
+};
+template <typename InputAction>
 struct HandleTrayNavigation : SystemWithUIContext<ui::HasTray> {
   UIContext<InputAction> *context;
 
