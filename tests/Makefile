@@ -286,6 +286,7 @@ ALL_TESTS := \
 	entity_membership_test \
 	temp_warning_caller_test \
 	query_scratch_test \
+	prefabs_test \
 	get_or_default_test \
 	component_toggle_test \
 	query_extreme_by_test \
