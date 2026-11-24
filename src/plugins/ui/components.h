@@ -370,6 +370,10 @@ struct HasUIModifiers : BaseComponent {
   float origin_x = 0.5f;
   float origin_y = 0.5f;
 
+  Vector2Type rotation_center(RectangleType rect) const {
+    return {rect.x + rect.width * origin_x, rect.y + rect.height * origin_y};
+  }
+
   RectangleType apply_modifier(RectangleType rect) const {
     // Apply scale first
     float s = scale;

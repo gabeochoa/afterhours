@@ -103,6 +103,7 @@ ALL_TESTS := \
 	batched_text_overflow_test \
 	scroll_clip_decoration_test \
 	animation_test \
+	sprite_animation_test \
 	reveal_test \
 	motion_config_test \
 	reduced_motion_test \

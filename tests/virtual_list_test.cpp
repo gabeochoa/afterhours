@@ -35,6 +35,35 @@ TEST(uniform_rows_build_only_the_window) {
   CHECK(built < 100); // a window, not the list
 }
 
+TEST(fast_glide_still_builds_the_current_viewport) {
+  ImmTestHarness h;
+  std::vector<size_t> built;
+  Entity *list_ent = nullptr;
+  auto build = [&] {
+    built.clear();
+    auto r = virtual_list(
+        h.context(), mk(h.root(), 0), 1000, 20.f,
+        [&](size_t i, Entity &) { built.push_back(i); },
+        ComponentConfig{}
+            .with_size(ComponentSize{pixels(300), pixels(200)})
+            .with_debug_name("vl_glide"));
+    list_ent = &r.ent();
+  };
+  h.begin_frame(); build(); h.layout_only();
+  CHECK(list_ent && list_ent->has<HasScrollView>());
+  if (!list_ent || !list_ent->has<HasScrollView>()) return;
+  auto &sv = list_ent->get<HasScrollView>();
+  sv.viewport_size = {300.f, 200.f};
+  sv.scroll_offset.y = 0.f;
+  sv.scroll_target.y = 10000.f;
+  h.begin_frame(); build(); h.layout_only();
+  CHECK(!built.empty());
+  CHECK(built.front() == 0);
+  bool has_current = false;
+  for (size_t i : built) has_current |= (i < 10);
+  CHECK(has_current);
+}
+
 TEST(measured_rows_build_only_the_window) {
   ImmTestHarness h;
   int built = 0;
