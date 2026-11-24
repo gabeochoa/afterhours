@@ -107,7 +107,7 @@ struct MousePointerState {
   // pos and delta are in the same space as UIComponent::rect() -- letterbox
   // and resolution scaling are already applied. Callers reaching for the
   // backend's raw mouse instead have to redo that conversion by hand.
-  input::MousePosition pos{};
+  input::MousePosition pos{-1.f, -1.f};
   // Movement since the previous frame. Derived from pos rather than the
   // backend's mouse delta, which is raw window pixels. Zero when there is no
   // cursor, and no dead zone, unlike moved_this_frame below.
@@ -620,6 +620,34 @@ template <typename InputAction> struct UIContext final : BaseComponent {
       all_actions[magic_enum::enum_index<InputAction>(name).value()] = false;
     }
     return a;
+  }
+
+  bool dispatch_focused_shortcut(InputAction action) {
+    if (action == InputAction::None)
+      return false;
+    const int wanted = static_cast<int>(action);
+    EntityID cur = focus_id;
+    for (int depth = 0; depth < 64 && cur != ROOT && cur >= 0; depth++) {
+      OptEntity opt = UICollectionHolder::getEntityForID(cur);
+      if (!opt.has_value())
+        break;
+      Entity &e = opt.asE();
+      if (is_input_allowed(cur) && e.template has<HasShortcuts>() &&
+          e.template get<HasShortcuts>().dispatch(wanted, e)) {
+        last_action = InputAction::None;
+        last_action_modifiers = 0;
+        const auto idx = magic_enum::enum_index<InputAction>(action);
+        if (idx.has_value()) {
+          all_actions.reset(idx.value());
+          all_actions_repeat.reset(idx.value());
+        }
+        return true;
+      }
+      if (!e.template has<UIComponent>())
+        break;
+      cur = e.template get<UIComponent>().parent;
+    }
+    return false;
   }
 
   // Does the focused element own WidgetUp/WidgetDown? When true they belong to
