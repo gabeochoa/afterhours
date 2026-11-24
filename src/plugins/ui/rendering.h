@@ -663,7 +663,9 @@ position_text_ex(const ui::FontManager &fm, const std::string &text,
     // would report a box sized to exactly its own text -- a Dim::Text box --
     // as overflowing by precisely the margin, always.
     const float usable_y = measures_as_block ? container.height : max_text_size.y;
-    text_fits = ts.y <= usable_y && ts.x <= max_text_size.x;
+    text_fits = ts.y <= usable_y &&
+                (text_overflow == TextOverflow::Ellipsis ||
+                 ts.x <= max_text_size.x);
 #ifdef AFTERHOURS_DEBUG_TEXT_OVERFLOW
     if (!text_fits && report_overflow) {
       // Keyed on the LAYOUT, not the string. Keying on text meant an editable
@@ -2640,6 +2642,23 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
               static_cast<int>(label_clip.x), static_cast<int>(label_clip.y),
               static_cast<int>(label_clip.width),
               static_cast<int>(label_clip.height), layer, entity.id);
+        if (SHOW_TEXT_OVERFLOW_DEBUG && !result.text_fits) {
+          RectangleType dr = text_rect;
+          dr.x += hasLabel.text_x_offset;
+          dr.width -= hasLabel.text_x_offset;
+          dr.y += hasLabel.text_y_offset;
+          const Color overlay{255, 50, 50, 60}, border{255, 50, 50, 200};
+          const float t = 2.f;
+          buffer.add_rectangle(dr, overlay, layer, entity.id);
+          buffer.add_rectangle({dr.x, dr.y, dr.width, t}, border, layer,
+                               entity.id);
+          buffer.add_rectangle({dr.x, dr.y + dr.height - t, dr.width, t},
+                               border, layer, entity.id);
+          buffer.add_rectangle({dr.x, dr.y, t, dr.height}, border, layer,
+                               entity.id);
+          buffer.add_rectangle({dr.x + dr.width - t, dr.y, t, dr.height},
+                               border, layer, entity.id);
+        }
         // Handle text overflow ellipsis truncation for batched path
         std::string display_text = hasLabel.label;
         if (hasLabel.text_overflow == TextOverflow::Ellipsis &&
