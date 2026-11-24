@@ -10,6 +10,8 @@
 #include <string_view>
 #include <type_traits>
 #include <typeinfo>
+#include <unordered_map>
+#include <vector>
 
 #include <cstdlib>
 #if __has_include(<cxxabi.h>)
@@ -136,6 +138,26 @@ class SystemBase {
         return static_cast<const SystemBase &>(*this).should_run(dt);
     }
     virtual bool should_run(const float) const { return true; }
+    virtual void on_activate(const float dt) {
+        static_cast<const SystemBase &>(*this).on_activate(dt);
+    }
+    virtual void on_activate(const float) const {}
+    virtual void on_deactivate(const float dt) {
+        static_cast<const SystemBase &>(*this).on_deactivate(dt);
+    }
+    virtual void on_deactivate(const float) const {}
+    bool is_active() const { return active; }
+    bool advance_lifecycle(const float dt) {
+        const bool running = should_run(dt);
+        if (running != active) {
+            active = running;
+            if (running)
+                on_activate(dt);
+            else
+                on_deactivate(dt);
+        }
+        return running;
+    }
     virtual void once(const float) {}
     virtual void once(const float) const {}
     virtual void on_iteration_begin(const float) {}
@@ -167,6 +189,7 @@ class SystemBase {
 
    private:
     mutable std::string cached_name_;
+    bool active = false;
 };
 
 template<typename S>
@@ -650,7 +673,29 @@ struct SystemManager {
     std::vector<std::unique_ptr<SystemBase>> fixed_update_systems_;
     std::vector<std::unique_ptr<SystemBase>> render_systems_;
 
+   private:
+    std::unordered_map<SystemBase *, std::string> system_groups;
+    std::unordered_map<std::string, bool> group_states;
+
+    void assign_group(SystemBase *sys, std::string_view group) {
+        system_groups[sys] = std::string(group);
+    }
+
+    bool system_group_enabled(SystemBase *sys) const {
+        const auto it = system_groups.find(sys);
+        if (it == system_groups.end()) return true;
+        const auto g = group_states.find(it->second);
+        return g == group_states.end() || g->second;
+    }
+
+   public:
     void register_update_system(std::unique_ptr<SystemBase> system) {
+        update_systems_.emplace_back(std::move(system));
+    }
+
+    void register_update_system(std::unique_ptr<SystemBase> system,
+                                std::string_view group) {
+        assign_group(system.get(), group);
         update_systems_.emplace_back(std::move(system));
     }
 
@@ -658,8 +703,45 @@ struct SystemManager {
         fixed_update_systems_.emplace_back(std::move(system));
     }
 
+    void register_fixed_update_system(std::unique_ptr<SystemBase> system,
+                                      std::string_view group) {
+        assign_group(system.get(), group);
+        fixed_update_systems_.emplace_back(std::move(system));
+    }
+
     void register_render_system(std::unique_ptr<SystemBase> system) {
         render_systems_.emplace_back(std::move(system));
+    }
+
+    void register_render_system(std::unique_ptr<SystemBase> system,
+                                std::string_view group) {
+        assign_group(system.get(), group);
+        render_systems_.emplace_back(std::move(system));
+    }
+
+    void set_group_enabled(std::string_view group, bool enabled) {
+        group_states[std::string(group)] = enabled;
+    }
+
+    bool group_enabled(std::string_view group) const {
+        const auto it = group_states.find(std::string(group));
+        return it == group_states.end() || it->second;
+    }
+
+    std::vector<std::string_view> systems_in_group(
+        std::string_view group) const {
+        std::vector<std::string_view> out;
+        auto scan = [&](const auto &list) {
+            for (const auto &sys : list) {
+                const auto it = system_groups.find(sys.get());
+                if (it != system_groups.end() && it->second == group)
+                    out.push_back(sys->name());
+            }
+        };
+        scan(update_systems_);
+        scan(fixed_update_systems_);
+        scan(render_systems_);
+        return out;
     }
 
     void register_update_system(const std::function<void(float)> &cb) {
@@ -676,7 +758,9 @@ struct SystemManager {
 
     void tick(Entities &entities, const float dt) {
         for (auto &system : update_systems_) {
-            if (!system->should_run(dt)) continue;
+            if (!system_group_enabled(system.get()) ||
+                !system->advance_lifecycle(dt))
+                continue;
             ProfileScope profile_scope(system.get(), SystemPhase::Update);
             system->once(dt);
             profile_scope.entity_count = run_system_over(
@@ -689,7 +773,9 @@ struct SystemManager {
 
     void fixed_tick(Entities &entities, const float dt) {
         for (auto &system : fixed_update_systems_) {
-            if (!system->should_run(dt)) continue;
+            if (!system_group_enabled(system.get()) ||
+                !system->advance_lifecycle(dt))
+                continue;
             ProfileScope profile_scope(system.get(), SystemPhase::FixedUpdate);
             system->once(dt);
             profile_scope.entity_count = run_system_over(
@@ -701,7 +787,9 @@ struct SystemManager {
 
     void render(Entities &entities, const float dt) {
         for (auto &system : render_systems_) {
-            if (!system->should_run(dt)) continue;
+            if (!system_group_enabled(system.get()) ||
+                !system->advance_lifecycle(dt))
+                continue;
             ProfileScope profile_scope(system.get(), SystemPhase::Render);
             system->once(dt);
             profile_scope.entity_count = run_system_over(
