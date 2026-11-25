@@ -2,6 +2,7 @@
 #pragma once
 
 #include <algorithm>
+#include <filesystem>
 #include <map>
 #include <optional>
 #include <vector>
@@ -28,21 +29,48 @@ inline std::optional<raylib::Font> &default_font_override() {
   static std::optional<raylib::Font> font;
   return font;
 }
+
+inline std::optional<raylib::Font> &bundled_default_font();
 } // namespace detail
 
 // The face for text drawn without one: get_default_font(), get_unset_font(),
-// draw_text and the library's debug overlays. Unset, it is raylib's built-in
-// pixel font. Set it before the UI plugin loads its fonts so imm's default
+// draw_text and the library's debug overlays. Unset, it is the library's
+// bundled Roboto Regular (src/assets/fonts/Roboto-Regular.ttf); if that file
+// cannot be found or rasterized, raylib's built-in pixel font is the
+// fallback. Set before the UI plugin loads its fonts so imm's default
 // and unset fonts pick it up too. The caller keeps the font loaded.
 inline void set_default_font(raylib::Font font) {
   detail::default_font_override() = font;
 }
+
 inline void clear_default_font() { detail::default_font_override().reset(); }
 
 inline raylib::Font get_default_font() {
-  return detail::default_font_override().value_or(raylib::GetFontDefault());
+  if (const auto &chosen = detail::default_font_override())
+    return *chosen;
+  const auto &bundled = detail::bundled_default_font();
+  if (bundled && bundled->glyphCount > 0)
+    return *bundled;
+  return raylib::GetFontDefault();
 }
+
 inline raylib::Font get_unset_font() { return get_default_font(); }
+
+inline float font_display_scale() {
+  float scale = static_cast<float>(graphics::render_scale());
+  if (raylib::IsWindowReady()) {
+    const float dpi = raylib::GetWindowScaleDPI().x;
+    if (dpi > scale)
+      scale = dpi;
+  }
+  return scale > 1.f ? scale : 1.f;
+}
+
+inline int display_scaled_size(int nominal) {
+  const float scaled = std::round(static_cast<float>(nominal) *
+                                  font_display_scale());
+  return scaled >= 1.f ? static_cast<int>(scaled) : 1;
+}
 
 // Passing nullptr asks raylib for its default set, which is 95 ASCII glyphs.
 // So an arrow, a chevron, a checkmark or an ellipsis drew nothing at all, and
@@ -231,7 +259,7 @@ inline bool font_gl_ready() {
 
 inline raylib::Font load_font_from_file(const char *file, int size = 0) {
   std::vector<int> cps = default_codepoints();
-  const int px = size > 0 ? size : 32;
+  const int px = size > 0 ? size : display_scaled_size(32);
   raylib::Font font =
       raylib::LoadFontEx(file, px, cps.data(), (int)cps.size());
   if (font.glyphCount <= 0) {
@@ -247,8 +275,14 @@ inline raylib::Font load_font_from_file(const char *file, int size = 0) {
   return font;
 }
 
+inline raylib::Font load_font_at_display_size(const char *file, int nominal = 32) {
+  return load_font_from_file(file, display_scaled_size(nominal));
+}
+
 inline raylib::Font load_font_from_memory(const unsigned char *data, int size,
-                                          const char *name, int px = 32) {
+                                          const char *name, int px = 0) {
+  if (px <= 0)
+    px = display_scaled_size(32);
   std::vector<int> cps = default_codepoints();
   raylib::Font font = raylib::LoadFontFromMemory(
       ".ttf", data, size, px, cps.data(), static_cast<int>(cps.size()));
@@ -264,6 +298,43 @@ inline raylib::Font load_font_from_memory(const unsigned char *data, int size,
   }
   return font;
 }
+
+namespace detail {
+
+inline std::string bundled_default_font_path() {
+#ifdef AFTERHOURS_ROBOTO_FONT_PATH
+  return AFTERHOURS_ROBOTO_FONT_PATH;
+#else
+  return (std::filesystem::path(__FILE__).parent_path() / ".." / ".." /
+          "assets" / "fonts" / "Roboto-Regular.ttf")
+      .string();
+#endif
+}
+
+inline std::optional<raylib::Font> load_bundled_default_font() {
+  std::vector<unsigned char> bytes;
+  if (!font_coverage::read_file(bundled_default_font_path().c_str(), bytes))
+    return std::nullopt;
+  const raylib::Font font = load_font_from_memory(
+      bytes.data(), static_cast<int>(bytes.size()), "Roboto-Regular");
+  if (font.glyphCount <= 0)
+    return std::nullopt;
+  return font;
+}
+
+// The bundled Roboto Regular, loaded once and kept for the process. A load
+// before any GL context produces glyphs but no atlas; the next call after a
+// context exists reloads it once so text measures and draws for real.
+inline std::optional<raylib::Font> &bundled_default_font() {
+  static std::optional<raylib::Font> font = load_bundled_default_font();
+  if (font && font->texture.id == 0 && font_gl_ready()) {
+    if (const auto reloaded = load_bundled_default_font())
+      font = reloaded;
+  }
+  return font;
+}
+
+} // namespace detail
 
 // Whether the loaded face actually covers a codepoint. raylib maps anything it
 // does not have to glyph 0, so asking is the only way to tell a real glyph
@@ -394,7 +465,9 @@ inline void warn_on_missing_glyphs(const raylib::Font font, const char *text) {
 // Add codepoint-based font loading for CJK support
 inline raylib::Font
 load_font_from_file_with_codepoints(const char *file, int *codepoints,
-                                    int codepoint_count, int size = 32) {
+                                    int codepoint_count, int size = 0) {
+  if (size <= 0)
+    size = display_scaled_size(32);
   if (!file || !codepoints || codepoint_count <= 0) {
     log_error("Invalid parameters for font loading: file={}, codepoints={}, "
               "count={}",
@@ -453,10 +526,18 @@ inline int *remove_duplicate_codepoints(int *codepoints, int codepointCount,
   return codepointsNoDups;
 }
 
+inline bool font_same_face(const raylib::Font a, const raylib::Font b) {
+  return a.glyphs == b.glyphs && a.texture.id == b.texture.id;
+}
+
 // Convenience function to load a font with codepoints extracted from a string
 inline void unload_font(raylib::Font &font) {
   coverage_registry().erase(font_key(font));
   glyph_warn_generation()++;
+  auto &faces = fallback_faces();
+  std::erase_if(faces, [&](const raylib::Font &f) {
+    return f.glyphs == font.glyphs;
+  });
   measure_memo::invalidate();
   raylib::UnloadFont(font);
   font = raylib::Font{};
@@ -464,7 +545,9 @@ inline void unload_font(raylib::Font &font) {
 
 inline raylib::Font load_font_for_string(const std::string &content,
                                          const std::string &font_filename,
-                                         int size = 96) {
+                                         int size = 0) {
+  if (size <= 0)
+    size = display_scaled_size(96);
   if (content.empty() || font_filename.empty()) {
     log_warn("Empty content or font filename passed to load_font_for_string");
     return get_default_font();
@@ -602,6 +685,20 @@ inline float monospace_cell_advance(const raylib::Font font,
           ? static_cast<float>(font.recs[idx].width)
           : static_cast<float>(font.glyphs[idx].advanceX);
   return advance * size / static_cast<float>(font.baseSize);
+}
+
+inline float text_ascent(const raylib::Font font, const float size) {
+  if (!std::isfinite(size) || size <= 0.f)
+    return 0.f;
+  if (!font_is_usable(font) || font.baseSize <= 0 || !font.glyphs || !font.recs)
+    return size * 0.8f;
+  const int idx = raylib::GetGlyphIndex(font, 'H');
+  if (idx < 0 || idx >= font.glyphCount)
+    return size * 0.8f;
+  const float scale = size / static_cast<float>(font.baseSize);
+  return (static_cast<float>(font.glyphs[idx].offsetY) +
+          static_cast<float>(font.recs[idx].height)) *
+         scale;
 }
 
 // Get the left-side bearing (offsetX) for the first glyph in a string.

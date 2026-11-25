@@ -18,6 +18,25 @@ TEST(once_only_ui_systems_do_not_iterate) {
   CHECK(!HandleDragGroupsPostLayout<TestInputAction>{}.should_iterate());
 }
 
+TEST(context_only_ui_systems_require_only_ui_context) {
+  const auto expected =
+      components::get_type_id<UIContext<TestInputAction>>();
+  TrackIfComponentWillBeRendered<TestInputAction> track;
+  ComputeVisualFocusId<TestInputAction> compute;
+  const auto *track_req = track.membership_requirements();
+  const auto *compute_req = compute.membership_requirements();
+  CHECK(track_req != nullptr);
+  CHECK(compute_req != nullptr);
+  if (track_req) {
+    CHECK(track_req->size() == 1);
+    CHECK(!track_req->empty() && (*track_req)[0] == expected);
+  }
+  if (compute_req) {
+    CHECK(compute_req->size() == 1);
+    CHECK(!compute_req->empty() && (*compute_req)[0] == expected);
+  }
+}
+
 TEST(once_only_ui_systems_once_still_runs_without_singletons) {
   // No UIEntityMappingCache / DragGroupState registered: once() must
   // early-out, not crash — that is the idle-UI world this fix serves.
