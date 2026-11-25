@@ -674,6 +674,8 @@ struct MetalPlatformAPI {
     if (metal_detail::g_headless) {
       ::afterhours::end_texture_mode();
       sg_commit();
+      metal_detail::g_simulated_time +=
+          static_cast<double>(get_frame_time());
       return;
     }
 
@@ -742,6 +744,8 @@ struct MetalPlatformAPI {
     return dt > 0.0f ? 1.0f / dt : 0.0f;
   }
   static double get_time() {
+    if (metal_detail::g_headless)
+      return metal_detail::g_simulated_time;
     return stm_sec(stm_since(metal_detail::g_start_time));
   }
 
@@ -1189,6 +1193,7 @@ inline bool metal_init(const Config &cfg) {
     }
     stm_setup();
     metal_detail::g_start_time = stm_now();
+    metal_detail::g_simulated_time = 0.0;
     metal_detail::g_initialized = true;
 
     const int scale =
@@ -1231,6 +1236,7 @@ inline void metal_shutdown() {
 #endif
   metal_detail::g_initialized = false;
   metal_detail::g_headless = false;
+  metal_detail::g_simulated_time = 0.0;
 }
 
 inline void metal_begin_frame() { MetalPlatformAPI::begin_drawing(); }

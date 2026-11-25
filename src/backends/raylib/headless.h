@@ -36,6 +36,7 @@ struct RaylibHeadless {
   int logical_w_ = 0;
   int logical_h_ = 0;
   int render_scale_ = 1;
+  double simulated_time = 0.0;
 
   /// Initialize the headless backend with the given configuration.
   /// Creates a headless GL context, initializes rlgl, and sets up a render
@@ -48,6 +49,7 @@ struct RaylibHeadless {
     }
 
     config = cfg;
+    simulated_time = 0.0;
     logical_w_ = cfg.width;
     logical_h_ = cfg.height;
     render_scale_ =
@@ -147,7 +149,10 @@ struct RaylibHeadless {
   }
 
   /// End rendering to the render texture.
-  inline void end_frame() { raylib::EndTextureMode(); }
+  inline void end_frame() {
+    raylib::EndTextureMode();
+    simulated_time += static_cast<double>(get_delta_time());
+  }
 
   /// Clear the background with the specified color.
   inline void clear(raylib::Color color) { raylib::ClearBackground(color); }

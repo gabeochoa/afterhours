@@ -147,6 +147,18 @@ inline bool raylib_is_headless() {
       storage());
 }
 
+inline double raylib_simulated_time() {
+  return std::visit(
+      [](auto &backend) -> double {
+        using T = std::decay_t<decltype(backend)>;
+        if constexpr (std::is_same_v<T, RaylibHeadless>) {
+          return backend.simulated_time;
+        }
+        return 0.0;
+      },
+      storage());
+}
+
 inline RenderTextureType &raylib_get_render_texture() {
   static RenderTextureType dummy{};
   return std::visit(
@@ -294,7 +306,11 @@ struct RaylibPlatformAPI {
   static int get_screen_height() { return raylib::GetScreenHeight(); }
   static float get_frame_time() { return raylib::GetFrameTime(); }
   static float get_fps() { return static_cast<float>(raylib::GetFPS()); }
-  static double get_time() { return raylib::GetTime(); }
+  static double get_time() {
+    if (raylib_backend::raylib_is_headless())
+      return raylib_backend::raylib_simulated_time();
+    return raylib::GetTime();
+  }
 
   // ── Text measurement ──
   static int measure_text(const char *text, int fontSize) {
