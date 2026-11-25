@@ -1552,6 +1552,30 @@ struct input : developer::Plugin {
 static_assert(developer::PluginCore<input>,
               "input must implement the core plugin interface");
 
+struct InputPlugin {
+    input::ProvidesInputMapping::GameMapping mapping{};
+
+    template <typename Action>
+        requires std::is_enum_v<Action>
+    static InputPlugin from_enum(const std::map<Action, input::ValidInputs> &enum_mapping) {
+        InputPlugin plugin;
+        for (const auto &[action, inputs] : enum_mapping)
+            plugin.mapping[static_cast<int>(action)] = inputs;
+        return plugin;
+    }
+
+    void install(PluginContext &ctx) const {
+        ctx.ensure_singleton<input::InputCollector>();
+        ctx.ensure_singleton<input::ProvidesMaxGamepadID>();
+        ctx.ensure_singleton<input::ProvidesInputMapping>(mapping);
+        ctx.ensure_singleton<input::ProvidesInputConfig>();
+        input::try_load_gamepad_mappings();
+        ctx.add_system(Stage::PreUpdate,
+                       std::make_unique<input::InputSystem>());
+    }
+};
+static_assert(InstallablePlugin<InputPlugin>);
+
 // Templated on project's layer enum (e.g., menu::State)
 template<typename LayerEnum>
 struct ProvidesLayeredInputMapping : public BaseComponent {
@@ -1715,6 +1739,21 @@ struct layered_input : developer::Plugin {
                 developer::EnforceSingleton<input::ProvidesMaxGamepadID>>());
         // Note: Can't enforce ProvidesLayeredInputMapping without knowing
         // LayerEnum at compile time
+    }
+};
+
+template <typename LayerEnum> struct LayeredInputPlugin {
+    std::map<LayerEnum, std::map<int, input::ValidInputs>> mapping{};
+    LayerEnum starting_layer{};
+
+    void install(PluginContext &ctx) const {
+        ctx.ensure_singleton<input::InputCollector>();
+        ctx.ensure_singleton<input::ProvidesMaxGamepadID>();
+        ctx.ensure_singleton<ProvidesLayeredInputMapping<LayerEnum>>(mapping,
+                                                                     starting_layer);
+        input::try_load_gamepad_mappings();
+        ctx.add_system(Stage::PreUpdate,
+                       std::make_unique<LayeredInputSystem<LayerEnum>>());
     }
 };
 

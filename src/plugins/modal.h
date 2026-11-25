@@ -1123,6 +1123,18 @@ struct modal : developer::Plugin {
     }
 };
 
+template <typename InputAction> struct ModalPlugin {
+    void install(PluginContext &ctx) const {
+        ctx.ensure_singleton<modal::ModalRoot>();
+        ctx.add_system(Stage::Update,
+                       std::make_unique<modal::ModalCloseWatcherSystem<InputAction>>());
+        ctx.add_system(Stage::Update,
+                       std::make_unique<modal::ModalInputBlockSystem<InputAction>>());
+        ctx.add_system(Stage::Update,
+                       std::make_unique<modal::ModalFocusTrapSystem<InputAction>>());
+    }
+};
+
 // Free function for cleaner API: modal(ctx, ep, open, config)
 inline ui::imm::ElementResult modal(ui::imm::HasUIContext auto &ctx,
                                     ui::imm::EntityParent ep_pair, bool &open,

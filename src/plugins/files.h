@@ -431,4 +431,14 @@ struct files : developer::Plugin {
 static_assert(developer::PluginCore<files>,
               "files must implement the core plugin interface");
 
+struct FilesPlugin {
+  std::string game_name{};
+  std::string root_folder = "resources";
+
+  void install(PluginContext &ctx) const {
+    ctx.ensure_singleton<files::ProvidesResourcePaths>(game_name, root_folder);
+  }
+};
+static_assert(InstallablePlugin<FilesPlugin>);
+
 } // namespace afterhours
