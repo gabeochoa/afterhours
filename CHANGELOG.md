@@ -6,6 +6,7 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+- **Glyph atlas-packing failure reporting.** Raylib font loads log unpacked glyphs once and expose them via `FontManager::packing_failures`. Covered by `glyph_packing_test`.
 - **`ComponentConfig::with_text_offset(x, y)` and fixed `text_x_offset` on right/center-aligned labels.** Right-aligned text now moves with the offset (negative pulls it inward from the right edge) instead of being a silent no-op, and centered text shifts without shrinking its wrap width; left-aligned behaviour is unchanged. Covered by `text_origin_test`.
 - **Scale-aware `on_draw_bg` / `on_draw_fg` callbacks (`RenderPrimitive::DrawContext{rect, scale}`).** Additive overload passing the resolved `ui_scale` for Adaptive widgets (1.0 for Proportional), keeping existing `RectangleType`-only callbacks unchanged. Covered by `draw_context_scale_test`.
 - **Word selection policy (`ui::text_selection::WordPolicy`: `Prose`, `Identifier`, `Path`).** Unifies word-boundary helpers in `text_selection.h` and defaults to `Prose`. Covered by `word_policy_test`.

@@ -411,6 +411,7 @@ lighting_zones_test \
 	shared_handlers_test \
 	default_font_test \
 	load_font_size_test \
+	glyph_packing_test \
 	edit_keys_test \
 	tab_container_test \
 	tab_toggle_geometry_test \
@@ -480,6 +481,7 @@ RAYLIB_TESTS := \
 	default_font_test \
 	font_display_size_test \
 	load_font_size_test \
+	glyph_packing_test \
 	font_unload_manager_test \
 	border_width_test \
 	border_only_test \
@@ -860,6 +862,7 @@ $(OUT)/font_prewarm_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/f
 $(OUT)/sokol_letter_spacing_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/font_points_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/glyph_placeholder_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
+$(OUT)/glyph_packing_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/load_font_size_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/font_display_size_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/font_memory_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
