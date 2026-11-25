@@ -337,6 +337,7 @@ struct FocusPaint {
   size_t after_command;
   int layer;
   float rotation;
+  Vector2Type rotation_pivot{0.f, 0.f};
   std::optional<RectangleType> clip;
 };
 
@@ -364,8 +365,19 @@ std::optional<FocusPaint> prepare_focus_paint(const UIContext<InputAction> &cont
     if (!descendants.contains(cmd.id)) continue;
     const auto [has_clip, clip] =
         compute_intersected_clip_rect(entity, /*include_self=*/false);
+    RectangleType widget = cmp.rect();
+    Vector2Type pivot;
+    if (entity.has<HasUIModifiers>()) {
+      const auto &mods = entity.get<HasUIModifiers>();
+      widget = detail::apply_ancestor_transform(entity, mods.apply_modifier(widget));
+      pivot = mods.rotation_center(widget);
+    } else {
+      widget = detail::apply_ancestor_transform(entity, widget);
+      pivot = {widget.x + widget.width * .5f, widget.y + widget.height * .5f};
+    }
     return FocusPaint{*ring, entity.id, i - 1, cmd.layer,
                       entity.has<HasUIModifiers>() ? entity.get<HasUIModifiers>().rotation : 0.f,
+                      pivot,
                       has_clip ? clip : std::optional<RectangleType>{}};
   }
   return {};
@@ -379,8 +391,7 @@ inline void draw_focus_paint(const FocusPaint &paint) {
                        static_cast<int>(r.width), static_cast<int>(r.height));
   }
   capture::Scope attribute(paint.entity_id, paint.layer);
-  push_rotation(ring.rect.x + ring.rect.width * .5f,
-                ring.rect.y + ring.rect.height * .5f, paint.rotation);
+  push_rotation(paint.rotation_pivot.x, paint.rotation_pivot.y, paint.rotation);
   if (ring.contrast_edges)
     draw_rectangle_rounded_lines(ring.outer_contrast(), ring.roundness_at(ring.thickness),
                                  ring.segments, ring.contrast, ring.corners);
@@ -405,13 +416,16 @@ inline void collect_focus_paint(RenderCommandBuffer &buffer, const FocusPaint &p
   if (ring.contrast_edges)
     buffer.add_rounded_rectangle_outline(ring.outer_contrast(), ring.contrast,
         ring.roundness_at(ring.thickness), ring.segments, ring.corners,
-        paint.layer, paint.entity_id, 0.f, paint.rotation);
+        paint.layer, paint.entity_id, 0.f, paint.rotation,
+        paint.rotation_pivot.x, paint.rotation_pivot.y);
   if (ring.contrast_edges && ring.rect.width > 2.f && ring.rect.height > 2.f)
     buffer.add_rounded_rectangle_outline(ring.inner_contrast(), ring.contrast,
         ring.roundness_at(-1.f), ring.segments, ring.corners,
-        paint.layer, paint.entity_id, 0.f, paint.rotation);
+        paint.layer, paint.entity_id, 0.f, paint.rotation,
+        paint.rotation_pivot.x, paint.rotation_pivot.y);
   buffer.add_rounded_rectangle_outline(ring.rect, ring.color, ring.roundness,
-      ring.segments, ring.corners, paint.layer, paint.entity_id, ring.thickness, paint.rotation);
+      ring.segments, ring.corners, paint.layer, paint.entity_id, ring.thickness, paint.rotation,
+      paint.rotation_pivot.x, paint.rotation_pivot.y);
   if (paint.clip) buffer.add_scissor_end(paint.layer, paint.entity_id);
 }
 
@@ -1916,7 +1930,11 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
 
     // Custom draw (behind): drawn before the widget's own fill.
     if (entity.has<HasOnDraw>() && entity.get<HasOnDraw>().bg)
-      entity.get<HasOnDraw>().bg(draw_rect);
+      entity.get<HasOnDraw>().bg(RenderPrimitive::DrawContext{
+          draw_rect,
+          cmp.resolved_scaling_mode == ScalingMode::Adaptive
+              ? context.theme.ui_scale
+              : 1.f});
 
     if (entity.has<HasColor>()) {
       Color col = entity.template get<HasColor>().color();
@@ -2042,15 +2060,17 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       // (see position_text_ex call ~100 lines below) so they don't diverge.
       float explicit_fs = 0.f;
       if (cmp.font_size_explicitly_set) {
-        float uis = imm::ThemeDefaults::get().theme.ui_scale;
-        explicit_fs = resolve_to_pixels(cmp.font_size, context.screen_height,
-                                        cmp.resolved_scaling_mode, uis);
+        const auto &theme = imm::ThemeDefaults::get().theme;
+        explicit_fs = resolve_font_size(cmp.font_size, context.screen_height,
+                                        cmp.resolved_scaling_mode, theme.ui_scale,
+                                        theme.text_scale);
       }
       const float label_line_h =
           hasLabel.line_height.has_value()
-              ? resolve_to_pixels(*hasLabel.line_height, context.screen_height,
+              ? resolve_font_size(*hasLabel.line_height, context.screen_height,
                                   cmp.resolved_scaling_mode,
-                                  imm::ThemeDefaults::get().theme.ui_scale)
+                                  imm::ThemeDefaults::get().theme.ui_scale,
+                                  imm::ThemeDefaults::get().theme.text_scale)
               : 0.f;
 
       const Vector2Type immediate_inset =
@@ -2168,7 +2188,11 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
 
     // Custom draw (on top): drawn after all of the widget's own primitives.
     if (entity.has<HasOnDraw>() && entity.get<HasOnDraw>().fg)
-      entity.get<HasOnDraw>().fg(draw_rect);
+      entity.get<HasOnDraw>().fg(RenderPrimitive::DrawContext{
+          draw_rect,
+          cmp.resolved_scaling_mode == ScalingMode::Adaptive
+              ? context.theme.ui_scale
+              : 1.f});
 
     pop_rotation();
   }
@@ -2543,8 +2567,12 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     // Custom draw (behind): enqueued before the fill so it renders under the
     // widget; the fn pointer is stable on the HasOnDraw component for the frame.
     if (entity.has<HasOnDraw>() && entity.get<HasOnDraw>().bg) {
-      buffer.add_custom(draw_rect, &entity.get<HasOnDraw>().bg, layer,
-                        entity.id);
+      buffer.add_custom(
+          draw_rect, &entity.get<HasOnDraw>().bg.fn,
+          cmp.resolved_scaling_mode == ScalingMode::Adaptive
+              ? context.theme.ui_scale
+              : 1.f,
+          layer, entity.id);
     }
 
     // Background color
@@ -2682,15 +2710,17 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       if (cmp.font_size_explicitly_set) {
         // Use scaling-mode-aware resolution so font pixels scale with
         // ui_scale in Adaptive mode.
-        float uis = imm::ThemeDefaults::get().theme.ui_scale;
-        explicit_fs = resolve_to_pixels(cmp.font_size, context.screen_height,
-                                        cmp.resolved_scaling_mode, uis);
+        const auto &theme = imm::ThemeDefaults::get().theme;
+        explicit_fs = resolve_font_size(cmp.font_size, context.screen_height,
+                                        cmp.resolved_scaling_mode, theme.ui_scale,
+                                        theme.text_scale);
       }
       const float label_line_h =
           hasLabel.line_height.has_value()
-              ? resolve_to_pixels(*hasLabel.line_height, context.screen_height,
+              ? resolve_font_size(*hasLabel.line_height, context.screen_height,
                                   cmp.resolved_scaling_mode,
-                                  imm::ThemeDefaults::get().theme.ui_scale)
+                                  imm::ThemeDefaults::get().theme.ui_scale,
+                                  imm::ThemeDefaults::get().theme.text_scale)
               : 0.f;
 
       const Vector2Type label_inset =
@@ -3029,8 +3059,12 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
     // Custom draw (on top): enqueued after all of the widget's own primitives.
     if (entity.has<HasOnDraw>() && entity.get<HasOnDraw>().fg) {
-      buffer.add_custom(draw_rect, &entity.get<HasOnDraw>().fg, layer,
-                        entity.id);
+      buffer.add_custom(
+          draw_rect, &entity.get<HasOnDraw>().fg.fn,
+          cmp.resolved_scaling_mode == ScalingMode::Adaptive
+              ? context.theme.ui_scale
+              : 1.f,
+          layer, entity.id);
     }
   }
 

@@ -5,6 +5,7 @@
 #include "element_result.h"
 #include "entity_management.h"
 #include "imm_components.h"
+#include "disclosure.h"
 #include "rounded_corners.h"
 #include "setting_row.h"
 #include "tree_view.h"

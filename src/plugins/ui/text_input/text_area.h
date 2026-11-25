@@ -120,8 +120,9 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
                               ctx.theme.ui_scale)
           : ctx.theme.text_area_line_height_ratio > 0.f
                 ? ctx.theme.text_area_line_height_ratio *
-                      resolve_to_pixels(config.font_size, resolution_height,
-                                        scaling_mode, ctx.theme.ui_scale)
+                      resolve_font_size(config.font_size, resolution_height,
+                                        scaling_mode, ctx.theme.ui_scale,
+                                        ctx.theme.text_scale)
                 : resolve_to_pixels(pixels(20.f), resolution_height,
                                     scaling_mode, ctx.theme.ui_scale);
   // The field's own top+bottom padding (h720(4) each side, below), resolved
@@ -258,8 +259,9 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
           window_manager::ProvidesCurrentResolution>())
     screen_height = static_cast<float>(pcr->current_resolution.height);
   const float resolved_font_size =
-      resolve_to_pixels(config.font_size, screen_height,
-                        field_cmp.resolved_scaling_mode, ctx.theme.ui_scale);
+      resolve_font_size(config.font_size, screen_height,
+                        field_cmp.resolved_scaling_mode, ctx.theme.ui_scale,
+                        ctx.theme.text_scale);
   // Published for the listeners, which cannot see any of this by the time they
   // run. area_config.line_height is already refreshed in init_state above.
   state.render_font_name = font_name;

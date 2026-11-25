@@ -67,6 +67,7 @@ TEST(free_text_stays_literal_unless_quoted) {
   check_args("expect_input_text field plain  text", {"field", "plain  text"});
   check_args(R"e2e(type "")e2e", {""});
   check_args("click_text New  project", {"New  project"});
+  check_args("click_text New  project under=dialog", {"New  project", "under=dialog"});
   check_args("custom value\r\n", {"value"});
 }
 
@@ -195,11 +196,17 @@ TEST(serial_dispatch_waits_for_pending_command) {
     }
     CHECK(saw_first);
   }
-  // Consume the first command: the runner may now dispatch the second.
+  // Consumption starts the post-command settle interval. The second command
+  // can dispatch on the tick after that interval expires.
   for (auto &e : coll.get_entities()) {
     if (!e || !e->has<PendingE2ECommand>()) continue;
     e->get<PendingE2ECommand>().consume();
   }
+  runner.tick(0.1f);
+  coll.merge_entity_arrays();
+  for (auto &e : coll.get_entities())
+    if (e && e->has<PendingE2ECommand>())
+      CHECK(e->get<PendingE2ECommand>().name != "custom_second_xyz");
   runner.tick(0.1f);
   coll.merge_entity_arrays();
   bool saw_second = false;

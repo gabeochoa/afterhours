@@ -61,6 +61,7 @@ OUT := $(realpath ..)/output
 $(shell mkdir -p $(OUT))
 
 ALL_TESTS := \
+	draw_context_scale_test \
 	focus_return_test \
 	border_width_test \
 	border_only_test \
@@ -68,8 +69,10 @@ ALL_TESTS := \
 	touch_target_test \
 	touch_target_single_test \
 	font_tier_scaling_test \
+	text_scale_test \
 	text_visibility_test \
 	image_tint_test \
+	icon_row_test \
 	e2e_arguments_test \
 	scrollbar_render_test \
 	scroll_input_gate_test \
@@ -93,6 +96,8 @@ ALL_TESTS := \
 	glyph_placeholder_test \
 	monospace_cell_test \
 	font_memory_test \
+	font_unload_test \
+	font_unload_manager_test \
 	ui_texture_lifecycle_test \
 	ui_update_lifecycle_test \
 	ui_update_lifecycle_single_test \
@@ -129,6 +134,7 @@ ALL_TESTS := \
 	particles_test \
 	trigger_volume_test \
 	ui_modifiers_test \
+	rotation_hit_test \
 	ancestor_transform_test \
 	text_units_test \
 	utf8_sanitize_test \
@@ -333,6 +339,7 @@ lighting_zones_test \
 	two_trees_test \
 	text_selection_test \
 	selectable_text_test \
+	word_policy_test \
 	text_stroke_test \
 	text_stroke_render_test \
 	multiline_text_test \
@@ -418,6 +425,7 @@ lighting_zones_test \
 	theme_io_test \
 	tree_view_test \
 	window_helpers_test \
+	disclosure_test \
 	skeletal_test \
 	translation_test \
 	layout_inspector_test \
@@ -471,6 +479,7 @@ RAYLIB_TESTS := \
 	default_font_test \
 	font_display_size_test \
 	load_font_size_test \
+	font_unload_manager_test \
 	border_width_test \
 	border_only_test \
 	text_visibility_test \
@@ -555,6 +564,7 @@ RAYLIB_TESTS := \
 	styled_ellipsis_test \
 	theme_io_test \
 	tree_view_test \
+	disclosure_test \
 	layout_inspector_test
 
 ifeq ($(UNAME_S),Darwin)
@@ -850,6 +860,8 @@ $(OUT)/glyph_placeholder_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURD
 $(OUT)/load_font_size_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/font_display_size_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/font_memory_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
+$(OUT)/font_unload_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
+$(OUT)/font_unload_manager_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/headless_fallback_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/capture_perf_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/raylib_fallback_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"

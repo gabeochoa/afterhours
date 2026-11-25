@@ -84,6 +84,18 @@ TEST(unread_key_press_fails_and_names_the_key) {
   CHECK(captured.find("never read") != std::string::npos);
 }
 
+TEST(expect_unread_key_checks_both_outcomes) {
+  for (bool read : {false, true}) {
+    RunnerFixture f;
+    register_all_handlers(f.sm);
+    if (read) f.sm.register_update_system(std::make_unique<KeyReader>());
+    f.load("expect_unread_key F\n");
+    f.frames(60);
+    CHECK(f.runner.is_finished());
+    CHECK(f.runner.has_failed() == read);
+  }
+}
+
 TEST(unread_mouse_press_fails) {
   RunnerFixture f;
   register_all_handlers(f.sm);
