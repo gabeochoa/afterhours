@@ -277,6 +277,20 @@ struct AutoLayout {
            ascent + label.text_y_offset;
   }
 
+  std::optional<float> row_baseline_target(UIComponent &widget) {
+    float target = 0.f;
+    bool any = false;
+    for (EntityID child_id : widget.children) {
+      UIComponent &child = cmp(child_id);
+      if (child.absolute || child.should_hide || !wants_baseline(widget, child))
+        continue;
+      any = true;
+      target = fmaxf(target, child.computed_margin[Axis::top] +
+                                 baseline_offset(child).value_or(0.f));
+    }
+    return any ? std::optional<float>(target) : std::nullopt;
+  }
+
   // Per-side inset for this entity: its own override if it set one, else the
   // theme's. The override is stored unscaled, so it scales here the way
   // text_inset_x already was.
@@ -410,12 +424,31 @@ struct AutoLayout {
     return widget.computed[axis];
   }
 
+  float scrollbar_gutter_px(UIComponent &widget, Axis axis) {
+    if (widget.id < 0 || static_cast<size_t>(widget.id) >= mapping.size() ||
+        mapping[static_cast<size_t>(widget.id)] == nullptr)
+      return 0.f;
+    Entity &ent = *mapping[static_cast<size_t>(widget.id)];
+    if (!ent.has<HasScrollView>())
+      return 0.f;
+    const HasScrollView &sv = ent.get<HasScrollView>();
+    if (!sv.scrollbar_gutter)
+      return 0.f;
+    const bool trailing =
+        ((axis == Axis::right || axis == Axis::X) && sv.vertical_enabled) ||
+        ((axis == Axis::bottom || axis == Axis::Y) && sv.horizontal_enabled);
+    if (!trailing)
+      return 0.f;
+    return resolve_to_pixels(sv.scrollbar_thickness,
+                             fetch_screen_value_(Axis::Y),
+                             widget.resolved_scaling_mode, ui_scale);
+  }
   float compute_padding_for_standalone_expectation(UIComponent &widget,
                                                    Axis axis) {
     const float no_change = widget.computed_padd[axis];
     const float screenValue = fetch_screen_value_(axis);
 
-    const auto compute_ = [&](const Size &exp) {
+    const auto compute = [&](const Size &exp) {
       switch (exp.dim) {
       case Dim::Pixels:
         return resolve_pixels(exp.value, widget);
@@ -439,14 +472,16 @@ struct AutoLayout {
     const auto &padd = widget.desired_padding;
     switch (axis) {
     case Axis::X:
-      return compute_(padd[Axis::left]) + compute_(padd[Axis::right]);
+      return compute(padd[Axis::left]) + compute(padd[Axis::right]) +
+             scrollbar_gutter_px(widget, axis);
     case Axis::Y:
-      return compute_(padd[Axis::top]) + compute_(padd[Axis::bottom]);
+      return compute(padd[Axis::top]) + compute(padd[Axis::bottom]) +
+             scrollbar_gutter_px(widget, axis);
     case Axis::top:
     case Axis::left:
     case Axis::right:
     case Axis::bottom:
-      return compute_(padd[axis]);
+      return compute(padd[axis]) + scrollbar_gutter_px(widget, axis);
     }
     return no_change;
   }
@@ -456,7 +491,7 @@ struct AutoLayout {
     const float no_change = widget.computed_margin[axis];
     const float screenValue = fetch_screen_value_(axis);
 
-    const auto compute_ = [&](const Size &exp) {
+    const auto compute = [&](const Size &exp) {
       switch (exp.dim) {
       case Dim::Pixels:
         return resolve_pixels(exp.value, widget);
@@ -479,14 +514,14 @@ struct AutoLayout {
     const auto &margin = widget.desired_margin;
     switch (axis) {
     case Axis::X:
-      return compute_(margin[Axis::left]) + compute_(margin[Axis::right]);
+      return compute(margin[Axis::left]) + compute(margin[Axis::right]);
     case Axis::Y:
-      return compute_(margin[Axis::top]) + compute_(margin[Axis::bottom]);
+      return compute(margin[Axis::top]) + compute(margin[Axis::bottom]);
     case Axis::top:
     case Axis::left:
     case Axis::right:
     case Axis::bottom:
-      return compute_(margin[axis]);
+      return compute(margin[axis]);
     }
     return no_change;
   }
@@ -541,7 +576,8 @@ struct AutoLayout {
       return no_change;
     }
 
-    const auto compute_ = [&](const Size &exp, float parent_value) {
+    const auto compute = [&](const Size &exp, float parent_value,
+                              float gutter) {
       switch (exp.dim) {
       // Unsupported kinds fall through into Percent.
       case Dim::Children:
@@ -551,7 +587,7 @@ struct AutoLayout {
       case Dim::Expand:
         log_error("Padding by expand not supported");
       case Dim::Percent:
-        return exp.value * parent_value;
+        return exp.value * parent_value + gutter;
       case Dim::ScreenPercent:
       case Dim::None:
       case Dim::Pixels:
@@ -563,17 +599,21 @@ struct AutoLayout {
     const auto &padd = widget.desired_padding;
     switch (axis) {
     case Axis::X:
-      return compute_(padd[Axis::left], parent.computed[Axis::X]) +
-             compute_(padd[Axis::right], parent.computed[Axis::X]);
+      return compute(padd[Axis::left], parent.computed[Axis::X], 0.f) +
+             compute(padd[Axis::right], parent.computed[Axis::X],
+                      scrollbar_gutter_px(widget, Axis::right));
     case Axis::Y:
-      return compute_(padd[Axis::top], parent.computed[Axis::Y]) +
-             compute_(padd[Axis::bottom], parent.computed[Axis::Y]);
+      return compute(padd[Axis::top], parent.computed[Axis::Y], 0.f) +
+             compute(padd[Axis::bottom], parent.computed[Axis::Y],
+                      scrollbar_gutter_px(widget, Axis::bottom));
     case Axis::left:
     case Axis::right:
-      return compute_(padd[axis], parent.computed[Axis::X]);
+      return compute(padd[axis], parent.computed[Axis::X],
+                      scrollbar_gutter_px(widget, axis));
     case Axis::top:
     case Axis::bottom:
-      return compute_(padd[axis], parent.computed[Axis::Y]);
+      return compute(padd[axis], parent.computed[Axis::Y],
+                      scrollbar_gutter_px(widget, axis));
     }
     return no_change;
   }
@@ -597,24 +637,24 @@ struct AutoLayout {
       return no_change;
     }
 
-    const auto compute_ = [&](const Size &exp, float parent_value) {
+    const auto compute = [&](const Size &exp, float parent_value) {
       return exp.dim == Dim::Percent ? exp.value * parent_value : no_change;
     };
 
     const auto &margin = widget.desired_margin;
     switch (axis) {
     case Axis::X:
-      return compute_(margin[Axis::left], parent.computed[Axis::X]) +
-             compute_(margin[Axis::right], parent.computed[Axis::X]);
+      return compute(margin[Axis::left], parent.computed[Axis::X]) +
+             compute(margin[Axis::right], parent.computed[Axis::X]);
     case Axis::Y:
-      return compute_(margin[Axis::top], parent.computed[Axis::Y]) +
-             compute_(margin[Axis::bottom], parent.computed[Axis::Y]);
+      return compute(margin[Axis::top], parent.computed[Axis::Y]) +
+             compute(margin[Axis::bottom], parent.computed[Axis::Y]);
     case Axis::left:
     case Axis::right:
-      return compute_(margin[axis], parent.computed[Axis::X]);
+      return compute(margin[axis], parent.computed[Axis::X]);
     case Axis::top:
     case Axis::bottom:
-      return compute_(margin[axis], parent.computed[Axis::Y]);
+      return compute(margin[axis], parent.computed[Axis::Y]);
     }
     return no_change;
   }
@@ -795,17 +835,7 @@ struct AutoLayout {
   float _max_child_size(UIComponent &widget, Axis axis) {
     if (axis == Axis::Y &&
         static_cast<bool>(widget.flex_direction & FlexDirection::Row)) {
-      float target = 0.f;
-      bool any = false;
-      for (EntityID child_id : widget.children) {
-        UIComponent &child = cmp(child_id);
-        if (child.absolute || child.should_hide || !wants_baseline(widget, child))
-          continue;
-        any = true;
-        const float b = baseline_offset(child).value_or(0.f);
-        target = fmaxf(target, child.computed_margin[Axis::top] + b);
-      }
-      if (any) {
+      if (auto target = row_baseline_target(widget)) {
         float need = 0.f;
         for (EntityID child_id : widget.children) {
           UIComponent &child = cmp(child_id);
@@ -814,7 +844,7 @@ struct AutoLayout {
           float bottom = child.computed[axis] + child.computed_margin[axis];
           if (wants_baseline(widget, child)) {
             const float b = baseline_offset(child).value_or(0.f);
-            bottom = target - b + child.computed[axis] +
+            bottom = *target - b + child.computed[axis] +
                      child.computed_margin[Axis::bottom];
           }
           need = fmaxf(need, bottom);
@@ -1748,18 +1778,8 @@ struct AutoLayout {
       }
     }
 
-    float row_baseline = 0.f;
-    if (is_row) {
-      for (EntityID child_id : widget.children) {
-        UIComponent &child = cmp(child_id);
-        if (child.absolute || child.should_hide ||
-            !wants_baseline(widget, child))
-          continue;
-        row_baseline = fmaxf(
-            row_baseline, child.computed_margin[Axis::top] +
-                              baseline_offset(child).value_or(0.f));
-      }
-    }
+    const float row_baseline =
+        is_row ? row_baseline_target(widget).value_or(0.f) : 0.f;
 
     // Position children
     float offx = is_row ? start_offset : 0.f;

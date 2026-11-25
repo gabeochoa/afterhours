@@ -42,6 +42,17 @@ struct UICollectionHolder {
     return EntityHelper::getEntityForIDEnforce(id);
   }
 
+  static EntityHandle handle_for(const Entity &entity) {
+    EntityHandle h = get().collection.handle_for(entity);
+    return h.is_valid() ? h : EntityHelper::handle_for(entity);
+  }
+
+  static OptEntity resolve(EntityHandle handle) {
+    if (auto result = get().collection.resolve(handle); result.valid())
+      return result;
+    return EntityHelper::resolve(handle);
+  }
+
   UICollectionHolder(const UICollectionHolder &) = delete;
   UICollectionHolder &operator=(const UICollectionHolder &) = delete;
 
