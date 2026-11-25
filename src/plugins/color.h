@@ -85,6 +85,7 @@ constexpr Color gray_75() { return gray(192); }
 constexpr Color rgb(unsigned char r, unsigned char g, unsigned char b) {
   return {r, g, b, 255};
 }
+
 constexpr Color rgba(unsigned char r, unsigned char g, unsigned char b,
                      unsigned char a) {
   return {r, g, b, a};
@@ -544,6 +545,7 @@ public:
   FetchFn fetch_fn = nullptr;
   bool skip_hover_override = false;
   std::optional<Color> hover_color; // Per-component hover background override
+  std::optional<Vector2Type> bg_inset; // fill inset from the widget rect
 
   HasColor(const Color c) : color_(c) {}
   HasColor(const FetchFn &fetch)
