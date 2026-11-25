@@ -120,8 +120,9 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
                               ctx.theme.ui_scale)
           : ctx.theme.text_area_line_height_ratio > 0.f
                 ? ctx.theme.text_area_line_height_ratio *
-                      resolve_to_pixels(config.font_size, resolution_height,
-                                        scaling_mode, ctx.theme.ui_scale)
+                      resolve_font_size(config.font_size, resolution_height,
+                                        scaling_mode, ctx.theme.ui_scale,
+                                        ctx.theme.text_scale)
                 : resolve_to_pixels(pixels(20.f), resolution_height,
                                     scaling_mode, ctx.theme.ui_scale);
   // The field's own top+bottom padding (h720(4) each side, below), resolved
@@ -258,8 +259,9 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
           window_manager::ProvidesCurrentResolution>())
     screen_height = static_cast<float>(pcr->current_resolution.height);
   const float resolved_font_size =
-      resolve_to_pixels(config.font_size, screen_height,
-                        field_cmp.resolved_scaling_mode, ctx.theme.ui_scale);
+      resolve_font_size(config.font_size, screen_height,
+                        field_cmp.resolved_scaling_mode, ctx.theme.ui_scale,
+                        ctx.theme.text_scale);
   // Published for the listeners, which cannot see any of this by the time they
   // run. area_config.line_height is already refreshed in init_state above.
   state.render_font_name = font_name;
@@ -659,30 +661,28 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       // Word-level delete (Alt/Ctrl+Backspace, Alt/Ctrl+Delete). Guarded on the
       // action existing so an app with a smaller enum still compiles, the same
       // way text_input does it.
-      if constexpr (magic_enum::enum_contains<InputAction>(
-                        "TextDeleteWordBack")) {
-        if (ctx.pressed_or_repeat(InputAction::TextDeleteWordBack))
+      {
+        if (text_action_pressed<InputAction>(ctx, "TextDeleteWordBack", true))
           after_delete(delete_word_before_cursor(state));
       }
-      if constexpr (magic_enum::enum_contains<InputAction>(
-                        "TextDeleteWordForward")) {
-        if (ctx.pressed_or_repeat(InputAction::TextDeleteWordForward))
+      {
+        if (text_action_pressed<InputAction>(ctx, "TextDeleteWordForward",
+                                            true))
           after_delete(delete_word_after_cursor(state));
       }
-      if constexpr (magic_enum::enum_contains<InputAction>(
-                        "TextDeleteLineBack")) {
-        if (ctx.pressed_or_repeat(InputAction::TextDeleteLineBack))
+      {
+        if (text_action_pressed<InputAction>(ctx, "TextDeleteLineBack", true))
           after_delete(delete_to_line_start(state));
       }
-      if constexpr (magic_enum::enum_contains<InputAction>(
-                        "TextDeleteLineForward")) {
-        if (ctx.pressed_or_repeat(InputAction::TextDeleteLineForward))
+      {
+        if (text_action_pressed<InputAction>(ctx, "TextDeleteLineForward",
+                                            true))
           after_delete(delete_to_line_end(state));
       }
 
       // Backspace and Delete take the selection when there is one, rather than
       // one character next to the caret.
-      if (ctx.pressed_or_repeat(InputAction::TextBackspace)) {
+      if (text_action_pressed<InputAction>(ctx, "TextBackspace", true)) {
         state.push_undo_snapshot();
         const bool did = state.has_selection()
                              ? delete_selection(state)
@@ -694,7 +694,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
           text_changed = true;
         }
       }
-      if (ctx.pressed_or_repeat(InputAction::TextDelete)) {
+      if (text_action_pressed<InputAction>(ctx, "TextDelete", true)) {
         state.push_undo_snapshot();
         const bool did = state.has_selection()
                              ? delete_selection(state)
@@ -711,16 +711,16 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
     // Home/End act on the VISUAL row, not the source line: on a wrapped
     // paragraph the source version jumps to the far end of the paragraph
     // rather than the end of the row you can see.
-    if (ctx.pressed_or_repeat(InputAction::TextHome))
+    if (text_action_pressed<InputAction>(ctx, "TextHome", true))
       navigate([&] { move_to_visual_line_start(state); });
-    if (ctx.pressed_or_repeat(InputAction::TextEnd))
+    if (text_action_pressed<InputAction>(ctx, "TextEnd", true))
       navigate([&] { move_to_visual_line_end(state); });
 
     // Word-level movement (Alt/Ctrl+Arrow). Unshifted with a selection,
     // they collapse to its near edge first, like Left/Right below and like
     // text_input; only a second press moves a word.
-    if constexpr (magic_enum::enum_contains<InputAction>("TextWordLeft")) {
-      if (ctx.pressed_or_repeat(InputAction::TextWordLeft))
+    {
+      if (text_action_pressed<InputAction>(ctx, "TextWordLeft", true))
         navigate([&] {
           if (!shift_held && state.has_selection())
             state.cursor_position = state.selection_start();
@@ -729,8 +729,8 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
           reset_preferred_column(state);
         });
     }
-    if constexpr (magic_enum::enum_contains<InputAction>("TextWordRight")) {
-      if (ctx.pressed_or_repeat(InputAction::TextWordRight))
+    {
+      if (text_action_pressed<InputAction>(ctx, "TextWordRight", true))
         navigate([&] {
           if (!shift_held && state.has_selection())
             state.cursor_position = state.selection_end();

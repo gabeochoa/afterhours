@@ -2,6 +2,8 @@
 
 #include "../../animation/instant.h"
 #include "../../clipboard.h"
+#include "../../input_system.h"
+#include "../../../core/key_codes.h"
 #include "../text_selection.h"
 #include "../text_units.h"
 #include "../ui_collection.h"
@@ -20,6 +22,8 @@ namespace text_input {
 // Canonical definition lives in ui/text_selection.h; selection geometry needs
 // it and must not depend on the editing module.
 using afterhours::ui::utf8_char_length;
+using afterhours::ui::is_valid_utf8;
+using afterhours::ui::sanitize_utf8;
 
 
 // Get number of bytes in a UTF-8 character starting at pos
@@ -164,7 +168,7 @@ inline bool insert_char(AnyTextInputState auto &s, int codepoint) {
 template <typename State>
 inline void replace_text_externally(State &s, const std::string &text) {
   s.storage.clear();
-  s.storage.insert(0, text);
+  s.storage.insert(0, sanitize_utf8(text));
   s.cursor_position = std::min(s.cursor_position, s.text_size());
   const std::string stored = s.text();
   if (s.cursor_position > 0 && s.cursor_position < stored.size() &&
@@ -248,73 +252,27 @@ inline bool contains_cjk(const std::string &text) {
   return false;
 }
 
-/// Check if character is a word separator (whitespace or punctuation)
 inline bool is_word_separator(char c) {
-  return std::isspace(static_cast<unsigned char>(c)) ||
-         std::ispunct(static_cast<unsigned char>(c));
+  return !ui::text_selection::is_word_char(c);
 }
 
-/// Find start of word containing or before position.
-/// Moves backward past separators, then backward to start of word.
-inline size_t find_word_start(std::string_view text, size_t pos) {
-  if (pos == 0 || text.empty())
-    return 0;
-
-  size_t p = pos;
-
-  // Move back past any separators
-  while (p > 0 && is_word_separator(text[p - 1]))
-    --p;
-
-  // Move back to start of word
-  while (p > 0 && !is_word_separator(text[p - 1]))
-    --p;
-
-  return p;
+inline size_t find_word_start(std::string_view text, size_t pos,
+                              ui::text_selection::WordPolicy policy =
+                                  ui::text_selection::WordPolicy::Prose) {
+  return ui::text_selection::find_word_start(text, pos, policy);
 }
 
-/// Find end of word containing or after position.
-/// Moves forward past separators, then forward to end of word.
-inline size_t find_word_end(std::string_view text, size_t pos) {
-  if (pos >= text.size())
-    return text.size();
-
-  size_t p = pos;
-
-  // Move forward past any separators
-  while (p < text.size() && is_word_separator(text[p]))
-    ++p;
-
-  // Move forward to end of word
-  while (p < text.size() && !is_word_separator(text[p]))
-    ++p;
-
-  return p;
+inline size_t find_word_end(std::string_view text, size_t pos,
+                            ui::text_selection::WordPolicy policy =
+                                ui::text_selection::WordPolicy::Prose) {
+  return ui::text_selection::find_word_end(text, pos, policy);
 }
 
-/// Select the word at position (for double-click).
-/// Returns {start, end} byte offsets.
-inline std::pair<size_t, size_t> select_word_at(std::string_view text,
-                                                size_t pos) {
-  if (text.empty())
-    return {0, 0};
-  pos = std::min(pos, text.size() - 1);
-
-  // If on a separator, select just that separator
-  if (is_word_separator(text[pos])) {
-    return {pos, pos + 1};
-  }
-
-  // Find word boundaries
-  size_t start = pos;
-  while (start > 0 && !is_word_separator(text[start - 1]))
-    --start;
-
-  size_t end = pos;
-  while (end < text.size() && !is_word_separator(text[end]))
-    ++end;
-
-  return {start, end};
+inline std::pair<size_t, size_t> select_word_at(
+    std::string_view text, size_t pos,
+    ui::text_selection::WordPolicy policy =
+        ui::text_selection::WordPolicy::Prose) {
+  return ui::text_selection::select_word_at(text, pos, policy);
 }
 
 // Move cursor left by one word
@@ -621,12 +579,15 @@ template <typename State> inline void insert_newline_if_multiline(State &s) {
 /// insert_char.
 template <typename State>
 inline void insert_pasted_text(State &s, const std::string &clip) {
-  for (size_t i = 0; i < clip.size();) {
-    const int cp = utf8_to_codepoint(clip, i);
-    const size_t len = utf8_char_length(clip, i);
+  std::string sanitized;
+  const std::string &text =
+      is_valid_utf8(clip) ? clip : (sanitized = sanitize_utf8(clip));
+  for (size_t i = 0; i < text.size();) {
+    const int cp = utf8_to_codepoint(text, i);
+    const size_t len = utf8_char_length(text, i);
     i += len > 0 ? len : 1;
     if (cp == '\r') {
-      if (i < clip.size() && clip[i] == '\n')
+      if (i < text.size() && text[i] == '\n')
         continue; // CRLF: the \n below is the one break
     }
     const bool is_break = cp == '\n' || cp == '\r';
@@ -649,72 +610,134 @@ inline void insert_pasted_text(State &s, const std::string &clip) {
   }
 }
 
-/// Undo/redo, clipboard and select-all -- the part of editing that is the same
-/// whether the field is one line or many. Returns true if the text changed.
-///
-/// Copy and select-all are allowed while readonly; cut, paste, undo and redo
-/// are not. Each action is guarded on existing in the app's enum, so a smaller
-/// InputAction still compiles.
-///
+inline const auto &default_text_chord_table() {
+  using KeyChord = input::KeyChord;
+  constexpr uint8_t SHIFT = KeyChord::MOD_SHIFT;
+#if defined(__APPLE__)
+  constexpr uint8_t PRIMARY = KeyChord::MOD_SUPER;
+  constexpr uint8_t WORD = KeyChord::MOD_ALT;
+#else
+  constexpr uint8_t PRIMARY = KeyChord::MOD_CTRL;
+  constexpr uint8_t WORD = KeyChord::MOD_CTRL;
+#endif
+  static const std::pair<std::string_view, std::vector<KeyChord>> table[] = {
+      {"TextBackspace", {KeyChord{keys::BACKSPACE, 0}}},
+      {"TextDelete", {KeyChord{keys::DELETE_KEY, 0}}},
+      {"TextCopy", {KeyChord{keys::C, PRIMARY}}},
+      {"TextCut", {KeyChord{keys::X, PRIMARY}}},
+      {"TextPaste", {KeyChord{keys::V, PRIMARY}}},
+      {"TextUndo", {KeyChord{keys::Z, PRIMARY}}},
+      {"TextSelectAll", {KeyChord{keys::A, PRIMARY}}},
+      {"TextRedo", {KeyChord{keys::Z, static_cast<uint8_t>(PRIMARY | SHIFT)}
+#if !defined(__APPLE__)
+                    ,
+                    KeyChord{keys::Y, PRIMARY}
+#endif
+                    }},
+      {"TextDeleteWordBack", {KeyChord{keys::BACKSPACE, WORD}}},
+      {"TextDeleteWordForward", {KeyChord{keys::DELETE_KEY, WORD}}},
+      {"TextWordLeft", {KeyChord{keys::LEFT, WORD}}},
+      {"TextWordRight", {KeyChord{keys::RIGHT, WORD}}},
+      {"TextSelectLeft", {KeyChord{keys::LEFT, SHIFT}}},
+      {"TextSelectRight", {KeyChord{keys::RIGHT, SHIFT}}},
+#if defined(__APPLE__)
+      {"TextHome", {KeyChord{keys::HOME, 0}, KeyChord{keys::LEFT, PRIMARY},
+                    KeyChord{keys::A, KeyChord::MOD_CTRL}}},
+      {"TextEnd", {KeyChord{keys::END, 0}, KeyChord{keys::RIGHT, PRIMARY},
+                   KeyChord{keys::E, KeyChord::MOD_CTRL}}},
+      {"TextDeleteLineBack", {KeyChord{keys::BACKSPACE, PRIMARY}}},
+      {"TextDeleteLineForward", {KeyChord{keys::K, KeyChord::MOD_CTRL}}},
+#else
+      {"TextHome", {KeyChord{keys::HOME, 0}}},
+      {"TextEnd", {KeyChord{keys::END, 0}}},
+      {"TextDeleteLineBack",
+       {KeyChord{keys::BACKSPACE,
+                 static_cast<uint8_t>(KeyChord::MOD_CTRL | SHIFT)}}},
+#endif
+  };
+  return table;
+}
+
+inline bool has_default_text_chord(std::string_view name) {
+  for (const auto &[entry_name, chords] : default_text_chord_table())
+    if (entry_name == name)
+      return !chords.empty();
+  return false;
+}
+
+inline bool default_text_chord_pressed(std::string_view name, bool repeat) {
+  const uint8_t mods = input::get_current_modifiers();
+  for (const auto &[entry_name, chords] : default_text_chord_table()) {
+    if (entry_name != name) continue;
+    for (const auto &chord : chords)
+      if (chord.required_modifiers == mods &&
+          (repeat ? input::is_key_pressed_repeat(chord.key)
+                  : input::is_key_pressed(chord.key)))
+        return true;
+  }
+  return false;
+}
+
+// Host action if the enum carries `name`, else the library default chord.
+template <typename InputAction>
+inline bool text_action_pressed(auto &ctx, std::string_view name,
+                                bool repeat = false) {
+  if (const auto value = magic_enum::enum_cast<InputAction>(name))
+    return repeat ? ctx.pressed_or_repeat(*value) : ctx.pressed(*value);
+  return default_text_chord_pressed(name, repeat);
+}
+
+/// Falls back to library defaults for actions the host enum lacks.
 template <typename Ctx, typename State>
 inline bool handle_clipboard_and_undo(Ctx &ctx, State &s, bool editable) {
   using InputAction = typename std::remove_reference_t<Ctx>::value_type;
   bool changed = false;
 
   if (editable) {
-    if constexpr (magic_enum::enum_contains<InputAction>("TextUndo")) {
-      if (ctx.pressed(InputAction::TextUndo)) {
-        s.undo();
-        reset_blink(s);
-        changed = true;
-      }
+    if (text_action_pressed<InputAction>(ctx, "TextUndo")) {
+      s.undo();
+      reset_blink(s);
+      changed = true;
     }
-    if constexpr (magic_enum::enum_contains<InputAction>("TextRedo")) {
-      if (ctx.pressed(InputAction::TextRedo)) {
-        s.redo();
-        reset_blink(s);
-        changed = true;
-      }
+    if (text_action_pressed<InputAction>(ctx, "TextRedo")) {
+      s.redo();
+      reset_blink(s);
+      changed = true;
     }
   }
 
-  if constexpr (magic_enum::enum_contains<InputAction>("TextCopy")) {
-    if (!s.copy_disabled && ctx.pressed(InputAction::TextCopy) && s.has_selection())
-      clipboard::set_text(s.selected_text());
-  }
+  if (!s.copy_disabled &&
+      text_action_pressed<InputAction>(ctx, "TextCopy") && s.has_selection())
+    clipboard::set_text(s.selected_text());
 
   if (editable) {
-    if constexpr (magic_enum::enum_contains<InputAction>("TextCut")) {
-      if (!s.cut_disabled && ctx.pressed(InputAction::TextCut) && s.has_selection()) {
+    if (!s.cut_disabled &&
+        text_action_pressed<InputAction>(ctx, "TextCut") && s.has_selection()) {
+      s.push_undo_snapshot();
+      clipboard::set_text(s.selected_text());
+      delete_selection(s);
+      reset_blink(s);
+      changed = true;
+    }
+    if (!s.paste_disabled &&
+        text_action_pressed<InputAction>(ctx, "TextPaste")) {
+      const std::string clip = clipboard::get_text();
+      if (!clip.empty()) {
         s.push_undo_snapshot();
-        clipboard::set_text(s.selected_text());
-        delete_selection(s);
+        if (s.has_selection())
+          delete_selection(s);
+        insert_pasted_text(s, clip);
+        s.clear_selection();
         reset_blink(s);
         changed = true;
       }
     }
-    if constexpr (magic_enum::enum_contains<InputAction>("TextPaste")) {
-      if (!s.paste_disabled && ctx.pressed(InputAction::TextPaste)) {
-        const std::string clip = clipboard::get_text();
-        if (!clip.empty()) {
-          s.push_undo_snapshot();
-          if (s.has_selection())
-            delete_selection(s);
-          insert_pasted_text(s, clip);
-          s.clear_selection();
-          reset_blink(s);
-          changed = true;
-        }
-      }
-    }
   }
 
-  if constexpr (magic_enum::enum_contains<InputAction>("TextSelectAll")) {
-    if (ctx.pressed(InputAction::TextSelectAll)) {
-      s.selection_anchor = 0;
-      s.cursor_position = s.text_size();
-      reset_blink(s);
-    }
+  if (text_action_pressed<InputAction>(ctx, "TextSelectAll")) {
+    s.selection_anchor = 0;
+    s.cursor_position = s.text_size();
+    reset_blink(s);
   }
   return changed;
 }

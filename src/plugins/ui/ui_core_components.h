@@ -420,6 +420,24 @@ struct FontManager final : BaseComponent {
     return *this;
   }
 
+  bool unload_font(const std::string &font_name) {
+    auto it = fonts.find(font_name);
+    if (it == fonts.end())
+      return false;
+    Font old = it->second;
+    invalidate_measurements_for(font_name);
+    fonts.erase(it);
+    if (active_font == font_name)
+      active_font = UIComponent::DEFAULT_FONT;
+    const bool shared = std::any_of(
+        fonts.begin(), fonts.end(), [&](const auto &entry) {
+          return font_same_face(entry.second, old);
+        });
+    if (!shared)
+      afterhours::unload_font(old);
+    return true;
+  }
+
   auto &set_active(const std::string &font_name) {
     if (!fonts.contains(font_name)) {
       log_warn("{} missing from font manager. Did you call load_font() on it "
@@ -471,6 +489,18 @@ struct FontManager final : BaseComponent {
                                uint32_t codepoint) const {
     return font_has_glyph(find_font(font_name),
                           static_cast<int>(codepoint));
+  }
+
+  [[nodiscard]] std::vector<uint32_t>
+  packing_failures(const std::string &font_name) const {
+    std::vector<uint32_t> failed;
+    for (int cp : glyph_packing_failures(find_font(font_name)))
+      failed.push_back(static_cast<uint32_t>(cp));
+    return failed;
+  }
+
+  [[nodiscard]] bool has_packing_failure(const std::string &font_name) const {
+    return !packing_failures(font_name).empty();
   }
 
   // The distinct codepoints in `text` that the face cannot draw, in order.

@@ -553,14 +553,9 @@ ElementResult icon_row(HasUIContext auto &ctx, EntityParent ep_pair,
                        ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
 
-  auto row = hstack(ctx, ep_pair,
-                    ComponentConfig::inherit_from(config, "icon_row")
-                        .with_size(config.size)
-                        .with_margin(config.margin)
-                        .with_padding(config.padding)
-                        .with_debug_name(config.debug_name.empty()
-                                             ? "icon_row"
-                                             : config.debug_name));
+  if (config.debug_name.empty())
+    config.with_debug_name("icon_row");
+  auto row = hstack(ctx, ep_pair, config);
 
   size_t i = 0;
   for (const auto &frame : frames) {
@@ -572,6 +567,7 @@ ElementResult icon_row(HasUIContext auto &ctx, EntityParent ep_pair,
                .with_image_alignment(
                    afterhours::texture_manager::HasTexture::Alignment::Center)
                .with_size(ComponentSize{icon_width, icon_height})
+               .with_skip_grid_snap(config.skip_grid_snap)
                .with_debug_name(fmt::format("icon_row_item_{}", i)));
     i++;
   }
