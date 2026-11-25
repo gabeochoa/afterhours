@@ -282,7 +282,7 @@ inline void report_glyph_packing_failures(const raylib::Font font,
       continue;
     stored.push_back(cp);
     if (reported.insert({font_key(font), cp}).second)
-      log_error("font atlas did not pack U+{:04X} from '{}': it draws the "
+      log_warn("font atlas did not pack U+{:04X} from '{}': it draws the "
                 "atlas-corner glyph instead. Use a smaller font size or "
                 "fewer codepoints.",
                 cp, what ? what : "");
@@ -344,13 +344,16 @@ inline bool font_gl_ready() {
   return raylib::IsWindowReady() || graphics::is_headless();
 }
 
+// Warn, do not error: a font loaded before any GL context (or in headless
+// runs) legitimately has glyphs but no texture yet, and some hosts treat
+// log_error as fatal. The diagnostic is still reported once per font.
 inline void check_font_atlas(const raylib::Font font, const char *what) {
   report_glyph_packing_failures(font, what, glyph_packing_failures(font));
   if (font.glyphCount <= 0 || font.texture.id != 0 || !font_gl_ready())
     return;
   static std::set<std::pair<uint64_t, std::string>> reported;
   if (reported.insert({font_key(font), what ? what : ""}).second)
-    log_error("font atlas from '{}' has {} glyphs but no texture, so text "
+    log_warn("font atlas from '{}' has {} glyphs but no texture, so text "
               "draws nothing and measures by estimate. Use a smaller font "
               "size or fewer codepoints.",
               what ? what : "", font.glyphCount);
