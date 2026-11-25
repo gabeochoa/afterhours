@@ -1280,6 +1280,36 @@ struct input : developer::Plugin {
         }
     };
 
+    struct MultiClick {
+        float max_interval = 0.4f;
+        float slop = 6.f;
+        int max_clicks = 3;
+        int streak = 0;
+        float last_time = -1.f;
+        Vector2Type last_pos{};
+
+        int update(const bool pressed, const Vector2Type pos,
+                   const float now) {
+            if (!pressed) return 0;
+
+            const bool within =
+                streak > 0 && (now - last_time) <= max_interval &&
+                distance_sq(pos, last_pos) <= slop * slop;
+            streak = within ? (streak >= max_clicks ? 1 : streak + 1) : 1;
+            last_time = now;
+            last_pos = pos;
+            return streak;
+        }
+
+        void reset() {
+            streak = 0;
+            last_time = -1.f;
+            last_pos = {};
+        }
+
+        int count() const { return streak; }
+    };
+
     struct InputActivity {
         bool any = false;
         bool pressed = false;
