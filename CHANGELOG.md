@@ -6,6 +6,7 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+- **Word selection policy (`ui::text_selection::WordPolicy`: `Prose`, `Identifier`, `Path`).** Unifies word-boundary helpers in `text_selection.h` and defaults to `Prose`. Covered by `word_policy_test`.
 - **Global text scale (`Theme::text_scale`).** Multiplies every resolved font size via `ui::resolve_font_size` (layout, baseline alignment, immediate & batched renderers, text inputs, tooltips, and validation) without scaling widget boxes. Covered by `text_scale_test`.
 - **Rotated hit testing and `ComponentConfig::with_rotation(deg)`.** Routes hit testing, subtree hit checks, and drag-group hits through `HasUIModifiers::contains_rotated` and rotates focus rings around `HasUIModifiers::rotation_center`. Covered by `rotation_hit_test`.
 - **Font unload (`FontManager::unload_font`) and unbounded Sokol font tracking.** Replaces the 16-font cap in Sokol with a vector and frees backend font resources on unload unless another registered name aliases the same face. Covered by `font_unload_manager_test` and `font_unload_test`.
