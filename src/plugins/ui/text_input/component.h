@@ -21,8 +21,7 @@ namespace text_input {
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
-// Opted into by naming them in the consumer's InputAction enum, so a typo
-// silently removes the feature.
+// A typo bypasses the host binding and falls back to the library default.
 inline constexpr std::string_view optional_editing_actions[] = {
     "TextUndo",      "TextRedo",       "TextCopy",
     "TextCut",       "TextPaste",      "TextWordLeft",
@@ -36,27 +35,37 @@ constexpr bool has_editing_action(std::string_view name) {
   return magic_enum::enum_contains<InputAction>(name);
 }
 
-// Names whatever resolved to nothing, once per run.
 template <typename InputAction> inline void report_missing_editing_actions() {
   static bool reported = false;
   if (reported)
     return;
   reported = true;
 
-  std::string missing;
+  std::string with_default;
+  std::string unavailable;
   for (const std::string_view name : optional_editing_actions) {
-    if (!has_editing_action<InputAction>(name)) {
-      if (!missing.empty())
-        missing += ", ";
-      missing += name;
-    }
+    if (has_editing_action<InputAction>(name))
+      continue;
+    std::string &list =
+        has_default_text_chord(name) ? with_default : unavailable;
+    if (!list.empty())
+      list += ", ";
+    list += name;
   }
-  if (missing.empty())
+  if (with_default.empty() && unavailable.empty())
     return;
-  log_warn("text_input: these editing actions are off because {} has no "
-           "enumerator by that name: {}. Add the enumerator and bind it, or "
-           "ignore this if you meant to leave them out.",
-           type_name<InputAction>(), missing);
+  if (!with_default.empty())
+    log_warn("text_input: {} has no enumerator for: {}. They have no host "
+             "enumerator and will use library default chords where "
+             "available. Add and bind the enumerator to customize them, or "
+             "ignore this if the defaults are intended.",
+             type_name<InputAction>(), with_default);
+  if (!unavailable.empty())
+    log_warn("text_input: {} has no enumerator for: {}. They have no host "
+             "enumerator and no library default chord on this platform, so "
+             "they are unavailable. Add and bind the enumerator to enable "
+             "them, or ignore this if they are not needed.",
+             type_name<InputAction>(), unavailable);
 }
 
 // Given a local x coordinate within a text field, find the byte offset
@@ -119,6 +128,9 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
       },
       text);
 
+  auto &submit_state = entity.template addComponentIfMissing<IsSubmittable>();
+  submit_state.submitted = false;
+
   // Apply readonly/disabled from config each frame
   state.readonly = config.text_readonly;
   state.disabled = config.disabled;
@@ -126,6 +138,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   state.copy_disabled = config.text_copy_disabled;
   state.cut_disabled = config.text_cut_disabled;
   state.paste_disabled = config.text_paste_disabled;
+  state.escape_blurs = config.text_escape_blurs;
 
   // Disabled: skip focus entirely, render with reduced opacity
   if (state.disabled) {
@@ -145,6 +158,14 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
                       : ComponentSize(pixels(default_component_size.x * 1.5f),
                                       pixels(default_component_size.y));
   }
+
+  const Padding requested_padding = config.padding;
+  const bool caller_set_padding = requested_padding.top.dim != Dim::None ||
+                                  requested_padding.left.dim != Dim::None ||
+                                  requested_padding.bottom.dim != Dim::None ||
+                                  requested_padding.right.dim != Dim::None;
+  if (caller_set_padding)
+    config.padding = Padding{};
 
   config.flex_direction = FlexDirection::Row;
   init_component(ctx, ep_pair, config, ComponentType::TextInput, false,
@@ -202,6 +223,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
                                           : base_corners)
           .with_alignment(TextAlignment::Left)
           .with_overflow(Overflow::Hidden)
+          .with_select_on_focus(false)
           .with_render_layer(config.render_layer + 1);
   // Only impose the theme fill when the caller did not pick one, or an app
   // with its own tokens cannot theme the field.
@@ -232,7 +254,8 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   // Entities persist across frames, so the muted colour has to be cleared
   // again rather than only set.
   if (show_placeholder)
-    field_label.explicit_text_color = ctx.theme.font_muted;
+    field_label.explicit_text_color =
+        config.placeholder_color.value_or(ctx.theme.font_muted);
   else if (config.custom_text_color.has_value())
     field_label.explicit_text_color = config.custom_text_color;
   else
@@ -259,12 +282,18 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
                           : pixels(field_h * 0.5f);
       field_cmp.enable_font(fn, fs, true);
 
-      float pad_h = field_h * 0.125f;
-      float pad_w = field_h * 0.35f;
-      field_cmp.set_desired_padding(Padding{.top = pixels(pad_h),
-                                            .bottom = pixels(pad_h),
-                                            .left = pixels(pad_w),
-                                            .right = pixels(pad_w)});
+      float pad_w;
+      if (caller_set_padding) {
+        field_cmp.set_desired_padding(requested_padding);
+        pad_w = field_cmp.computed_padd[Axis::left];
+      } else {
+        float pad_h = field_h * 0.125f;
+        pad_w = field_h * 0.35f;
+        field_cmp.set_desired_padding(Padding{.top = pixels(pad_h),
+                                              .bottom = pixels(pad_h),
+                                              .left = pixels(pad_w),
+                                              .right = pixels(pad_w)});
+      }
       field_cmp.padding_is_default = true;
 
       // draw_text_in_rect adds DRAW_TEXT_MARGIN internally; subtract it so
@@ -286,8 +315,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   // Select all text when gaining focus via tab (not mouse click).
   // Mouse clicks position the cursor via the click listener instead.
   if (state.is_focused && !state.was_focused) {
-    bool mouse_caused_focus =
-        ctx.is_mouse_press(field_entity.id) || ctx.is_mouse_press(entity.id);
+    bool mouse_caused_focus = ctx.focus_modality == FocusSource::Pointer;
     if (!mouse_caused_focus && state.text_size() > 0) {
       state.selection_anchor = 0;
       state.cursor_position = state.text_size();
@@ -318,12 +346,12 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
       screen_height = static_cast<float>(pcr->current_resolution.height);
     }
 
-    float uis = imm::ThemeDefaults::get().theme.ui_scale;
+    const auto &theme = imm::ThemeDefaults::get().theme;
     // Pass the Size, not its raw .value re-tagged as pixels: an h720() font
     // size carries the 20/720 fraction, so that resolved to 0.028px.
-    float actual_font_size = resolve_to_pixels(
+    float actual_font_size = resolve_font_size(
         field_cmp.font_size, screen_height, field_cmp.resolved_scaling_mode,
-        uis);
+        theme.ui_scale, theme.text_scale);
 
     float pad_left = field_cmp.computed_padd[Axis::left];
     float pad_top = field_cmp.computed_padd[Axis::top];
@@ -481,9 +509,10 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
                 window_manager::ProvidesCurrentResolution>())
           screen_h = static_cast<float>(pcr->current_resolution.height);
 
-        float uis = imm::ThemeDefaults::get().theme.ui_scale;
-        float afs = resolve_to_pixels(cmp.font_size, screen_h,
-                                      cmp.resolved_scaling_mode, uis);
+        const auto &theme = imm::ThemeDefaults::get().theme;
+        float afs = resolve_font_size(cmp.font_size, screen_h,
+                                      cmp.resolved_scaling_mode,
+                                      theme.ui_scale, theme.text_scale);
 
         RectangleType fr = cmp.rect();
         float pad_left = cmp.computed_padd[Axis::left];
@@ -554,31 +583,29 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
 
     // Undo/Redo (before clipboard/char input so Ctrl+Z doesn't insert)
     if (editable) {
-      if constexpr (magic_enum::enum_contains<InputAction>("TextUndo")) {
-        if (ctx.pressed(InputAction::TextUndo)) {
-          state.undo();
-          reset_blink(state);
-        }
+      if (text_action_pressed<InputAction>(ctx, "TextUndo")) {
+        state.undo();
+        reset_blink(state);
       }
-      if constexpr (magic_enum::enum_contains<InputAction>("TextRedo")) {
-        if (ctx.pressed(InputAction::TextRedo)) {
-          state.redo();
-          reset_blink(state);
-        }
+      if (text_action_pressed<InputAction>(ctx, "TextRedo")) {
+        state.redo();
+        reset_blink(state);
       }
     }
 
     // Copy is allowed while readonly unless the field disables it.
     // Cut/Paste need editable and honour their own disable flags.
-    if constexpr (magic_enum::enum_contains<InputAction>("TextCopy")) {
-      if (!state.copy_disabled && ctx.pressed(InputAction::TextCopy)) {
+    {
+      if (!state.copy_disabled &&
+          text_action_pressed<InputAction>(ctx, "TextCopy")) {
         if (state.has_selection())
           clipboard::set_text(state.selected_text());
       }
     }
     if (editable) {
-      if constexpr (magic_enum::enum_contains<InputAction>("TextCut")) {
-        if (!state.cut_disabled && ctx.pressed(InputAction::TextCut)) {
+      {
+        if (!state.cut_disabled &&
+            text_action_pressed<InputAction>(ctx, "TextCut")) {
           if (state.has_selection()) {
             state.push_undo_snapshot();
             clipboard::set_text(state.selected_text());
@@ -587,8 +614,9 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
           }
         }
       }
-      if constexpr (magic_enum::enum_contains<InputAction>("TextPaste")) {
-        if (!state.paste_disabled && ctx.pressed(InputAction::TextPaste)) {
+      {
+        if (!state.paste_disabled &&
+            text_action_pressed<InputAction>(ctx, "TextPaste")) {
           state.push_undo_snapshot();
           if (state.has_selection()) delete_selection(state);
           std::string clip = clipboard::get_text();
@@ -602,7 +630,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
     }
 
     // Select all (allowed in readonly)
-    if (ctx.pressed(InputAction::TextSelectAll)) {
+    if (text_action_pressed<InputAction>(ctx, "TextSelectAll")) {
       state.selection_anchor = 0;
       state.cursor_position = state.text_size();
       reset_blink(state);
@@ -642,8 +670,8 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
     };
 
     // Word-level movement (Ctrl+Arrow / Alt+Arrow)
-    if constexpr (magic_enum::enum_contains<InputAction>("TextWordLeft")) {
-      if (ctx.pressed_or_repeat(InputAction::TextWordLeft)) {
+    {
+      if (text_action_pressed<InputAction>(ctx, "TextWordLeft", true)) {
         navigate([&] {
           if (!shift_held && state.has_selection()) {
             state.cursor_position = state.selection_start();
@@ -653,8 +681,8 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
         });
       }
     }
-    if constexpr (magic_enum::enum_contains<InputAction>("TextWordRight")) {
-      if (ctx.pressed_or_repeat(InputAction::TextWordRight)) {
+    {
+      if (text_action_pressed<InputAction>(ctx, "TextWordRight", true)) {
         navigate([&] {
           if (!shift_held && state.has_selection()) {
             state.cursor_position = state.selection_end();
@@ -668,13 +696,13 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
     // Character-level selection movement (Shift+Arrow via chord actions).
     // These are kept for backward compatibility; the shift_held path in
     // navigate() handles selection automatically.
-    if constexpr (magic_enum::enum_contains<InputAction>("TextSelectLeft")) {
-      if (ctx.pressed_or_repeat(InputAction::TextSelectLeft)) {
+    {
+      if (text_action_pressed<InputAction>(ctx, "TextSelectLeft", true)) {
         navigate([&] { move_cursor_left(state); });
       }
     }
-    if constexpr (magic_enum::enum_contains<InputAction>("TextSelectRight")) {
-      if (ctx.pressed_or_repeat(InputAction::TextSelectRight)) {
+    {
+      if (text_action_pressed<InputAction>(ctx, "TextSelectRight", true)) {
         navigate([&] { move_cursor_right(state); });
       }
     }
@@ -701,8 +729,8 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
 
     // Deletion (word-level and character-level) - only if editable
     if (editable) {
-      if constexpr (magic_enum::enum_contains<InputAction>("TextDeleteWordBack")) {
-        if (ctx.pressed_or_repeat(InputAction::TextDeleteWordBack)) {
+      {
+        if (text_action_pressed<InputAction>(ctx, "TextDeleteWordBack", true)) {
           state.push_undo_snapshot();
           if (state.has_selection()) {
             delete_selection(state);
@@ -712,8 +740,8 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
           reset_blink(state);
         }
       }
-      if constexpr (magic_enum::enum_contains<InputAction>("TextDeleteWordForward")) {
-        if (ctx.pressed_or_repeat(InputAction::TextDeleteWordForward)) {
+      {
+        if (text_action_pressed<InputAction>(ctx, "TextDeleteWordForward", true)) {
           state.push_undo_snapshot();
           if (state.has_selection()) {
             delete_selection(state);
@@ -723,8 +751,8 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
           reset_blink(state);
         }
       }
-      if constexpr (magic_enum::enum_contains<InputAction>("TextDeleteLineBack")) {
-        if (ctx.pressed_or_repeat(InputAction::TextDeleteLineBack)) {
+      {
+        if (text_action_pressed<InputAction>(ctx, "TextDeleteLineBack", true)) {
           state.push_undo_snapshot();
           if (state.has_selection()) {
             delete_selection(state);
@@ -734,8 +762,8 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
           reset_blink(state);
         }
       }
-      if constexpr (magic_enum::enum_contains<InputAction>("TextDeleteLineForward")) {
-        if (ctx.pressed_or_repeat(InputAction::TextDeleteLineForward)) {
+      {
+        if (text_action_pressed<InputAction>(ctx, "TextDeleteLineForward", true)) {
           state.push_undo_snapshot();
           if (state.has_selection()) {
             delete_selection(state);
@@ -746,7 +774,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
         }
       }
 
-      if (ctx.pressed_or_repeat(InputAction::TextBackspace)) {
+      if (text_action_pressed<InputAction>(ctx, "TextBackspace", true)) {
         state.push_undo_snapshot();
         if (state.has_selection()) {
           delete_selection(state);
@@ -755,7 +783,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
         }
         reset_blink(state);
       }
-      if (ctx.pressed_or_repeat(InputAction::TextDelete)) {
+      if (text_action_pressed<InputAction>(ctx, "TextDelete", true)) {
         state.push_undo_snapshot();
         if (state.has_selection()) {
           delete_selection(state);
@@ -767,30 +795,38 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
     }
 
     // Home/End: Shift extends selection, plain collapses it
-    if (ctx.pressed_or_repeat(InputAction::TextHome)) {
+    if (text_action_pressed<InputAction>(ctx, "TextHome", true)) {
       navigate([&] { state.cursor_position = 0; });
     }
-    if (ctx.pressed_or_repeat(InputAction::TextEnd)) {
+    if (text_action_pressed<InputAction>(ctx, "TextEnd", true)) {
       navigate([&] { state.cursor_position = state.text_size(); });
     }
 
     // FAKE prevents try_to_grab from immediately re-focusing the first widget.
-    if (ctx.pressed(InputAction::MenuBack)) {
+    // with_escape_blurs(false) leaves both focus and the press to the app.
+    if (config.text_escape_blurs && ctx.pressed(InputAction::MenuBack)) {
       state.clear_selection();
       ctx.set_focus(ctx.FAKE);
     }
 
     // Enter/Submit
-    if (ctx.pressed(InputAction::WidgetPress) &&
-        entity.has<HasTextInputListener>())
-      if (auto &listener = entity.get<HasTextInputListener>();
-          listener.on_submit)
-        listener.on_submit(entity);
+    if (ctx.pressed(InputAction::WidgetPress)) {
+      submit_state.submitted = true;
+      if (entity.has<HasTextInputListener>())
+        if (auto &listener = entity.get<HasTextInputListener>();
+            listener.on_submit)
+          listener.on_submit(entity);
+      if (config.on_submit) {
+        const std::string submitted_text = state.text();
+        config.on_submit(submitted_text);
+      }
+    }
   }
 
   text = state.text();
   entity.template addComponentIfMissing<FocusClusterRoot>();
-  return ElementResult{state.changed_since, entity};
+  ElementResult result{state.changed_since, entity};
+  return result;
 }
 
 } // namespace text_input

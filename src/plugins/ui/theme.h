@@ -232,6 +232,8 @@ struct Theme {
   std::optional<Color> surface_raised;
   float panel_corner_radius = 12.f;
 
+  float divider_min_hit_thickness = 12.f;
+
   Color raised_surface() const {
     if (surface_raised) return *surface_raised;
     return colors::mix(surface, colors::auto_text_color(surface, font, darkfont),
@@ -329,6 +331,8 @@ struct Theme {
   // In Proportional mode this is ignored. In Adaptive mode, all pixels()
   // values are multiplied by this factor (like browser Ctrl+/- zoom).
   float ui_scale = 1.0f;
+
+  float text_scale = 1.0f;
 
   // ===== Text inset =====
   // Space reserved between a label and its own box, on each side, in
@@ -598,6 +602,11 @@ public:
   // Only affects Adaptive scaling mode. Clamped to [0.5, 3.0].
   Builder &with_ui_scale(float scale) {
     theme_.ui_scale = std::clamp(scale, 0.5f, 3.0f);
+    return *this;
+  }
+
+  Builder &with_text_scale(float scale) {
+    theme_.text_scale = std::clamp(scale, 0.5f, 3.0f);
     return *this;
   }
 
