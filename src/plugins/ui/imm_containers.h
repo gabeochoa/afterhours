@@ -182,7 +182,8 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                  .with_absolute_position()
                  .with_translate(pixels(placed.x - anchor.x),
                                  pixels(placed.y - anchor.y))
-                 .with_render_layer(config.render_layer + 1));
+                 .with_render_layer(config.render_layer +
+                                    overlay::OVERLAY_BASE));
 
     // Set tray selection to current option only when first opened
     if (!dropdownState.was_open_last_frame &&
@@ -238,6 +239,8 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
     entity.disableTag(UITag::InputExclusivity);
   }
 
+  detail::apply_accessibility(entity, config, AccessibleRole::Dropdown,
+                                label_str, current_option);
   option_index = dropdownState.last_option_clicked;
   return ElementResult{dropdownState.changed_since, entity,
                        dropdownState.last_option_clicked};
@@ -350,6 +353,11 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
 /// @param tab_labels Container of tab label strings
 /// @param active_tab Reference to the currently active tab index
 /// @param config Component configuration
+/// @param active_config Overrides applied to the active tab only, after the
+///        built-in active-tab styling (see ComponentConfig::apply_overrides).
+///        Empty (the default) leaves the active tab unchanged; for example,
+///        pass a config with with_border_top() and top-rounded corners to
+///        replace the bottom underline with a top edge.
 ///
 /// Features:
 /// - Horizontal row of equally-sized tabs
@@ -373,7 +381,8 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
 template <typename Container>
 ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
                             const Container &tab_labels, size_t &active_tab,
-                            ComponentConfig config = ComponentConfig()) {
+                            ComponentConfig config = ComponentConfig(),
+                            ComponentConfig active_config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
 
   if (tab_labels.empty())
@@ -432,6 +441,11 @@ ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
             .with_justify_content(JustifyContent::Center)
             .with_text_overflow(TextOverflow::Ellipsis)
             .with_border_bottom(underline_color, pixels(underline_h));
+
+    if (config.rounded_corners)
+      tab_config.with_rounded_corners(*config.rounded_corners);
+    if (is_active)
+      tab_config.apply_overrides_from(active_config);
 
     auto tab = button(ctx, mk(entity, i), tab_config);
     // Content-fit floor: never shrink a tab below its label width (+ padding).
