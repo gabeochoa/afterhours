@@ -14,6 +14,7 @@
 #include <magic_enum/magic_enum.hpp>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "../../drawing_helpers.h"
@@ -374,6 +375,19 @@ struct HasUIModifiers : BaseComponent {
     return {rect.x + rect.width * origin_x, rect.y + rect.height * origin_y};
   }
 
+  bool contains_rotated(RectangleType rect, float px, float py) const {
+    if (rotation == 0.f)
+      return px >= rect.x && px <= rect.x + rect.width && py >= rect.y &&
+             py <= rect.y + rect.height;
+    const Vector2Type pivot = rotation_center(rect);
+    const float rad = -rotation * 3.14159265358979323846f / 180.f;
+    const float c = std::cos(rad), s = std::sin(rad);
+    const float dx = px - pivot.x, dy = py - pivot.y;
+    const float lx = pivot.x + dx * c - dy * s;
+    const float ly = pivot.y + dx * s + dy * c;
+    return lx >= rect.x && lx <= rect.x + rect.width && ly >= rect.y &&
+           ly <= rect.y + rect.height;
+  }
   RectangleType apply_modifier(RectangleType rect) const {
     // Apply scale first
     float s = scale;
@@ -606,6 +620,9 @@ struct HasScrollView : BaseComponent {
   // Pixels of rows a virtualized list chose not to build, added into
   // content_size so the scrollbar still spans the whole list.
   Vector2Type unbuilt_content_size = {0, 0};
+  size_t virtual_first = 0, virtual_last = 0;
+  size_t virtual_visible_first = 0, virtual_visible_last = 0;
+  size_t virtual_count = 0;
 
   // Hold the viewport on whatever child is at the top of it when content is
   // added or removed above, the way a browser does. Off by default: it costs a
@@ -617,6 +634,8 @@ struct HasScrollView : BaseComponent {
   // above the fold is detected without anyone reporting one.
   EntityID anchor_child = -1;
   float anchor_child_y = 0.f;
+  size_t anchor_item_key = 0;
+  bool has_anchor_item_key = false;
   // Unset until a layout pass has measured it. A plain {0,0} could not be told
   // apart from a view genuinely measured as empty, so a consumer windowing its
   // content read zero on frame one and quietly built everything.
@@ -779,6 +798,8 @@ struct HasVirtualListIndex : BaseComponent {
   size_t pending_prepend = 0;
   float last_scale = 1.f;
   float last_gap = 0.f;
+  std::unordered_map<size_t, EntityID> key_slots;
+  EntityID next_key_slot = 0;
 
   void invalidate(size_t first, size_t last) {
     dirty_from = std::min(dirty_from, first);
@@ -903,6 +924,9 @@ struct DragGroupState : BaseComponent {
   bool dragging = false;
   int drag_source_index = -1;
   int hover_index = -1;
+
+  static constexpr float edge_scroll_margin_px = 24.f;
+  static constexpr float edge_scroll_speed_px_s = 240.f;
 
   // Pressed but not yet moved past the drag threshold.
   bool armed = false;

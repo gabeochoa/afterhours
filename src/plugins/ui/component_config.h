@@ -126,6 +126,8 @@ struct ComponentConfig {
   // Per-side space between this label and its own box, overriding
   // Theme::text_inset. Unset means the theme's value.
   std::optional<Vector2Type> text_inset;
+  float text_x_offset = 0.f;
+  float text_y_offset = 0.f;
   std::optional<CursorType> cursor_type; // Cursor to show on hover
   bool skip_when_tabbing = false;
   bool focus_scope = false;
@@ -151,6 +153,7 @@ struct ComponentConfig {
   // ui modifiers
   float opacity = 1.0f;
   float scale = 1.0f; // Visual scale applied after layout (smooth animations)
+  float rotation = 0.0f;
   Size translate_x = pixels(0.0f);
   Size translate_y = pixels(0.0f);
   // Trailing: (x,y) insets from far edges; explicit size grows inward.
@@ -177,8 +180,8 @@ struct ComponentConfig {
   std::optional<Size> tooltip_font_size;
   float tooltip_padding = 8.f;
   float tooltip_gap = 4.f;
-  RenderPrimitive::CustomDrawFn on_draw_bg;
-  RenderPrimitive::CustomDrawFn on_draw_fg;
+  RenderPrimitive::DrawCallback on_draw_bg;
+  RenderPrimitive::DrawCallback on_draw_fg;
   RenderPrimitive::CustomDrawFn on_draw_over;
   using OnSubmitFn = std::function<void(std::string_view)>;
   OnSubmitFn on_submit;
@@ -606,6 +609,11 @@ struct ComponentConfig {
   ComponentConfig &with_text_inset(float both) {
     return with_text_inset(both, both);
   }
+  ComponentConfig &with_text_offset(float x, float y = 0.f) {
+    text_x_offset = x;
+    text_y_offset = y;
+    return *this;
+  }
   ComponentConfig &with_cursor(CursorType cursor) {
     cursor_type = cursor;
     return *this;
@@ -713,11 +721,11 @@ struct ComponentConfig {
     return *this;
   }
   // bg: behind fill; fg: over own primitives; over: over whole subtree.
-  ComponentConfig &with_on_draw_bg(RenderPrimitive::CustomDrawFn fn) {
+  ComponentConfig &with_on_draw_bg(RenderPrimitive::DrawCallback fn) {
     on_draw_bg = std::move(fn);
     return *this;
   }
-  ComponentConfig &with_on_draw_fg(RenderPrimitive::CustomDrawFn fn) {
+  ComponentConfig &with_on_draw_fg(RenderPrimitive::DrawCallback fn) {
     on_draw_fg = std::move(fn);
     return *this;
   }
@@ -830,6 +838,10 @@ struct ComponentConfig {
   /// Use this for smooth scale animations instead of changing size.
   ComponentConfig &with_scale(float s) {
     scale = s;
+    return *this;
+  }
+  ComponentConfig &with_rotation(float deg) {
+    rotation = deg;
     return *this;
   }
   ComponentConfig &with_shader(graphics::ShaderType &s) {
@@ -1419,6 +1431,8 @@ if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.deb
       merged.opacity = overrides.opacity;
     if (overrides.scale != 1.0f)
       merged.scale = overrides.scale;
+    if (overrides.rotation != 0.0f)
+      merged.rotation = overrides.rotation;
     if (overrides.translate_x.value != 0.0f)
       merged.translate_x = overrides.translate_x;
     if (overrides.translate_y.value != 0.0f)
@@ -1490,6 +1504,10 @@ if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.deb
       merged.letter_spacing = overrides.letter_spacing;
     if (overrides.text_inset.has_value())
       merged.text_inset = overrides.text_inset;
+    if (overrides.text_x_offset != 0.f || overrides.text_y_offset != 0.f) {
+      merged.text_x_offset = overrides.text_x_offset;
+      merged.text_y_offset = overrides.text_y_offset;
+    }
     if (overrides.text_stroke_config.has_value())
       merged.text_stroke_config = overrides.text_stroke_config;
     if (!overrides.styled_label.empty())
@@ -1629,6 +1647,7 @@ if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.deb
       custom_color = parent.custom_color;
     }
     if (parent.custom_text_color.has_value()) {
+      text_color_usage = parent.text_color_usage;
       custom_text_color = parent.custom_text_color;
       auto_text_color = parent.auto_text_color;
     }

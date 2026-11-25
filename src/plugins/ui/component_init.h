@@ -354,6 +354,8 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
       .set_text_inset(config.text_inset)
       .set_line_height(config.text_area_line_height)
       .set_spans(pseudo_localize_spans(config.styled_label, pseudo));
+  lbl.text_x_offset = config.text_x_offset;
+  lbl.text_y_offset = config.text_y_offset;
 
   // Set explicit text color if specified via with_text_color()
   if (config.text_color_usage == Theme::Usage::Custom &&
@@ -592,13 +594,14 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
     prior.origin_y = 0.5f;
   }
   // Apply UI modifiers (scale, translate) if any are non-default
-  bool needs_modifiers = config.scale != 1.0f ||
+  bool needs_modifiers = config.scale != 1.0f || config.rotation != 0.0f ||
                          config.translate_x.value != 0.0f ||
                          config.translate_y.value != 0.0f;
   if (needs_modifiers) {
     auto &mods = entity.addComponentIfMissing<HasUIModifiers>();
     // Apply scale (visual scaling after layout - smooth for animations)
     mods.scale = config.scale;
+    mods.rotation = config.rotation;
     // Resolve each axis against its own screen dimension (720p
     // baseline without a resolution singleton). Both axes used the
     // height, so a width-referenced x (w1280) was scaled by the

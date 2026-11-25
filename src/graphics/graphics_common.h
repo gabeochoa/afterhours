@@ -468,6 +468,13 @@ inline bool is_headless() {
 
 inline int get_frame_count() { return detail::frame_count(); }
 
+inline std::uint64_t &context_epoch() {
+  static std::uint64_t epoch = 0;
+  return epoch;
+}
+
+inline void bump_context_epoch() { ++context_epoch(); }
+
 inline RenderTextureType &get_render_texture() {
   auto &backend = get_backend();
   if (backend.get_render_texture) {
