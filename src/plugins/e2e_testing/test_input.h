@@ -380,11 +380,11 @@ template <typename BackendFn>
 inline bool is_mouse_button_down(int button, BackendFn backend_fn) {
   if (detail::test_mode) {
     if (button == 0)
-      return input_injector::detail::mouse.left_down;
+      return input_injector::is_mouse_button_down();
     if (button == 1)
-      return input_injector::detail::mouse.right_down;
+      return input_injector::is_mouse_right_button_down();
     if (button == 2)
-      return input_injector::detail::mouse.middle_down;
+      return input_injector::is_mouse_middle_button_down();
     return false;
   }
   return backend_fn(button);
