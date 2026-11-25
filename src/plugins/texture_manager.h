@@ -3,6 +3,7 @@
 #include "../config.h"
 #include "../developer.h"
 #include "../warn_once.h"
+#include "animation/store.h"
 
 namespace afterhours {
 namespace texture_manager {
@@ -12,10 +13,18 @@ using Rectangle = raylib::Rectangle;
 using Texture = raylib::Texture2D;
 using Color = raylib::Color;
 
+} // namespace texture_manager
+void draw_texture_pro(TextureType tex, RectangleType src, RectangleType dest,
+                      Vector2Type origin, float rotation, ColorType tint,
+                      int filter = -1);
+namespace texture_manager {
+
 inline void draw_texture_pro(const Texture sheet, const Rectangle frame,
                              const Rectangle location, const Vector2Type size,
-                             const float angle, const Color tint) {
-  raylib::DrawTexturePro(sheet, frame, location, size, angle, tint);
+                             const float angle, const Color tint,
+                             const int filter = -1) {
+  ::afterhours::draw_texture_pro(sheet, frame, location, size, angle, tint,
+                                 filter);
 }
 #else
 using Rectangle = RectangleType;
@@ -23,25 +32,24 @@ using Texture = TextureType;
 using Color = ColorType;
 
 #if defined(AFTER_HOURS_SOKOL)
-// Forward declaration of the sokol backend draw_texture_pro (defined in
-// backends/sokol/drawing_helpers.h, included after this header). Routing the
-// wrapper here lets sprite/animation rendering (RenderSprites / RenderAnimation
-// below) light up on the sokol backend. The call resolves at the sprite
-// systems' use sites, by which point the definition is visible.
 } // namespace texture_manager
 void draw_texture_pro(TextureType tex, RectangleType src, RectangleType dest,
-                      Vector2Type origin, float rotation, ColorType tint);
+                      Vector2Type origin, float rotation, ColorType tint,
+                      int filter);
 namespace texture_manager {
 
 inline void draw_texture_pro(const Texture sheet, const Rectangle frame,
                              const Rectangle location, const Vector2Type size,
-                             const float angle, const Color tint) {
-  ::afterhours::draw_texture_pro(sheet, frame, location, size, angle, tint);
+                             const float angle, const Color tint,
+                             const int filter = -1) {
+  ::afterhours::draw_texture_pro(sheet, frame, location, size, angle, tint,
+                                 filter);
 }
 #else
 // No graphics backend selected: sprites are a no-op.
 inline void draw_texture_pro(const Texture, const Rectangle, const Rectangle,
-                             const Vector2Type, const float, const Color) {
+                             const Vector2Type, const float, const Color,
+                             const int = -1) {
   warn_once(0, "@notimplemented texture_manager::draw_texture_pro on this "
                "backend (no raylib/sokol); nothing is drawn");
 }
@@ -194,11 +202,11 @@ struct HasAnimation : BaseComponent {
 struct AnimationUpdateCurrentFrame : System<HasAnimation> {
   virtual void for_each_with(Entity &entity, HasAnimation &hasAnimation,
                              const float dt) override {
-    hasAnimation.frame_time -= dt;
+    hasAnimation.frame_time -= motion::scaled_dt(dt);
     if (hasAnimation.frame_time > 0) {
       return;
     }
-    hasAnimation.frame_time = hasAnimation.frame_dur();
+    hasAnimation.frame_time += hasAnimation.frame_dur();
 
     if (hasAnimation.cur_frame() >= hasAnimation.total_frames()) {
       if (hasAnimation.once()) {
