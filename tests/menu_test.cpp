@@ -423,6 +423,134 @@ TEST(menu_rows_take_padding_colour_and_hover_from_the_config) {
                  __LINE__);
 }
 
+namespace {
+void menu_press_at(UIContext<ui_test::TestInputAction> &ctx, float x, float y) {
+  ctx.mouse.pos = input::MousePosition{x, y};
+  ctx.mouse.left_down = true;
+  ctx.mouse.just_pressed = true;
+  ctx.mouse.press_moved = false;
+  ctx.set_hot(ctx.ROOT);
+  ctx.set_active(ctx.ROOT);
+}
+
+void menu_run_clicks(ImmTestHarness &h) {
+  ResolveHitTarget<ui_test::TestInputAction> resolver;
+  resolver.context = &h.context();
+  resolver.resolve();
+
+  HandleClicks<ui_test::TestInputAction> sys;
+  sys.context = &h.context();
+  for (const auto &e : UICollectionHolder::get().collection.get_entities()) {
+    if (!e || !e->has<UIComponent>() || !e->has<HasClickListener>())
+      continue;
+    sys.for_each_with(*e, e->get<UIComponent>(), e->get<HasClickListener>(),
+                      0.f);
+  }
+}
+}
+TEST(disabled_menu_row_blocks_the_click_and_the_menu_stays_open) {
+  ImmTestHarness h;
+  bool open = true;
+  std::vector<MenuItem> items{MenuItem{"Open", "Cmd+O", false, false},
+                              MenuItem{"Quit", "", false, true}};
+  auto emit = [&]() {
+    return context_menu(h.context(), mk(h.root(), 1), items,
+                        Vector2Type{100, 100}, open,
+                        ComponentConfig{}.with_size(
+                            ComponentSize{pixels(180), pixels(28)}));
+  };
+  h.begin_frame();
+  auto under = button(
+      h.context(), mk(h.root(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(180), pixels(28)})
+          .with_absolute_position(100.f, 128.f)
+          .with_label("Under"));
+  int under_fired = 0;
+  under.ent().get<HasClickListener>().cb = [&](Entity &) { ++under_fired; };
+  emit();
+  h.layout_only();
+  ui_test::check(open, "the menu is open", __FILE__, __LINE__);
+  UIComponent *disabled_row = h.find("menu_item_1");
+  ui_test::check(disabled_row != nullptr, "the disabled row exists", __FILE__,
+                 __LINE__);
+  if (!disabled_row)
+    return;
+
+  menu_press_at(h.context(), 190.f, 142.f);
+  menu_run_clicks(h);
+  ui_test::check(h.context().hot_id == disabled_row->id &&
+                     h.context().active_id == disabled_row->id,
+                 "the disabled row owns the press", __FILE__, __LINE__);
+  ui_test::check(under_fired == 0,
+                 "the control beneath the disabled row does not fire",
+                 __FILE__, __LINE__);
+
+  h.begin_frame();
+  int chosen = emit();
+  h.layout_only();
+  ui_test::check(chosen == kNoMenuSelection,
+                 "a press on a disabled row chooses nothing", __FILE__,
+                 __LINE__);
+  ui_test::check(open, "the menu stays open", __FILE__, __LINE__);
+}
+
+TEST(enabled_menu_row_still_chooses_on_press) {
+  ImmTestHarness h;
+  bool open = true;
+  std::vector<MenuItem> items{MenuItem{"Open", "Cmd+O", false, false},
+                              MenuItem{"Quit", "", false, true}};
+  auto emit = [&]() {
+    return context_menu(h.context(), mk(h.root(), 0), items,
+                        Vector2Type{100, 100}, open,
+                        ComponentConfig{}.with_size(
+                            ComponentSize{pixels(180), pixels(28)}));
+  };
+  h.begin_frame();
+  emit();
+  h.layout_only();
+
+  menu_press_at(h.context(), 190.f, 114.f);
+  menu_run_clicks(h);
+
+  h.begin_frame();
+  int chosen = emit();
+  h.layout_only();
+  ui_test::check(chosen == 0, "the enabled row is chosen", __FILE__, __LINE__);
+  ui_test::check(!open, "the menu closes", __FILE__, __LINE__);
+}
+
+TEST(menu_rows_take_the_config_text_colour) {
+  ImmTestHarness h;
+  bool open = true;
+  std::vector<MenuItem> items{MenuItem{"Open", "Cmd+O", false, false}};
+  h.begin_frame();
+  context_menu(h.context(), mk(h.root(), 0), items, Vector2Type{40, 40}, open,
+               ComponentConfig{}
+                   .with_size(ComponentSize{pixels(200), pixels(28)})
+                   .with_text_color(Theme::Usage::Accent));
+  h.layout_only();
+
+  const Color want = h.context().theme.from_usage(Theme::Usage::Accent);
+  UIComponent *item = h.find("menu_item_0");
+  UIComponent *sc = h.find("menu_shortcut");
+  ui_test::check(item && sc, "row and shortcut exist", __FILE__, __LINE__);
+  if (!item || !sc)
+    return;
+  auto colour_of = [&](UIComponent *c) {
+    auto e = UICollectionHolder::getEntityForID(c->id);
+    auto colour = e->get<HasLabel>().explicit_text_color;
+    return colour.has_value() && colour->r == want.r && colour->g == want.g &&
+           colour->b == want.b;
+  };
+  ui_test::check(colour_of(item),
+                 "the row label takes the menu's text colour", __FILE__,
+                 __LINE__);
+  ui_test::check(colour_of(sc),
+                 "the shortcut takes the menu's text colour", __FILE__,
+                 __LINE__);
+}
+
 TEST(menu_parts_have_no_rounded_corners) {
   ImmTestHarness h;
   bool open = true;
@@ -529,6 +657,103 @@ TEST(popover_closed_builds_nothing) {
   ui_test::check(!pop, "a closed popover is falsy", __FILE__, __LINE__);
   ui_test::check(h.find("popover_panel") == nullptr, "and builds no panel",
                  __FILE__, __LINE__);
+}
+
+TEST(popover_closed_creates_no_menu_state) {
+  ImmTestHarness h;
+  bool open = false;
+  h.begin_frame();
+  auto pop = popover(h.context(), mk(h.root(), 0),
+                     RectangleType{100, 100, 120, 30}, open,
+                     overlay::Placement::Below,
+                     ComponentConfig{}.with_size(
+                         ComponentSize{pixels(200), pixels(120)}));
+  h.layout_only();
+  CHECK(!pop);
+  auto holder = UICollectionHolder::getEntityForID(pop.ent().id);
+  CHECK(holder.valid());
+  if (holder.valid())
+    CHECK(!holder.asE().has<HasMenuState>());
+}
+
+TEST(popover_keeps_caller_debug_name) {
+  ImmTestHarness h;
+  bool open = true;
+  h.begin_frame();
+  popover(h.context(), mk(h.root(), 0), RectangleType{100, 100, 120, 30}, open,
+          overlay::Placement::Below,
+          ComponentConfig{}
+              .with_debug_name("model_popover")
+              .with_size(ComponentSize{pixels(200), pixels(120)}));
+  h.layout_only();
+  CHECK(h.find("model_popover") != nullptr);
+  CHECK(h.find("popover_panel") == nullptr);
+}
+
+TEST(popover_delivers_pending_click_before_focus_loss_dismissal) {
+  ImmTestHarness h;
+  bool open = true;
+  bool clicked = false;
+  int body_runs = 0;
+  auto emit = [&] {
+    auto pop = popover(h.context(), mk(h.root(), 0),
+                       RectangleType{100, 100, 120, 30}, open,
+                       overlay::Placement::Below,
+                       ComponentConfig{}.with_size(
+                           ComponentSize{pixels(200), pixels(120)}));
+    if (pop) {
+      body_runs++;
+      clicked = static_cast<bool>(
+          button(h.context(), mk(pop.ent(), 0),
+                 ComponentConfig{}
+                     .with_size(ComponentSize{pixels(80), pixels(24)})
+                     .with_label("Apply")
+                     .with_debug_name("popover_button")));
+    }
+  };
+  h.begin_frame(); emit(); h.layout_only();
+  h.begin_frame(); emit(); h.layout_only();
+  auto *btn = h.find("popover_button");
+  CHECK(btn != nullptr);
+  if (!btn) return;
+  auto btn_entity = UICollectionHolder::getEntityForID(btn->id);
+  btn_entity->get<HasClickListener>().down = true;
+  h.context().set_focus(h.root().id);
+  clicked = false;
+  h.begin_frame(); emit(); h.layout_only();
+  CHECK(clicked);
+  CHECK(!open);
+  const int runs_after_dismissal = body_runs;
+  clicked = false;
+  h.begin_frame(); emit(); h.layout_only();
+  CHECK(!clicked);
+  CHECK(body_runs == runs_after_dismissal);
+}
+
+TEST(popover_lifecycle_close_during_enter_anchor_gone_and_reopen) {
+  ImmTestHarness h;
+  bool open = true;
+  auto emit = [&] {
+    return popover(h.context(), mk(h.root(), 0),
+                   RectangleType{100, 100, 120, 30}, open,
+                   overlay::Placement::Below,
+                   ComponentConfig{}.with_size(
+                       ComponentSize{pixels(200), pixels(120)}));
+  };
+  h.begin_frame(); CHECK(emit()); h.layout_only();
+  open = false;
+  h.begin_frame(); CHECK(!emit()); h.layout_only();
+  open = true;
+  h.begin_frame(); CHECK(emit()); h.layout_only();
+  h.begin_frame(); CHECK(emit()); h.layout_only();
+  CHECK(open);
+  h.begin_frame(); h.layout_only();
+  open = false;
+  h.begin_frame(); CHECK(!emit()); h.layout_only();
+  open = true;
+  h.begin_frame(); CHECK(emit()); h.layout_only();
+  h.begin_frame(); CHECK(emit()); h.layout_only();
+  CHECK(open);
 }
 
 TEST(popover_anchors_and_flips_like_a_menu) {

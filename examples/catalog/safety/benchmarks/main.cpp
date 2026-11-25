@@ -515,7 +515,7 @@ struct SnapPosition : BaseComponent {
     float x = 0.f, y = 0.f;
 };
 
-struct SnapPositionDTO {
+struct SnapPositionSerializable {
     float x = 0.f, y = 0.f;
 };
 
@@ -541,9 +541,9 @@ TEST_CASE("snapshot_benchmarks", "[benchmark][snapshot]") {
     BENCHMARK_ADVANCED("take_components snapshot of 1000")
     (Catch::Benchmark::Chronometer meter) {
         meter.measure([] {
-            return snapshot::take_components<SnapPosition, SnapPositionDTO>(
+            return snapshot::take_components<SnapPosition, SnapPositionSerializable>(
                        [](const SnapPosition &p) {
-                           return SnapPositionDTO{.x = p.x, .y = p.y};
+                           return SnapPositionSerializable{.x = p.x, .y = p.y};
                        },
                        {.force_merge = false})
                 .size();
