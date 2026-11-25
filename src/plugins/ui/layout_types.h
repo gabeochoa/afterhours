@@ -245,6 +245,14 @@ inline float resolve_to_pixels(const Size &size, float screen_dimension,
   return size.value;
 }
 
+// The one site every font-size resolution should go through.
+inline float resolve_font_size(const Size &size, float screen_dimension,
+                               ScalingMode mode, float ui_scale, float text_scale,
+                               float screen_height = -1.f) {
+  return resolve_to_pixels(size, screen_dimension, mode, ui_scale, screen_height) *
+         text_scale;
+}
+
 // Shorthand spelling of the 8pt grid. Each step is an alias for the
 // DefaultSpacing method of the same rank, so there is one scale rather than
 // two that disagree.
@@ -353,6 +361,7 @@ enum struct AlignItems {
   FlexEnd,   // Align to end of cross axis
   Center,    // Center on cross axis
   Stretch,   // Stretch to fill (for items without explicit cross-axis size)
+  Baseline,
 };
 
 /// Controls how an individual element aligns itself within its parent.
@@ -363,6 +372,7 @@ enum struct SelfAlign {
   FlexStart, // Align to start of cross axis
   FlexEnd,   // Align to end of cross axis
   Center,    // Center on cross axis - common for centering content containers
+  Baseline,
 };
 
 /// Controls whether children wrap to new rows/columns when they exceed
@@ -459,9 +469,11 @@ static_assert(set(Padding::Right(kProbe).right) &&
 constexpr bool only_vertical(auto p) {
   return set(p.top) && set(p.bottom) && !set(p.left) && !set(p.right);
 }
+
 constexpr bool only_horizontal(auto p) {
   return set(p.left) && set(p.right) && !set(p.top) && !set(p.bottom);
 }
+
 static_assert(only_vertical(Padding::vertical(kProbe)) &&
               only_vertical(Margin::vertical(kProbe)));
 static_assert(only_horizontal(Padding::horizontal(kProbe)) &&

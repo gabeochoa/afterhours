@@ -308,4 +308,36 @@ TEST(selected_system_rows_can_sort_by_peak_instead_of_average) {
     CHECK(control.get<ui::HasLabel>().label == "Sort: peak");
 }
 
+TEST(nested_scoped_zones_record_parent_and_child_durations) {
+    profiling::Collector collector;
+    CHECK(collector.start());
+    {
+        AFTERHOURS_PROFILE_ZONE("outer");
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        { AFTERHOURS_PROFILE_ZONE("inner"); std::this_thread::sleep_for(std::chrono::milliseconds(1)); }
+        { profiling::ScopedZone direct("direct"); std::this_thread::sleep_for(std::chrono::milliseconds(1)); }
+        { profiling::ScopedZone render("render-zone", SystemPhase::Render); }
+    }
+    collector.end_frame(16);
+    const auto snapshot = collector.snapshot();
+    const auto find = [&](const char *name) -> const profiling::SystemSample * {
+        for (const auto &s : snapshot.systems) if (s.name == name) return &s;
+        return nullptr;
+    };
+    const auto *outer = find("outer");
+    const auto *inner = find("inner");
+    const auto *direct = find("direct");
+    CHECK(outer && inner && direct);
+    if (!outer || !inner || !direct) return;
+    CHECK(outer->calls == 1 && inner->calls == 1 && direct->calls == 1);
+    CHECK(outer->last_frame_ms > 0 && inner->last_frame_ms > 0);
+    CHECK(inner->last_frame_ms <= outer->last_frame_ms);
+    CHECK(direct->last_frame_ms <= outer->last_frame_ms);
+    const auto *render = find("render-zone");
+    CHECK(render && render->phase == SystemPhase::Render);
+    CHECK(outer->phase == SystemPhase::Update);
+    collector.stop();
+    { AFTERHOURS_PROFILE_ZONE("unrecorded"); }
+}
+
 int main() { return ui_test::run_registered_tests("profiling collector"); }
