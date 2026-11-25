@@ -60,8 +60,8 @@ static void check_border_pixels(bool batched) {
         if (outside || inner) CHECK(red(x + offset, y + height / 2) == 0);
         else if (edge) CHECK(std::abs(red(x + offset, y + height / 2) - 100) <= 2);
       }
-      CHECK((red(x, y) > 0) == (i == 0 || i == 2 || i == 5));
-      CHECK((red(x + w - 1, y) > 0) == (i == 0 || i == 5));
+      CHECK((red(x, y) > 0) == (i == 0 || i == 5));
+      CHECK((red(x + w - 1, y) > 0) == (i == 0 || i == 2 || i == 5));
     }
   }
 }
@@ -77,13 +77,14 @@ TEST(border_follows_filled_corners) {
     fonts.load_font(UIComponent::UNSET_FONT, get_default_font());
     h.begin_frame();
     for (int corner = 0; corner < 4; ++corner) {
-      for (int bordered = 0; bordered < 2; ++bordered) {
+      for (int bordered = 0; bordered < 3; ++bordered) {
         auto style = ComponentConfig{}.with_size({pixels(40), pixels(40)})
-            .with_absolute_position(20.f + corner * 140.f + bordered * 60.f, 20)
+            .with_absolute_position(20.f + corner * 180.f + bordered * 60.f, 20)
             .with_roundness(.5f).with_rounded_corners(std::bitset<4>(1 << corner))
             .with_custom_background(Color{0, 80, 160, 255});
-        if (bordered) style.with_border(Color{200, 100, 50, 255}, pixels(3));
-        div(h.context(), mk(h.root(), corner * 2 + bordered), style);
+        if (bordered == 1) style.with_border(Color{200, 100, 50, 255}, pixels(3));
+        if (bordered == 2) style.with_border_top(Color{200, 100, 50, 255}, pixels(3));
+        div(h.context(), mk(h.root(), corner * 3 + bordered), style);
       }
     }
     h.layout_only();
@@ -101,11 +102,20 @@ TEST(border_follows_filled_corners) {
       const size_t offset = (static_cast<size_t>(y) * capture->width + x) * 4;
       return capture->pixels[offset] || capture->pixels[offset + 1] || capture->pixels[offset + 2];
     };
-    for (int corner = 0; corner < 4; ++corner)
-      for (int x : {0, 39})
-        for (int y : {0, 39})
-          CHECK(painted(20 + corner * 140 + x, 20 + y) ==
-                painted(80 + corner * 140 + x, 20 + y));
+    for (int corner = 0; corner < 4; ++corner) {
+      const int x0 = 20 + corner * 180;
+      for (int x : {0, 39}) {
+        for (int y : {0, 39}) {
+          CHECK(painted(x0 + x, 20 + y) == painted(x0 + 60 + x, 20 + y));
+          CHECK(painted(x0 + x, 20 + y) == painted(x0 + 120 + x, 20 + y));
+        }
+      }
+      const auto red_at = [&](int x, int y) {
+        return capture->pixels[((20 + y) * capture->width + x0 + 120 + x) * 4];
+      };
+      CHECK(red_at(20, 1) == 200); // top stroke still present
+      CHECK(red_at(20, 38) == 0);  // no bottom stroke
+    }
   }
 }
 

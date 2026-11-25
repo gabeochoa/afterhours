@@ -319,14 +319,14 @@ capture_render_texture_to_memory(const graphics::RenderTextureType &) {
   return {};
 }
 
-inline std::optional<RgbaCapture>
+inline std::optional<RGBACapture>
 capture_render_texture_rgba(const graphics::RenderTextureType &) {
   warn_once(0, "@notimplemented capture_render_texture_rgba on the none "
                "backend");
   return std::nullopt;
 }
 
-inline std::optional<PngCapture>
+inline std::optional<PNGCapture>
 capture_render_texture_png(const graphics::RenderTextureType &) {
   warn_once(0, "@notimplemented capture_render_texture_png on the none "
                "backend");
@@ -348,6 +348,9 @@ inline TextureType load_texture(const char *) {
   log_error("@notimplemented load_texture");
   return TextureType{};
 }
+
+// Records draws rather than issuing them; uploads here return empty by design.
+inline bool texture_is_usable() { return false; }
 
 inline TextureType load_texture_from_rgba(const std::uint8_t *, int, int,
                                           int = TEXTURE_FILTER_BILINEAR) {
