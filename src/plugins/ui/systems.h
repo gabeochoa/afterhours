@@ -172,17 +172,20 @@ static inline bool point_in_hit_rect(const Entity &entity,
                                      const UIComponent &component,
                                      const input::MousePosition &pos) {
   RectangleType rect = component.rect();
-  const HasUIModifiers *mods =
-      entity.has<HasUIModifiers>() ? &entity.get<HasUIModifiers>() : nullptr;
-  if (mods)
-    rect = mods->apply_modifier(rect);
-  rect = apply_ancestor_transform(entity, rect);
+  if (entity.has<HasUIModifiers>())
+    rect = entity.get<HasUIModifiers>().apply_modifier(rect);
+  const WorldTransform world = resolve_world_transform(entity, rect);
+  rect = world.rect;
   auto [has_clip, clip] = compute_intersected_clip_rect(entity);
   if (has_clip && !is_mouse_inside(pos, clip))
     return false;
-  if (mods)
-    return mods->contains_rotated(rect, pos.x, pos.y);
-  return is_mouse_inside(pos, rect);
+  if (world.rotation == 0.f)
+    return is_mouse_inside(pos, rect);
+  HasUIModifiers rotated;
+  rotated.rotation = world.rotation;
+  rotated.origin_x = 0.5f;
+  rotated.origin_y = 0.5f;
+  return rotated.contains_rotated(rect, pos.x, pos.y);
 }
 
 } // namespace detail

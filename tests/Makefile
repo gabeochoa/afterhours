@@ -135,6 +135,7 @@ ALL_TESTS := \
 	trigger_volume_test \
 	ui_modifiers_test \
 	rotation_hit_test \
+	subtree_rotation_test \
 	ancestor_transform_test \
 	text_units_test \
 	utf8_sanitize_test \
@@ -466,6 +467,7 @@ ALL_TESTS += staging_texture_leak_test
 endif
 
 RAYLIB_TESTS := \
+	subtree_rotation_test \
 	auto_text_color_test \
 	e2e_app_test \
 	skeletal_test \

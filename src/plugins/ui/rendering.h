@@ -375,6 +375,18 @@ std::optional<FocusPaint> prepare_focus_paint(const UIContext<InputAction> &cont
       widget = detail::apply_ancestor_transform(entity, widget);
       pivot = {widget.x + widget.width * .5f, widget.y + widget.height * .5f};
     }
+    RectangleType base = cmp.rect();
+    if (entity.has<HasUIModifiers>())
+      base = entity.get<HasUIModifiers>().apply_modifier(base);
+    const auto world = detail::resolve_world_transform(entity, base);
+    if (world.ancestor_rotated) {
+      FocusRing adjusted = *ring;
+      adjusted.rect.x += world.rot_center.x - (widget.x + widget.width * .5f);
+      adjusted.rect.y += world.rot_center.y - (widget.y + widget.height * .5f);
+      return FocusPaint{adjusted, entity.id, i - 1, cmd.layer, world.rotation,
+                        world.rot_center,
+                        has_clip ? clip : std::optional<RectangleType>{}};
+    }
     return FocusPaint{*ring, entity.id, i - 1, cmd.layer,
                       entity.has<HasUIModifiers>() ? entity.get<HasUIModifiers>().rotation : 0.f,
                       pivot,
@@ -1896,13 +1908,9 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         cmp.rect(), cmp.resolved_scaling_mode, context.theme.ui_scale);
     if (entity.has<HasUIModifiers>())
       draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
-    draw_rect = detail::apply_ancestor_transform(entity, draw_rect);
-
-    // Get rotation from modifiers (applied separately since rectangles rotate
-    // around center)
-    float rotation = entity.has<HasUIModifiers>()
-                         ? entity.get<HasUIModifiers>().rotation
-                         : 0.0f;
+    const auto world = detail::resolve_world_transform(entity, draw_rect);
+    draw_rect = world.rect;
+    float rotation = world.rotation;
 
     auto corner_settings = entity.has<HasRoundedCorners>()
                                ? entity.get<HasRoundedCorners>().get()
@@ -1916,10 +1924,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                        ? entity.get<HasRoundedCorners>().segments
                        : 8;
 
-    const Vector2Type rot_center = entity.has<HasUIModifiers>()
-        ? entity.get<HasUIModifiers>().rotation_center(draw_rect)
-        : Vector2Type{draw_rect.x + draw_rect.width / 2.0f,
-                      draw_rect.y + draw_rect.height / 2.0f};
+    const Vector2Type rot_center = world.rot_center;
     float centerX = rot_center.x;
     float centerY = rot_center.y;
     push_rotation(centerX, centerY, rotation);
@@ -2540,13 +2545,11 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         cmp.rect(), cmp.resolved_scaling_mode, context.theme.ui_scale);
     if (entity.has<HasUIModifiers>())
       draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
-    draw_rect = detail::apply_ancestor_transform(entity, draw_rect);
-
-    // Get rotation from modifiers (applied separately since rectangles rotate
-    // around center)
-    float rotation = entity.has<HasUIModifiers>()
-                         ? entity.get<HasUIModifiers>().rotation
-                         : 0.0f;
+    const auto world = detail::resolve_world_transform(entity, draw_rect);
+    draw_rect = world.rect;
+    float rotation = world.rotation;
+    const float world_center_x = world.rot_center.x;
+    const float world_center_y = world.rot_center.y;
 
     auto corner_settings = entity.has<HasRoundedCorners>()
                                ? entity.get<HasRoundedCorners>().get()
@@ -2594,7 +2597,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       if (col.a > 0) {
         buffer.add_rounded_rectangle(
             detail::fill_rect_for(entity, draw_rect), col, roundness, segments,
-            corner_settings, layer, entity.id, rotation);
+            corner_settings, layer, entity.id, rotation, world_center_x,
+            world_center_y);
       }
     }
 
@@ -2807,10 +2811,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         label_rect.y += label_inset.y;
         label_rect.width = std::max(0.f, label_rect.width - 2.f * label_inset.x);
         label_rect.height = std::max(0.f, label_rect.height - 2.f * label_inset.y);
-        const Vector2Type rot_center = entity.has<HasUIModifiers>()
-            ? entity.get<HasUIModifiers>().rotation_center(draw_rect)
-            : Vector2Type{draw_rect.x + draw_rect.width / 2.0f,
-                          draw_rect.y + draw_rect.height / 2.0f};
+        const Vector2Type rot_center{world_center_x, world_center_y};
         float centerX = rot_center.x;
         float centerY = rot_center.y;
 
@@ -3038,7 +3039,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       // Honor with_opacity like the HasImage branch below (and the direct
       // render path); previously HasTexture ignored it in the buffered pass.
       const Color tex_col = detail::resolve_image_tint(entity, effective_opacity);
-      buffer.add_image(dest, src, texture.texture, tex_col, layer, entity.id);
+      buffer.add_image(dest, src, texture.texture, tex_col, layer, entity.id,
+                       -1, rotation, world_center_x, world_center_y);
     } else if (entity.has<ui::HasImage>()) {
       const ui::HasImage &img = entity.get<ui::HasImage>();
       texture_manager::Rectangle src =
@@ -3054,7 +3056,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
       RectangleType dest = {location.x, location.y, size.x, size.y};
       buffer.add_image(dest, src, img.texture, img_col, layer, entity.id,
-                       img.filter.value_or(-1));
+                       img.filter.value_or(-1), rotation, world_center_x,
+                       world_center_y);
     }
 
     // Custom draw (on top): enqueued after all of the widget's own primitives.
