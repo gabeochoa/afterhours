@@ -7,7 +7,7 @@
 #include "../../../vendor/magic_enum/magic_enum.hpp"
 #endif
 
-#include "../../core/text_cache.h"
+#include "text_cache.h"
 #include "../../developer.h"
 #include "../../ecs.h"
 #include "../../logging.h"

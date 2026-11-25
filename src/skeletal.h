@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/math3d.h"
+#include "plugins/math3d.h"
 
 #include <cstddef>
 #include <vector>

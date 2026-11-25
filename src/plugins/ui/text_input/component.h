@@ -5,7 +5,7 @@
 
 #include "../../clipboard.h"
 #include "../../input_system.h"
-#include "../../../core/key_codes.h"
+#include "../../key_codes.h"
 #include "../../../graphics.h"
 #include "../component_init.h"
 #include "../element_result.h"

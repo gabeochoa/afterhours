@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "../../core/text_cache.h"
+#include "text_cache.h"
 #include "../../ecs.h"
 #include "text_selection.h"
 #include "ui_core_components.h"

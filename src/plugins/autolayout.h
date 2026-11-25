@@ -8,7 +8,7 @@
 #include "ui/ui_core_components.h"
 
 #include "../bitwise.h"
-#include "../core/text_cache.h"
+#include "ui/text_cache.h"
 #include "../developer.h"
 #include "../warn_once.h"
 #include "fmt/format.h"
