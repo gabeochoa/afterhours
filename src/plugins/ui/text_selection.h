@@ -23,6 +23,8 @@
 #include <cctype>
 #include <cstddef>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #include "../../ecs.h"
@@ -241,23 +243,31 @@ wrap_ranges(const std::string &text, float max_width,
   }
 }
 
-template <typename MeasureFn>
-static inline std::vector<TextRunLine>
-wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
-                   MeasureFn &&measure) {
+struct JoinedRuns {
+  const std::vector<TextSpan> &runs;
   std::string text;
   std::vector<size_t> run_ends;
-  for (const auto &run : runs) {
-    text += run.text;
-    run_ends.push_back(text.size());
+
+  explicit JoinedRuns(const std::vector<TextSpan> &source) : runs(source) {
+    run_ends.reserve(runs.size());
+    for (const auto &run : runs) {
+      text += run.text;
+      run_ends.push_back(text.size());
+    }
   }
-  const auto run_at = [&](size_t pos) {
+
+  [[nodiscard]] size_t run_at(size_t pos) const {
     return static_cast<size_t>(
         std::upper_bound(run_ends.begin(), run_ends.end(), pos) -
         run_ends.begin());
-  };
+  }
 
-  const auto measure_range = [&](size_t begin, size_t end) {
+  [[nodiscard]] colors::FontWeight weight_at(size_t pos) const {
+    return runs[std::min(run_at(pos), runs.size() - 1)].weight;
+  }
+
+  template <typename MeasureFn>
+  float measure_range(size_t begin, size_t end, MeasureFn &&measure) const {
     float total = 0.f;
     size_t seg = begin;
     for (size_t r = run_at(begin); seg < end; r++) {
@@ -270,33 +280,67 @@ wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
       }
     }
     return total;
-  };
+  }
 
-  const auto same_style = [](const TextSpan &a, const TextSpan &b) {
-    return a.color.r == b.color.r && a.color.g == b.color.g &&
-           a.color.b == b.color.b && a.color.a == b.color.a &&
-           a.weight == b.weight;
-  };
-
-  std::vector<TextRunLine> lines;
-  for (const WrappedLine &range : wrap_ranges(text, max_width, measure_range)) {
-    TextRunLine line;
-    for (size_t pos = range.begin, r = run_at(range.begin); pos < range.end;
-         r++) {
-      const size_t stop = std::min(range.end, run_ends[r]);
+  [[nodiscard]] std::vector<TextSpan> slice(size_t begin, size_t end,
+                                            bool merge_same_style) const {
+    const auto same_style = [](const TextSpan &a, const TextSpan &b) {
+      return a.color.r == b.color.r && a.color.g == b.color.g &&
+             a.color.b == b.color.b && a.color.a == b.color.a &&
+             a.weight == b.weight;
+    };
+    std::vector<TextSpan> out;
+    for (size_t pos = begin, r = run_at(begin); pos < end; r++) {
+      const size_t stop = std::min(end, run_ends[r]);
       if (stop == pos)
         continue;
-      const TextSpan part{text.substr(pos, stop - pos), runs[r].color,
-                          runs[r].weight};
-      if (!line.empty() && same_style(line.back(), part))
-        line.back().text += part.text;
+      TextSpan part{text.substr(pos, stop - pos), runs[r].color,
+                    runs[r].weight};
+      if (merge_same_style && !out.empty() && same_style(out.back(), part))
+        out.back().text += part.text;
       else
-        line.push_back(part);
+        out.push_back(std::move(part));
       pos = stop;
     }
-    lines.push_back(std::move(line));
+    return out;
+  }
+};
+
+template <typename MeasureFn>
+static inline std::vector<TextRunLine>
+wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
+                   MeasureFn &&measure) {
+  const JoinedRuns joined(runs);
+  const auto measure_range = [&](size_t begin, size_t end) {
+    return joined.measure_range(begin, end, measure);
+  };
+  std::vector<TextRunLine> lines;
+  for (const WrappedLine &range :
+       wrap_ranges(joined.text, max_width, measure_range)) {
+    lines.push_back(joined.slice(range.begin, range.end, true));
   }
   return lines;
+}
+
+template <typename MeasureFn>
+static inline std::vector<TextSpan>
+ellipsize_runs(const std::vector<TextSpan> &runs, float max_width,
+               MeasureFn &&measure) {
+  if (runs.empty() || max_width <= 0.f)
+    return runs;
+  const JoinedRuns joined(runs);
+  if (joined.measure_range(0, joined.text.size(), measure) <= max_width)
+    return runs;
+  const size_t keep = fit_text_prefix(
+      joined.text, max_width, [&](const std::string &s) {
+        return joined.measure_range(0, s.size(), measure) +
+               measure("...", joined.weight_at(s.size()));
+      });
+  if (keep == 0)
+    return {TextSpan{"...", runs.front().color, runs.front().weight}};
+  std::vector<TextSpan> out = joined.slice(0, keep, false);
+  out.back().text += "...";
+  return out;
 }
 
 // Where each run of a laid-out line starts, and how wide the line is.
@@ -429,6 +473,64 @@ struct Selection {
     cursor = length;
   }
 };
+
+enum class WordPolicy { Prose, Identifier, Path };
+
+inline bool is_word_char(char c, WordPolicy policy = WordPolicy::Prose) {
+  const auto u = static_cast<unsigned char>(c);
+  if (u >= 0x80)
+    return true;
+  switch (policy) {
+  case WordPolicy::Prose:
+    return !std::isspace(u) && !std::ispunct(u);
+  case WordPolicy::Identifier:
+    return std::isalnum(u) || c == '_';
+  case WordPolicy::Path:
+    return !std::isspace(u);
+  }
+  return false;
+}
+
+inline size_t find_word_start(std::string_view text, size_t pos,
+                              WordPolicy policy = WordPolicy::Prose) {
+  if (pos == 0 || text.empty())
+    return 0;
+  size_t p = pos;
+  while (p > 0 && !is_word_char(text[p - 1], policy))
+    --p;
+  while (p > 0 && is_word_char(text[p - 1], policy))
+    --p;
+  return p;
+}
+
+inline size_t find_word_end(std::string_view text, size_t pos,
+                            WordPolicy policy = WordPolicy::Prose) {
+  if (pos >= text.size())
+    return text.size();
+  size_t p = pos;
+  while (p < text.size() && !is_word_char(text[p], policy))
+    ++p;
+  while (p < text.size() && is_word_char(text[p], policy))
+    ++p;
+  return p;
+}
+
+inline std::pair<size_t, size_t>
+select_word_at(std::string_view text, size_t pos,
+               WordPolicy policy = WordPolicy::Prose) {
+  if (text.empty())
+    return {0, 0};
+  pos = std::min(pos, text.size() - 1);
+  if (!is_word_char(text[pos], policy))
+    return {pos, pos + 1};
+  size_t start = pos;
+  while (start > 0 && is_word_char(text[start - 1], policy))
+    --start;
+  size_t end = pos;
+  while (end < text.size() && is_word_char(text[end], policy))
+    ++end;
+  return {start, end};
+}
 
 // The text of a wrapped line, runs concatenated.
 inline std::string line_text(const detail::TextRunLine &line) {

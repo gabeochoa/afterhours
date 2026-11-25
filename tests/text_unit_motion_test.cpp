@@ -96,6 +96,17 @@ int main() {
               floats.at(unit_key(2, UnitProp::Opacity)).active(),
           "only the unit whose text changed animates again");
 
+    {
+      auto &tr = e.get<motion::HasTracks>().floats.at(unit_key(2, UnitProp::Opacity));
+      tr.advance(0.05f);
+      const float before = tr.value();
+      check(before > 0.f && before < 1.f, "unit is mid-flight before retarget");
+      update_text_units(e, "one two five");
+      const float after = e.get<motion::HasTracks>().floats.at(unit_key(2, UnitProp::Opacity)).value();
+      check(std::fabs(after - before) < 1e-4f && after > 0.f,
+            "changed mid-flight unit keeps its current opacity, no blink to 0");
+    }
+
     update_text_units(e, "one two four five");
     check(floats.at(unit_key(3, UnitProp::Opacity)).active() &&
               !floats.at(unit_key(0, UnitProp::Opacity)).active(),

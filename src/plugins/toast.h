@@ -11,6 +11,7 @@
 #include "../core/system.h"
 #include "../developer.h"
 #include "../drawing_helpers.h"
+#include "animation/instant.h"
 #include "color.h"
 #include "ui/element_result.h"
 #include "ui/imm_components.h"
@@ -137,12 +138,15 @@ struct toast : developer::Plugin {
             const std::string label =
                 icon.empty() ? msg : icon + " " + msg;
 
-            for (Entity &entity : EntityQuery()
+            for (Entity &entity : EntityQuery({.force_merge = true})
                                       .whereHasComponent<Toast>()
                                       .gen()) {
                 Toast &existing = entity.get<Toast>();
                 if (!entity.cleanup && !existing.is_expired() &&
-                    existing.level == level && existing.message == label) {
+                    existing.level == level && existing.message == label &&
+                    (level != Level::Custom ||
+                     (existing.custom_color.r == custom_color.r && existing.custom_color.g == custom_color.g &&
+                      existing.custom_color.b == custom_color.b && existing.custom_color.a == custom_color.a))) {
                     existing.elapsed = 0.f;
                     existing.duration = duration;
                     return {true, entity};
@@ -371,8 +375,9 @@ struct toast : developer::Plugin {
                 if (position == Position::TopRight || position == Position::BottomRight)
                     x_pos = static_cast<float>(screen_w) - padding_px - toast_width;
 
-                float alpha_ease = detail::ease_out_expo(t.progress());
-                float slide_offset = (1.0f - alpha_ease) * 24.0f;
+                const bool instant = motion::is_instant();
+                float alpha_ease = instant ? 1.0f : detail::ease_out_expo(t.progress());
+                float slide_offset = instant ? 0.0f : (1.0f - alpha_ease) * 24.0f;
                 y_pos += at_top ? -slide_offset : slide_offset;
 
                 ui.computed_rel[ui::Axis::X] = x_pos;
