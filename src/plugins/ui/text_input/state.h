@@ -26,6 +26,7 @@ struct HasTextInputStateT : BaseComponent {
   bool copy_disabled = false;  // Copy refused (opt-in; masking alone is not)
   bool cut_disabled = false;
   bool paste_disabled = false;
+  bool escape_blurs = true;
   size_t max_length = 256; // Maximum text length in bytes (0 = unlimited)
   float cursor_blink_timer = 0.f;  // Current timer value
   float cursor_blink_rate = 0.53f; // Seconds per half-cycle (configurable)

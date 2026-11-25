@@ -332,6 +332,8 @@ struct Theme {
   // values are multiplied by this factor (like browser Ctrl+/- zoom).
   float ui_scale = 1.0f;
 
+  float text_scale = 1.0f;
+
   // ===== Text inset =====
   // Space reserved between a label and its own box, on each side, in
   // unscaled pixels. This used to be a hardcoded 5 inside the renderer that
@@ -600,6 +602,11 @@ public:
   // Only affects Adaptive scaling mode. Clamped to [0.5, 3.0].
   Builder &with_ui_scale(float scale) {
     theme_.ui_scale = std::clamp(scale, 0.5f, 3.0f);
+    return *this;
+  }
+
+  Builder &with_text_scale(float scale) {
+    theme_.text_scale = std::clamp(scale, 0.5f, 3.0f);
     return *this;
   }
 
