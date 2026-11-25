@@ -174,6 +174,13 @@ static inline bool point_in_hit_rect(const Entity &entity,
   RectangleType rect = component.rect();
   if (entity.has<HasUIModifiers>())
     rect = entity.get<HasUIModifiers>().apply_modifier(rect);
+  if (entity.has<HasHitExpand>()) {
+    const HasHitExpand &pad = entity.get<HasHitExpand>();
+    rect.x -= pad.pad_x;
+    rect.y -= pad.pad_y;
+    rect.width += pad.pad_x * 2.f;
+    rect.height += pad.pad_y * 2.f;
+  }
   const WorldTransform world = resolve_world_transform(entity, rect);
   rect = world.rect;
   auto [has_clip, clip] = compute_intersected_clip_rect(entity);

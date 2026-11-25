@@ -24,6 +24,7 @@ namespace raylib {
 } // namespace raylib
 
 #include <afterhours/ah.h>
+#include <afterhours/src/graphics.h>
 #include <afterhours/src/plugins/models.h>
 
 using namespace afterhours;
@@ -67,14 +68,20 @@ int main() {
   }
 
   raylib::SetTraceLogLevel(raylib::LOG_ERROR);
-  raylib::SetConfigFlags(raylib::FLAG_WINDOW_HIDDEN);
-  raylib::InitWindow(64, 64, "instance_batcher_test");
+  afterhours::graphics::Config cfg;
+  cfg.display = afterhours::graphics::DisplayMode::Headless;
+  cfg.width = 64;
+  cfg.height = 64;
+  if (!afterhours::graphics::init(cfg)) {
+    fprintf(stderr, "instance_batcher_test: headless graphics init failed\n");
+    return 1;
+  }
   auto &models = ModelLibrary::get();
   check(models.load(AFTERHOURS_MODELS_DIR "/tree-large.glb", "tree"), "tree loads");
   check(models.load(AFTERHOURS_MODELS_DIR "/kaykit/lantern.gltf", "lantern"),
         "lantern loads");
   if (!models.contains("tree") || !models.contains("lantern")) {
-    raylib::CloseWindow();
+    afterhours::graphics::shutdown();
     printf("instance_batcher_test: %d/%d checks passed\n", checks_passed, checks_run);
     return 1;
   }
@@ -599,7 +606,7 @@ int main() {
   raylib::UnloadRenderTexture(rt);
   raylib::UnloadShader(shader);
   models.unload_all();
-  raylib::CloseWindow();
+  afterhours::graphics::shutdown();
 
   printf("instance_batcher_test: %d/%d checks passed\n", checks_passed, checks_run);
   return checks_passed == checks_run ? 0 : 1;

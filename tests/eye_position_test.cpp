@@ -11,6 +11,7 @@ namespace raylib {
 } // namespace raylib
 
 #include <afterhours/ah.h>
+#include <afterhours/src/graphics.h>
 #include <afterhours/src/plugins/effects.h>
 #include <afterhours/src/plugins/eye_position.h>
 #include <afterhours/src/plugins/models.h>
@@ -35,8 +36,14 @@ static bool is(Vector3Type v, float x, float y, float z) {
 
 int main() {
   raylib::SetTraceLogLevel(raylib::LOG_ERROR);
-  raylib::SetConfigFlags(raylib::FLAG_WINDOW_HIDDEN);
-  raylib::InitWindow(64, 64, "eye_position_test");
+  afterhours::graphics::Config cfg;
+  cfg.display = afterhours::graphics::DisplayMode::Headless;
+  cfg.width = 64;
+  cfg.height = 64;
+  if (!afterhours::graphics::init(cfg)) {
+    fprintf(stderr, "eye_position_test: headless graphics init failed\n");
+    return 1;
+  }
 
   check(is(eye_position::get(), 0.f, 0.f, 0.f), "default is the origin");
 
@@ -65,7 +72,7 @@ int main() {
   check(!effect.loaded, "unloaded effect ignores the eye position set");
 
   eye_position::reset();
-  raylib::CloseWindow();
+  afterhours::graphics::shutdown();
 
   printf("eye_position_test: %d/%d checks passed\n", checks_passed, checks_run);
   return checks_passed == checks_run ? 0 : 1;

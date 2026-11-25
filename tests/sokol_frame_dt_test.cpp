@@ -28,9 +28,12 @@ static void check(bool cond, const std::string &what) {
 
 static std::vector<float> dts;
 
-static void callback_after(int ms) {
+static float callback_after(int ms) {
+  const auto t0 = std::chrono::steady_clock::now();
   std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+  const auto t1 = std::chrono::steady_clock::now();
   md::sokol_frame_cb();
+  return std::chrono::duration<float>(t1 - t0).count();
 }
 
 int main() {
@@ -41,12 +44,15 @@ int main() {
   md::g_target_fps = 0;
   md::g_on_demand = false;
   md::sokol_frame_cb();
-  callback_after(50);
-  callback_after(20);
-  printf("  continuous: %.3f %.3f\n", dts[1], dts[2]);
+  const float wall1 = callback_after(50);
+  const float wall2 = callback_after(20);
+  printf("  continuous: %.3f (wall %.3f) %.3f (wall %.3f)\n", dts[1], wall1,
+         dts[2], wall2);
   check(dts.size() == 3, "every callback ran a frame");
-  check(dts[1] >= 0.045f && dts[1] < 0.5f, "dt is the 50ms since the last frame");
-  check(dts[2] >= 0.015f && dts[2] < dts[1], "and then the 20ms after that");
+  check(dts[1] >= 0.045f && dts[1] <= wall1 + 0.05f,
+        "dt is the 50ms since the last frame");
+  check(dts[2] >= 0.015f && dts[2] <= wall2 + 0.05f,
+        "and then the 20ms after that");
 
   md::g_on_demand = true;
   for (int i = 0; i < 4; ++i)
