@@ -61,6 +61,12 @@ struct RenderPrimitive {
   // it so RenderPrimitive stays trivially destructible for the arena.
   using CustomDrawFn = std::function<void(RectangleType)>;
 
+  struct DrawContext {
+    RectangleType rect;
+    float scale = 1.f;
+  };
+  using CustomDrawContextFn = std::function<void(const DrawContext &)>;
+
   RenderPrimitiveType type;
   int layer = 0;
   EntityID entity_id = -1; // For debugging
@@ -187,9 +193,9 @@ struct RenderPrimitive {
 
     struct {
       RectangleType rect;
-      // Stored as a pointer so RenderPrimitive stays
-      // trivially destructible for the arena 
+      const CustomDrawContextFn *fn_ctx;
       const CustomDrawFn *fn;
+      float scale;
     } custom;
 
     // Default constructor for union
@@ -381,7 +387,20 @@ public:
                                 EntityID entity_id = -1) {
     RenderPrimitive cmd(RenderPrimitiveType::Custom, layer, entity_id);
     cmd.data.custom.rect = rect;
+    cmd.data.custom.fn_ctx = nullptr;
     cmd.data.custom.fn = fn;
+    cmd.data.custom.scale = 1.f;
+    return cmd;
+  }
+
+  static RenderPrimitive custom(const RectangleType &rect,
+                                const CustomDrawContextFn *fn, float scale,
+                                int layer, EntityID entity_id = -1) {
+    RenderPrimitive cmd(RenderPrimitiveType::Custom, layer, entity_id);
+    cmd.data.custom.rect = rect;
+    cmd.data.custom.fn_ctx = fn;
+    cmd.data.custom.fn = nullptr;
+    cmd.data.custom.scale = scale;
     return cmd;
   }
 };
@@ -397,8 +416,8 @@ static_assert(std::is_trivially_destructible_v<RenderPrimitive>,
 // (gradients, feeds, brackets) inline, without a debug-name rect lookup or
 // separate BG/FG render systems. Set via ComponentConfig::with_on_draw_bg/fg.
 struct HasOnDraw : BaseComponent {
-  RenderPrimitive::CustomDrawFn bg;
-  RenderPrimitive::CustomDrawFn fg;
+  RenderPrimitive::CustomDrawContextFn bg;
+  RenderPrimitive::CustomDrawContextFn fg;
   // Drawn after the widget's whole subtree, unlike fg (own primitives only).
   RenderPrimitive::CustomDrawFn over;
 };
@@ -589,6 +608,13 @@ public:
                   const RenderPrimitive::CustomDrawFn *fn, int layer,
                   EntityID entity_id = -1) {
     commands_.push_back(RenderPrimitive::custom(rect, fn, layer, entity_id));
+  }
+
+  void add_custom(const RectangleType &rect,
+                  const RenderPrimitive::CustomDrawContextFn *fn, float scale,
+                  int layer, EntityID entity_id = -1) {
+    commands_.push_back(
+        RenderPrimitive::custom(rect, fn, scale, layer, entity_id));
   }
 
   // Add scissor start
@@ -875,7 +901,11 @@ public:
         break;
 
       case RenderPrimitiveType::Custom:
-        if (cmd.data.custom.fn && *cmd.data.custom.fn) {
+        if (cmd.data.custom.fn_ctx && *cmd.data.custom.fn_ctx) {
+          (*cmd.data.custom.fn_ctx)(RenderPrimitive::DrawContext{
+              cmd.data.custom.rect, cmd.data.custom.scale});
+          note_draw();
+        } else if (cmd.data.custom.fn && *cmd.data.custom.fn) {
           (*cmd.data.custom.fn)(cmd.data.custom.rect);
           note_draw();
         }

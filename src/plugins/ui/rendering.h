@@ -1930,7 +1930,11 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
 
     // Custom draw (behind): drawn before the widget's own fill.
     if (entity.has<HasOnDraw>() && entity.get<HasOnDraw>().bg)
-      entity.get<HasOnDraw>().bg(draw_rect);
+      entity.get<HasOnDraw>().bg(RenderPrimitive::DrawContext{
+          draw_rect,
+          cmp.resolved_scaling_mode == ScalingMode::Adaptive
+              ? context.theme.ui_scale
+              : 1.f});
 
     if (entity.has<HasColor>()) {
       Color col = entity.template get<HasColor>().color();
@@ -2184,7 +2188,11 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
 
     // Custom draw (on top): drawn after all of the widget's own primitives.
     if (entity.has<HasOnDraw>() && entity.get<HasOnDraw>().fg)
-      entity.get<HasOnDraw>().fg(draw_rect);
+      entity.get<HasOnDraw>().fg(RenderPrimitive::DrawContext{
+          draw_rect,
+          cmp.resolved_scaling_mode == ScalingMode::Adaptive
+              ? context.theme.ui_scale
+              : 1.f});
 
     pop_rotation();
   }
@@ -2559,8 +2567,12 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     // Custom draw (behind): enqueued before the fill so it renders under the
     // widget; the fn pointer is stable on the HasOnDraw component for the frame.
     if (entity.has<HasOnDraw>() && entity.get<HasOnDraw>().bg) {
-      buffer.add_custom(draw_rect, &entity.get<HasOnDraw>().bg, layer,
-                        entity.id);
+      buffer.add_custom(
+          draw_rect, &entity.get<HasOnDraw>().bg,
+          cmp.resolved_scaling_mode == ScalingMode::Adaptive
+              ? context.theme.ui_scale
+              : 1.f,
+          layer, entity.id);
     }
 
     // Background color
@@ -3047,8 +3059,12 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
     // Custom draw (on top): enqueued after all of the widget's own primitives.
     if (entity.has<HasOnDraw>() && entity.get<HasOnDraw>().fg) {
-      buffer.add_custom(draw_rect, &entity.get<HasOnDraw>().fg, layer,
-                        entity.id);
+      buffer.add_custom(
+          draw_rect, &entity.get<HasOnDraw>().fg,
+          cmp.resolved_scaling_mode == ScalingMode::Adaptive
+              ? context.theme.ui_scale
+              : 1.f,
+          layer, entity.id);
     }
   }
 

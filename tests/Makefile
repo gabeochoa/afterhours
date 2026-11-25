@@ -61,6 +61,7 @@ OUT := $(realpath ..)/output
 $(shell mkdir -p $(OUT))
 
 ALL_TESTS := \
+	draw_context_scale_test \
 	focus_return_test \
 	border_width_test \
 	border_only_test \
