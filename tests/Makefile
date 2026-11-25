@@ -62,6 +62,8 @@ $(shell mkdir -p $(OUT))
 
 ALL_TESTS := \
 	subtree_rotation_test \
+	offscreen_layer_test \
+	subtree_texture_test \
 	window_events_test \
 	text_input_no_host_enum_test \
 	scroll_logical_anchor_test \
