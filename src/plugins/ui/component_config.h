@@ -200,6 +200,8 @@ struct ComponentConfig {
   // Shadow configuration
   std::optional<Shadow> shadow_config;
 
+  std::optional<Glow> glow_config;
+
   // Border configuration
   std::optional<Border> border_config;
 
@@ -1158,6 +1160,16 @@ struct ComponentConfig {
     return *this;
   }
 
+  ComponentConfig &with_glow(Color color, float radius = 12.f) {
+    glow_config = Glow{radius, color};
+    return *this;
+  }
+
+  ComponentConfig &with_glow(const Glow &g) {
+    glow_config = g;
+    return *this;
+  }
+
   // Text stroke/outline configuration methods
   ComponentConfig &with_text_stroke(const TextStroke &stroke) {
     text_stroke_config = stroke;
@@ -1255,6 +1267,7 @@ struct ComponentConfig {
   bool has_texture() const { return texture_config.has_value(); }
   bool has_image_alignment() const { return image_alignment.has_value(); }
   bool has_shadow() const { return shadow_config.has_value(); }
+  bool has_glow() const { return glow_config.has_value(); }
   bool has_border() const { return border_config.has_value(); }
   bool has_bevel() const {
     return bevel_config.has_value() && bevel_config->has_bevel();
@@ -1443,6 +1456,8 @@ if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.deb
       merged.border_config = overrides.border_config;
     if (overrides.shadow_config.has_value())
       merged.shadow_config = overrides.shadow_config;
+    if (overrides.glow_config.has_value())
+      merged.glow_config = overrides.glow_config;
     if (overrides.text_shadow_config.has_value())
       merged.text_shadow_config = overrides.text_shadow_config;
     if (overrides.on_draw_bg)
