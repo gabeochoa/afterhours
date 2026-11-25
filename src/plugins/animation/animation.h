@@ -5,3 +5,4 @@
 #include "track.h"
 #include "store.h"
 #include "plugin.h"
+#include "reveal.h"

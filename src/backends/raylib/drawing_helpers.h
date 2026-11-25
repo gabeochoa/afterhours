@@ -17,6 +17,7 @@
 #include "../../render_capture.h"
 #include "../../developer.h"
 #include "../../graphics.h"
+#include "../../render_counters.h"
 #include "../../plugins/color.h"
 #include "../../plugins/texture_manager.h"
 #include "font_helper.h"
@@ -220,13 +221,7 @@ inline void draw_text_ex(const raylib::Font font, const char *content,
 inline void draw_text(const char *content, const float x, const float y,
                       const float font_size, const Color color) {
   if (!content) return;
-  if (!detail::default_font_override()) {
-    raylib::DrawText(content, static_cast<int>(x), static_cast<int>(y),
-                     static_cast<int>(font_size), color);
-    return;
-  }
-  raylib::DrawTextEx(*detail::default_font_override(), content, {x, y},
-                     font_size, 1.f, color);
+  draw_text_ex(get_default_font(), content, {x, y}, font_size, 1.f, color);
 }
 
 inline void draw_rectangle_outline(const RectangleType rect,
@@ -296,7 +291,7 @@ inline void draw_rectangle_rounded_lines(
   const float rBL = corners.test(1) ? r : 0.f;
   const float rBR = corners.test(0) ? r : 0.f;
   const int segs = segments > 0 ? segments : 8;
-  const float PI_HALF = 3.14159265f * 0.5f;
+  const float PI_HALF = PI * 0.5f;
 
   Vector2Type prev{x + rTL, y};
   bool has_prev = true;
@@ -320,7 +315,7 @@ inline void draw_rectangle_rounded_lines(
   line_to(Vector2Type{x + rBL, y + h});
   arc_to(x + rBL, y + h - rBL, rBL, PI_HALF);
   line_to(Vector2Type{x, y + rTL});
-  arc_to(x + rTL, y + rTL, rTL, 3.14159265f);
+  arc_to(x + rTL, y + rTL, rTL, PI);
   line_to(Vector2Type{x + rTL, y});
 }
 
@@ -626,7 +621,9 @@ inline void set_mouse_cursor(int cursor_id) {
 }
 
 inline graphics::RenderTextureType load_render_texture(int w, int h) {
-  return raylib::LoadRenderTexture(w, h);
+  auto rt = raylib::LoadRenderTexture(w, h);
+  if (rt.id != 0) render_counters::note_create();
+  return rt;
 }
 
 inline graphics::RenderTextureType load_render_texture_with_samples(int w, int h, int) {
@@ -711,7 +708,7 @@ inline bool capture_render_texture(const graphics::RenderTextureType &rt,
   return ok;
 }
 
-inline std::optional<RgbaCapture>
+inline std::optional<RGBACapture>
 capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
   if (rt.texture.id == 0) return std::nullopt;
   raylib::Image img = raylib::LoadImageFromTexture(rt.texture);
@@ -724,12 +721,12 @@ capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
   }
   const auto *bytes = static_cast<const uint8_t *>(img.data);
   const auto size = static_cast<size_t>(img.width) * static_cast<size_t>(img.height) * 4;
-  RgbaCapture result{img.width, img.height, {bytes, bytes + size}};
+  RGBACapture result{img.width, img.height, {bytes, bytes + size}};
   raylib::UnloadImage(img);
   return result;
 }
 
-inline std::optional<PngCapture>
+inline std::optional<PNGCapture>
 capture_render_texture_png(const graphics::RenderTextureType &rt) {
   if (rt.texture.id == 0) return std::nullopt;
   raylib::Image img = raylib::LoadImageFromTexture(rt.texture);
@@ -746,7 +743,7 @@ capture_render_texture_png(const graphics::RenderTextureType &rt) {
   }
   raylib::UnloadImage(img);
   if (result.empty()) return std::nullopt;
-  return PngCapture{std::move(result)};
+  return PNGCapture{std::move(result)};
 }
 
 inline std::vector<uint8_t>
@@ -779,7 +776,14 @@ inline constexpr int TEXTURE_WRAP_MIRROR_REPEAT =
     raylib::TEXTURE_WRAP_MIRROR_REPEAT;
 
 inline TextureType load_texture(const char *path) {
-  return raylib::LoadTexture(path);
+  auto texture = raylib::LoadTexture(path);
+  if (texture.id != 0) render_counters::note_create();
+  return texture;
+}
+
+// Uploading needs a live GL context: a window, or the headless session.
+inline bool texture_is_usable() {
+  return raylib::IsWindowReady() || graphics::is_headless();
 }
 
 inline TextureType load_texture_from_rgba(const std::uint8_t *rgba, int w,
@@ -796,6 +800,7 @@ inline TextureType load_texture_from_rgba(const std::uint8_t *rgba, int w,
     log_error("load_texture_from_rgba: upload failed ({}x{})", w, h);
     return texture;
   }
+  render_counters::note_create();
   raylib::SetTextureFilter(texture, filter);
   known_texture_filters()[texture.id] = filter;
   return texture;
@@ -841,6 +846,7 @@ load_texture_with_color_key(const char *path, const Color key,
   TextureType texture = raylib::LoadTextureFromImage(img);
   raylib::UnloadImage(img);
   if (texture.id != 0) {
+    render_counters::note_create();
     raylib::SetTextureFilter(texture, filter);
     known_texture_filters()[texture.id] = filter;
   }
