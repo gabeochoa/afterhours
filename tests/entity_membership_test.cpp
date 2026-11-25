@@ -274,6 +274,29 @@ int main() {
     CHECK(visited == 10);
   }
 
+  {
+    EntityCollection ec;
+    Entity &a = ec.createEntity();
+    a.addComponent<Pos>();
+    a.addComponent<Vel>();
+    Entity &b = ec.createEntity();
+    b.addComponent<Pos>();
+    const EntityID aid = a.id, bid = b.id;
+    ec.cleanup();
+    CHECK(ids_of(EntityQuery(ec).whereHasComponent<Pos>().gen()) ==
+          std::vector<EntityID>({aid, bid}));
+    CHECK(ids_of(EntityQuery(ec).whereHasComponent<Vel>().gen()) ==
+          std::vector<EntityID>({aid}));
+    const std::size_t r0 = EntityCollection::stats().membership_rebuilds;
+    b.addComponent<Vel>();
+    CHECK(ids_of(EntityQuery(ec).whereHasComponent<Pos>().gen()) ==
+          std::vector<EntityID>({aid, bid}));
+    CHECK(EntityCollection::stats().membership_rebuilds - r0 == 0);
+    CHECK(ids_of(EntityQuery(ec).whereHasComponent<Vel>().gen()) ==
+          std::vector<EntityID>({aid, bid}));
+    CHECK(EntityCollection::stats().membership_rebuilds - r0 == 1);
+  }
+
   std::printf("%d/%d checks passed\n", checks - failures, checks);
   if (failures == 0) std::printf("All checks passed!\n");
   return failures == 0 ? 0 : 1;
