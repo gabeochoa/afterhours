@@ -6,10 +6,14 @@
 #include "../entity_management.h"
 #include "../rendering.h"
 #include "../rounded_corners.h"
+#include "../text_measure.h"
 #include "text_area_state.h"
 #include "utils.h"
 #include <algorithm>
+#include <bit>
 #include <cmath>
+#include <format>
+#include <functional>
 
 namespace afterhours {
 namespace text_input {
@@ -116,8 +120,9 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
                               ctx.theme.ui_scale)
           : ctx.theme.text_area_line_height_ratio > 0.f
                 ? ctx.theme.text_area_line_height_ratio *
-                      resolve_to_pixels(config.font_size, resolution_height,
-                                        scaling_mode, ctx.theme.ui_scale)
+                      resolve_font_size(config.font_size, resolution_height,
+                                        scaling_mode, ctx.theme.ui_scale,
+                                        ctx.theme.text_scale)
                 : resolve_to_pixels(pixels(20.f), resolution_height,
                                     scaling_mode, ctx.theme.ui_scale);
   // The field's own top+bottom padding (h720(4) each side, below), resolved
@@ -144,6 +149,9 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
         s.changed_since = false;
       },
       text);
+
+  auto &submit_state = entity.template addComponentIfMissing<IsSubmittable>();
+  submit_state.submitted = false;
 
   state.readonly = config.text_readonly;
   state.disabled = config.disabled;
@@ -197,6 +205,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
           // Lines past the bottom of a fixed-height field must not paint
           // over whatever sits below it.
           .with_overflow(Overflow::Hidden)
+          .with_select_on_focus(false)
           .with_render_layer(config.render_layer + 1);
   // A caller's background (with_custom_background / with_transparent_bg)
   // replaces the default fill, as it does on text_input; the hardcoded
@@ -250,8 +259,9 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
           window_manager::ProvidesCurrentResolution>())
     screen_height = static_cast<float>(pcr->current_resolution.height);
   const float resolved_font_size =
-      resolve_to_pixels(config.font_size, screen_height,
-                        field_cmp.resolved_scaling_mode, ctx.theme.ui_scale);
+      resolve_font_size(config.font_size, screen_height,
+                        field_cmp.resolved_scaling_mode, ctx.theme.ui_scale,
+                        ctx.theme.text_scale);
   // Published for the listeners, which cannot see any of this by the time they
   // run. area_config.line_height is already refreshed in init_state above.
   state.render_font_name = font_name;
@@ -264,17 +274,20 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
   auto line_width = [&](std::string_view s) -> float {
     if (!font_manager)
       return static_cast<float>(s.size()) * resolved_font_size * 0.5f;
-    return measure_text(font_manager->get_font(font_name),
-                        std::string(s).c_str(), resolved_font_size, 1.f)
+    return measure_text_line(std::string(s), font_name, resolved_font_size,
+                             1.f)
         .x;
   };
+  const uint64_t measure_key = TextMeasureCache::compute_hash(
+      std::format("{}", measure_memo::generation()), font_name,
+      resolved_font_size, 1.f);
   // The 6px horizontal padding each side is already out of viewport_width.
   const float wrap_width = (config.text_area_word_wrap &&
                             !config.text_area_single_line)
                                ? viewport_width
                                : 0.f;
   state.layout_cache.rebuild(display_text, wrap_width, line_height,
-                             line_width);
+                             line_width, measure_key);
   const auto &vlines = state.layout_cache.lines();
 
   // Rows are VISUAL from here down: with wrapping on, one source line can
@@ -372,7 +385,8 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
                            : config.font_name,
                        config.font_size)
             .with_custom_text_color(placeholder_row
-                                        ? ctx.theme.font_muted
+                                        ? config.placeholder_color.value_or(
+                                              ctx.theme.font_muted)
                                         : config.custom_text_color.value_or(
                                               ctx.theme.font))
             .with_alignment(TextAlignment::Left)
@@ -419,7 +433,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Render cursor when focused
   if (state.is_focused) {
-    bool show_cursor = update_blink(state, 0.016f);
+    bool show_cursor = update_blink(state, ctx.dt > 0.f ? ctx.dt : (1.f / 60.f));
 
     // Use computed padding for positioning
     float pad_left = field_cmp.computed_padd[Axis::left];
@@ -611,14 +625,27 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       const bool wants_newline = !config.text_area_single_line &&
                                  (!config.text_area_submit_on_enter || shift);
       if (wants_newline) {
-        if (editable && insert_newline(state)) {
-          reset_blink(state);
-          text_changed = true;
+        if (editable) {
+          state.push_undo_snapshot();
+          if (state.has_selection())
+            delete_selection(state);
+          if (insert_newline(state)) {
+            state.clear_selection();
+            reset_blink(state);
+            text_changed = true;
+          }
         }
-      } else if (entity.template has<HasTextInputListener>()) {
-        if (auto &listener = entity.template get<HasTextInputListener>();
-            listener.on_submit)
-          listener.on_submit(entity);
+      } else {
+        submit_state.submitted = true;
+        if (entity.template has<HasTextInputListener>()) {
+          if (auto &listener = entity.template get<HasTextInputListener>();
+              listener.on_submit)
+            listener.on_submit(entity);
+        }
+        if (config.on_submit) {
+          const std::string submitted_text = state.text();
+          config.on_submit(submitted_text);
+        }
       }
     }
 
@@ -634,30 +661,28 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       // Word-level delete (Alt/Ctrl+Backspace, Alt/Ctrl+Delete). Guarded on the
       // action existing so an app with a smaller enum still compiles, the same
       // way text_input does it.
-      if constexpr (magic_enum::enum_contains<InputAction>(
-                        "TextDeleteWordBack")) {
-        if (ctx.pressed_or_repeat(InputAction::TextDeleteWordBack))
+      {
+        if (text_action_pressed<InputAction>(ctx, "TextDeleteWordBack", true))
           after_delete(delete_word_before_cursor(state));
       }
-      if constexpr (magic_enum::enum_contains<InputAction>(
-                        "TextDeleteWordForward")) {
-        if (ctx.pressed_or_repeat(InputAction::TextDeleteWordForward))
+      {
+        if (text_action_pressed<InputAction>(ctx, "TextDeleteWordForward",
+                                            true))
           after_delete(delete_word_after_cursor(state));
       }
-      if constexpr (magic_enum::enum_contains<InputAction>(
-                        "TextDeleteLineBack")) {
-        if (ctx.pressed_or_repeat(InputAction::TextDeleteLineBack))
+      {
+        if (text_action_pressed<InputAction>(ctx, "TextDeleteLineBack", true))
           after_delete(delete_to_line_start(state));
       }
-      if constexpr (magic_enum::enum_contains<InputAction>(
-                        "TextDeleteLineForward")) {
-        if (ctx.pressed_or_repeat(InputAction::TextDeleteLineForward))
+      {
+        if (text_action_pressed<InputAction>(ctx, "TextDeleteLineForward",
+                                            true))
           after_delete(delete_to_line_end(state));
       }
 
       // Backspace and Delete take the selection when there is one, rather than
       // one character next to the caret.
-      if (ctx.pressed_or_repeat(InputAction::TextBackspace)) {
+      if (text_action_pressed<InputAction>(ctx, "TextBackspace", true)) {
         state.push_undo_snapshot();
         const bool did = state.has_selection()
                              ? delete_selection(state)
@@ -669,7 +694,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
           text_changed = true;
         }
       }
-      if (ctx.pressed_or_repeat(InputAction::TextDelete)) {
+      if (text_action_pressed<InputAction>(ctx, "TextDelete", true)) {
         state.push_undo_snapshot();
         const bool did = state.has_selection()
                              ? delete_selection(state)
@@ -686,16 +711,16 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
     // Home/End act on the VISUAL row, not the source line: on a wrapped
     // paragraph the source version jumps to the far end of the paragraph
     // rather than the end of the row you can see.
-    if (ctx.pressed_or_repeat(InputAction::TextHome))
+    if (text_action_pressed<InputAction>(ctx, "TextHome", true))
       navigate([&] { move_to_visual_line_start(state); });
-    if (ctx.pressed_or_repeat(InputAction::TextEnd))
+    if (text_action_pressed<InputAction>(ctx, "TextEnd", true))
       navigate([&] { move_to_visual_line_end(state); });
 
     // Word-level movement (Alt/Ctrl+Arrow). Unshifted with a selection,
     // they collapse to its near edge first, like Left/Right below and like
     // text_input; only a second press moves a word.
-    if constexpr (magic_enum::enum_contains<InputAction>("TextWordLeft")) {
-      if (ctx.pressed_or_repeat(InputAction::TextWordLeft))
+    {
+      if (text_action_pressed<InputAction>(ctx, "TextWordLeft", true))
         navigate([&] {
           if (!shift_held && state.has_selection())
             state.cursor_position = state.selection_start();
@@ -704,8 +729,8 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
           reset_preferred_column(state);
         });
     }
-    if constexpr (magic_enum::enum_contains<InputAction>("TextWordRight")) {
-      if (ctx.pressed_or_repeat(InputAction::TextWordRight))
+    {
+      if (text_action_pressed<InputAction>(ctx, "TextWordRight", true))
         navigate([&] {
           if (!shift_held && state.has_selection())
             state.cursor_position = state.selection_end();
@@ -744,7 +769,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
     // Ensure cursor stays visible after any input
     if (text_changed) {
       state.layout_cache.rebuild(state.text(), wrap_width, line_height,
-                                 line_width);
+                                 line_width, measure_key);
       state.ensure_cursor_visible_at_row(
           state.layout_cache.line_at_offset(state.cursor_position),
           viewport_height, state.layout_cache.line_count());
@@ -753,7 +778,8 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
 
   text = state.text();
   entity.template addComponentIfMissing<FocusClusterRoot>();
-  return ElementResult{state.changed_since, entity};
+  ElementResult result{state.changed_since, entity};
+  return result;
 }
 
 } // namespace text_input
