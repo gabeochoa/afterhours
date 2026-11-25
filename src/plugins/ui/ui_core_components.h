@@ -420,6 +420,24 @@ struct FontManager final : BaseComponent {
     return *this;
   }
 
+  bool unload_font(const std::string &font_name) {
+    auto it = fonts.find(font_name);
+    if (it == fonts.end())
+      return false;
+    Font old = it->second;
+    invalidate_measurements_for(font_name);
+    fonts.erase(it);
+    if (active_font == font_name)
+      active_font = UIComponent::DEFAULT_FONT;
+    const bool shared = std::any_of(
+        fonts.begin(), fonts.end(), [&](const auto &entry) {
+          return font_same_face(entry.second, old);
+        });
+    if (!shared)
+      afterhours::unload_font(old);
+    return true;
+  }
+
   auto &set_active(const std::string &font_name) {
     if (!fonts.contains(font_name)) {
       log_warn("{} missing from font manager. Did you call load_font() on it "
@@ -573,11 +591,16 @@ inline bool operator==(const TextSpan &a, const TextSpan &b) {
          a.color.a == b.color.a && a.weight == b.weight;
 }
 
+struct HasThemeSnapshot : BaseComponent {
+  Theme theme;
+};
+
 struct HasCheckboxMark : BaseComponent {};
 
 struct HasLabel : BaseComponent {
   TextAlignment alignment = TextAlignment::None;
   TextOverflow text_overflow = TextOverflow::Clip;
+  bool truncated = false;
   float letter_spacing = 0.f; // Additional spacing between characters (pixels)
   // Per-side space between this label and its box; unset means Theme's value.
   std::optional<Vector2Type> text_inset;

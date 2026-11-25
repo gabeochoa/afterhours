@@ -55,6 +55,20 @@ int main() {
   }
   {
     HasUIModifiers m;
+    const auto c = m.rotation_center(r);
+    check(near(c.x, 300.f) && near(c.y, 240.f),
+          "default origin rotates about the centre");
+    m.origin_x = 0.f; m.origin_y = 0.f;
+    const auto tl = m.rotation_center(r);
+    check(near(tl.x, 100.f) && near(tl.y, 200.f),
+          "origin 0,0 rotates about the top-left corner");
+    m.origin_x = 1.f; m.origin_y = 1.f;
+    const auto br = m.rotation_center(r);
+    check(near(br.x, 500.f) && near(br.y, 280.f),
+          "origin 1,1 rotates about the bottom-right corner");
+  }
+  {
+    HasUIModifiers m;
     m.scale = 2.f;
     m.origin_x = 0.f;
     m.translate_x = 10.f;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../../animation/instant.h"
 #include "../../clipboard.h"
 #include "../text_selection.h"
 #include "../text_units.h"
@@ -19,6 +20,8 @@ namespace text_input {
 // Canonical definition lives in ui/text_selection.h; selection geometry needs
 // it and must not depend on the editing module.
 using afterhours::ui::utf8_char_length;
+using afterhours::ui::is_valid_utf8;
+using afterhours::ui::sanitize_utf8;
 
 
 // Get number of bytes in a UTF-8 character starting at pos
@@ -163,7 +166,7 @@ inline bool insert_char(AnyTextInputState auto &s, int codepoint) {
 template <typename State>
 inline void replace_text_externally(State &s, const std::string &text) {
   s.storage.clear();
-  s.storage.insert(0, text);
+  s.storage.insert(0, sanitize_utf8(text));
   s.cursor_position = std::min(s.cursor_position, s.text_size());
   const std::string stored = s.text();
   if (s.cursor_position > 0 && s.cursor_position < stored.size() &&
@@ -214,6 +217,8 @@ inline void move_cursor_right(AnyTextInputState auto &s) {
 
 // Update blink timer, returns true if cursor visible
 inline bool update_blink(AnyTextInputState auto &s, float dt) {
+  if (motion::is_instant())
+    return true;
   s.cursor_blink_timer += dt;
   if (s.cursor_blink_timer >= s.cursor_blink_rate * 2.0f)
     s.cursor_blink_timer = 0.0f;
@@ -245,73 +250,27 @@ inline bool contains_cjk(const std::string &text) {
   return false;
 }
 
-/// Check if character is a word separator (whitespace or punctuation)
 inline bool is_word_separator(char c) {
-  return std::isspace(static_cast<unsigned char>(c)) ||
-         std::ispunct(static_cast<unsigned char>(c));
+  return !ui::text_selection::is_word_char(c);
 }
 
-/// Find start of word containing or before position.
-/// Moves backward past separators, then backward to start of word.
-inline size_t find_word_start(std::string_view text, size_t pos) {
-  if (pos == 0 || text.empty())
-    return 0;
-
-  size_t p = pos;
-
-  // Move back past any separators
-  while (p > 0 && is_word_separator(text[p - 1]))
-    --p;
-
-  // Move back to start of word
-  while (p > 0 && !is_word_separator(text[p - 1]))
-    --p;
-
-  return p;
+inline size_t find_word_start(std::string_view text, size_t pos,
+                              ui::text_selection::WordPolicy policy =
+                                  ui::text_selection::WordPolicy::Prose) {
+  return ui::text_selection::find_word_start(text, pos, policy);
 }
 
-/// Find end of word containing or after position.
-/// Moves forward past separators, then forward to end of word.
-inline size_t find_word_end(std::string_view text, size_t pos) {
-  if (pos >= text.size())
-    return text.size();
-
-  size_t p = pos;
-
-  // Move forward past any separators
-  while (p < text.size() && is_word_separator(text[p]))
-    ++p;
-
-  // Move forward to end of word
-  while (p < text.size() && !is_word_separator(text[p]))
-    ++p;
-
-  return p;
+inline size_t find_word_end(std::string_view text, size_t pos,
+                            ui::text_selection::WordPolicy policy =
+                                ui::text_selection::WordPolicy::Prose) {
+  return ui::text_selection::find_word_end(text, pos, policy);
 }
 
-/// Select the word at position (for double-click).
-/// Returns {start, end} byte offsets.
-inline std::pair<size_t, size_t> select_word_at(std::string_view text,
-                                                size_t pos) {
-  if (text.empty())
-    return {0, 0};
-  pos = std::min(pos, text.size() - 1);
-
-  // If on a separator, select just that separator
-  if (is_word_separator(text[pos])) {
-    return {pos, pos + 1};
-  }
-
-  // Find word boundaries
-  size_t start = pos;
-  while (start > 0 && !is_word_separator(text[start - 1]))
-    --start;
-
-  size_t end = pos;
-  while (end < text.size() && !is_word_separator(text[end]))
-    ++end;
-
-  return {start, end};
+inline std::pair<size_t, size_t> select_word_at(
+    std::string_view text, size_t pos,
+    ui::text_selection::WordPolicy policy =
+        ui::text_selection::WordPolicy::Prose) {
+  return ui::text_selection::select_word_at(text, pos, policy);
 }
 
 // Move cursor left by one word
@@ -618,12 +577,15 @@ template <typename State> inline void insert_newline_if_multiline(State &s) {
 /// insert_char.
 template <typename State>
 inline void insert_pasted_text(State &s, const std::string &clip) {
-  for (size_t i = 0; i < clip.size();) {
-    const int cp = utf8_to_codepoint(clip, i);
-    const size_t len = utf8_char_length(clip, i);
+  std::string sanitized;
+  const std::string &text =
+      is_valid_utf8(clip) ? clip : (sanitized = sanitize_utf8(clip));
+  for (size_t i = 0; i < text.size();) {
+    const int cp = utf8_to_codepoint(text, i);
+    const size_t len = utf8_char_length(text, i);
     i += len > 0 ? len : 1;
     if (cp == '\r') {
-      if (i < clip.size() && clip[i] == '\n')
+      if (i < text.size() && text[i] == '\n')
         continue; // CRLF: the \n below is the one break
     }
     const bool is_break = cp == '\n' || cp == '\r';

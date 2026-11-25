@@ -1,6 +1,7 @@
 #pragma once
 
 #include <set>
+#include <atomic>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -51,11 +52,46 @@ static inline RectangleType snap_origin(RectangleType rect,
 
 static inline float compute_effective_opacity(const Entity &entity);
 
+static inline const Theme &theme_for(const Entity &entity,
+                                     const Theme &fallback) {
+  return entity.has<HasThemeSnapshot>()
+             ? entity.get<HasThemeSnapshot>().theme
+             : fallback;
+}
+
 static inline Color resolve_image_tint(const Entity &entity, float opacity) {
   const Color tint = entity.has<HasImageTint>()
                          ? entity.get<HasImageTint>().color
                          : Color{255, 255, 255, 255};
   return colors::opacity_pct(tint, opacity);
+}
+
+// Dotted and mixed-side borders use the per-side renderer below.
+static inline std::optional<std::pair<BorderEdge, BorderSide>> border_stroke(
+    const Border &border, float roundness, std::bitset<4> corners) {
+  if (border.is_uniform() && border.top.style == BorderStyle::Solid)
+    return std::pair{BorderEdge::All, border.top};
+  if (roundness <= 0.f || corners.none()) return {};
+  std::optional<std::pair<BorderEdge, BorderSide>> edge;
+  const std::array sides{border.top, border.right, border.bottom, border.left};
+  for (size_t i = 0; i < sides.size(); ++i) {
+    if (!sides[i].has_border()) continue;
+    if (edge || sides[i].style != BorderStyle::Solid) return {};
+    edge.emplace(static_cast<BorderEdge>(i), sides[i]);
+  }
+  return edge;
+}
+
+static inline RectangleType fill_rect_for(const Entity &entity,
+                                          const RectangleType &draw_rect) {
+  if (!entity.has<HasColor>())
+    return draw_rect;
+  const auto &inset = entity.get<HasColor>().bg_inset;
+  if (!inset.has_value())
+    return draw_rect;
+  const float w = std::max(0.f, draw_rect.width - 2.f * inset->x);
+  const float h = std::max(0.f, draw_rect.height - 2.f * inset->y);
+  return {draw_rect.x + inset->x, draw_rect.y + inset->y, w, h};
 }
 
 static inline bool is_hidden_for_render(const Entity &entity) {
@@ -301,6 +337,7 @@ struct FocusPaint {
   size_t after_command;
   int layer;
   float rotation;
+  Vector2Type rotation_pivot{0.f, 0.f};
   std::optional<RectangleType> clip;
 };
 
@@ -328,9 +365,20 @@ std::optional<FocusPaint> prepare_focus_paint(const UIContext<InputAction> &cont
     if (!descendants.contains(cmd.id)) continue;
     const auto [has_clip, clip] =
         compute_intersected_clip_rect(entity, /*include_self=*/false);
+    RectangleType widget = cmp.rect();
+    Vector2Type pivot;
+    if (entity.has<HasUIModifiers>()) {
+      const auto &mods = entity.get<HasUIModifiers>();
+      widget = detail::apply_ancestor_transform(entity, mods.apply_modifier(widget));
+      pivot = mods.rotation_center(widget);
+    } else {
+      widget = detail::apply_ancestor_transform(entity, widget);
+      pivot = {widget.x + widget.width * .5f, widget.y + widget.height * .5f};
+    }
     return FocusPaint{*ring, entity.id, i - 1, cmd.layer,
                       entity.has<HasUIModifiers>() ? entity.get<HasUIModifiers>().rotation : 0.f,
-                      has_clip && !entity.has<HasScrollView>() ? std::optional{clip} : std::nullopt};
+                      pivot,
+                      has_clip ? clip : std::optional<RectangleType>{}};
   }
   return {};
 }
@@ -343,8 +391,7 @@ inline void draw_focus_paint(const FocusPaint &paint) {
                        static_cast<int>(r.width), static_cast<int>(r.height));
   }
   capture::Scope attribute(paint.entity_id, paint.layer);
-  push_rotation(ring.rect.x + ring.rect.width * .5f,
-                ring.rect.y + ring.rect.height * .5f, paint.rotation);
+  push_rotation(paint.rotation_pivot.x, paint.rotation_pivot.y, paint.rotation);
   if (ring.contrast_edges)
     draw_rectangle_rounded_lines(ring.outer_contrast(), ring.roundness_at(ring.thickness),
                                  ring.segments, ring.contrast, ring.corners);
@@ -369,13 +416,16 @@ inline void collect_focus_paint(RenderCommandBuffer &buffer, const FocusPaint &p
   if (ring.contrast_edges)
     buffer.add_rounded_rectangle_outline(ring.outer_contrast(), ring.contrast,
         ring.roundness_at(ring.thickness), ring.segments, ring.corners,
-        paint.layer, paint.entity_id, 0.f, paint.rotation);
+        paint.layer, paint.entity_id, 0.f, paint.rotation,
+        paint.rotation_pivot.x, paint.rotation_pivot.y);
   if (ring.contrast_edges && ring.rect.width > 2.f && ring.rect.height > 2.f)
     buffer.add_rounded_rectangle_outline(ring.inner_contrast(), ring.contrast,
         ring.roundness_at(-1.f), ring.segments, ring.corners,
-        paint.layer, paint.entity_id, 0.f, paint.rotation);
+        paint.layer, paint.entity_id, 0.f, paint.rotation,
+        paint.rotation_pivot.x, paint.rotation_pivot.y);
   buffer.add_rounded_rectangle_outline(ring.rect, ring.color, ring.roundness,
-      ring.segments, ring.corners, paint.layer, paint.entity_id, ring.thickness, paint.rotation);
+      ring.segments, ring.corners, paint.layer, paint.entity_id, ring.thickness, paint.rotation,
+      paint.rotation_pivot.x, paint.rotation_pivot.y);
   if (paint.clip) buffer.add_scissor_end(paint.layer, paint.entity_id);
 }
 
@@ -663,7 +713,9 @@ position_text_ex(const ui::FontManager &fm, const std::string &text,
     // would report a box sized to exactly its own text -- a Dim::Text box --
     // as overflowing by precisely the margin, always.
     const float usable_y = measures_as_block ? container.height : max_text_size.y;
-    text_fits = ts.y <= usable_y && ts.x <= max_text_size.x;
+    text_fits = ts.y <= usable_y &&
+                (text_overflow == TextOverflow::Ellipsis ||
+                 ts.x <= max_text_size.x);
 #ifdef AFTERHOURS_DEBUG_TEXT_OVERFLOW
     if (!text_fits && report_overflow) {
       // Keyed on the LAYOUT, not the string. Keying on text meant an editable
@@ -849,16 +901,14 @@ inline void register_label_for_testing(const Entity &entity,
                                        float screen_width, float screen_height) {
   if (!testing::test_input::detail::test_mode) return;
   RectangleType viewport{0.f, 0.f, screen_width, screen_height};
-  if (!entity.has<HasScrollView>()) {
-    const auto [has_clip, clip] = compute_intersected_clip_rect(entity);
-    if (has_clip) {
-      const RectangleType scissor{
-          static_cast<float>(static_cast<int>(clip.x)),
-          static_cast<float>(static_cast<int>(clip.y)),
-          static_cast<float>(static_cast<int>(clip.width)),
-          static_cast<float>(static_cast<int>(clip.height))};
-      viewport = intersect_rects(viewport, scissor);
-    }
+  const auto [has_clip, clip] = compute_intersected_clip_rect(entity);
+  if (has_clip) {
+    const RectangleType scissor{
+        static_cast<float>(static_cast<int>(clip.x)),
+        static_cast<float>(static_cast<int>(clip.y)),
+        static_cast<float>(static_cast<int>(clip.width)),
+        static_cast<float>(static_cast<int>(clip.height))};
+    viewport = intersect_rects(viewport, scissor);
   }
   testing::VisibleTextRegistry::instance().register_text_in_clip(
       text, bounds.x, bounds.y, bounds.width, bounds.height,
@@ -913,6 +963,46 @@ resolve_text_inset(const Theme &theme,
                    const std::optional<Vector2Type> &override_ = std::nullopt) {
   const Vector2Type base = override_.value_or(theme.text_inset);
   return Vector2Type{base.x * theme.ui_scale, base.y * theme.ui_scale};
+}
+
+struct ResolvedTextOrigin {
+  Vector2Type origin{0.f, 0.f};
+  float font_size = 0.f;
+  Vector2Type inset{0.f, 0.f};
+  RectangleType laid_out_rect{0.f, 0.f, 0.f, 0.f};
+  bool text_fits = true;
+};
+
+static inline std::optional<ResolvedTextOrigin>
+resolved_text_origin(const Entity &entity,
+                     const ui::FontManager &fm, const Theme &theme,
+                     float screen_height) {
+  if (!entity.has<HasLabel>() || !entity.has<UIComponent>())
+    return std::nullopt;
+  const HasLabel &hasLabel = entity.get<HasLabel>();
+  const UIComponent &cmp = entity.get<UIComponent>();
+  float explicit_fs = 0.f;
+  if (cmp.font_size_explicitly_set) {
+    const float uis = imm::ThemeDefaults::get().theme.ui_scale;
+    explicit_fs = resolve_to_pixels(cmp.font_size, screen_height,
+                                    cmp.resolved_scaling_mode, uis);
+  }
+  const Vector2Type inset = resolve_text_inset(theme, hasLabel.text_inset);
+  RectangleType label_rect = cmp.rect();
+  label_rect.x += hasLabel.text_x_offset;
+  label_rect.width -= hasLabel.text_x_offset;
+  label_rect.y += hasLabel.text_y_offset;
+  const TextPositionResult pos = position_text_ex(
+      fm, hasLabel.label.c_str(), label_rect, hasLabel.alignment, inset,
+      explicit_fs, hasLabel.letter_spacing, hasLabel.text_overflow,
+      false);
+  return ResolvedTextOrigin{
+      .origin = Vector2Type{pos.rect.x, pos.rect.y},
+      .font_size = pos.rect.height,
+      .inset = inset,
+      .laid_out_rect = cmp.rect(),
+      .text_fits = pos.text_fits,
+  };
 }
 
 template <typename DrawLine>
@@ -971,7 +1061,7 @@ inline void paint_label_text_selection(UIContext<InputAction> &context,
     draw(r, context.theme.selection);
 }
 
-static inline void draw_text_in_rect(
+static inline bool draw_text_in_rect(
     const ui::FontManager &fm, const std::string &text, RectangleType rect,
     TextAlignment alignment, Color color, bool show_debug_indicator = false,
     const std::optional<TextStroke> &stroke = std::nullopt,
@@ -1053,6 +1143,7 @@ static inline void draw_text_in_rect(
       float total_h = line_h * static_cast<float>(lines.size());
       // Vertically center the block within the rect.
       float y = rect.y + std::max(0.f, (rect.height - total_h) * 0.5f);
+      bool truncated = false;
       for (const auto &ln : lines) {
         // A line that does not fully fit is dropped, not drawn: the
         // own-box clip would otherwise slice it mid-glyph.
@@ -1063,10 +1154,12 @@ static inline void draw_text_in_rect(
                             rot_center_x, rot_center_y, TextOverflow::Clip,
                             letter_spacing, font_size, /*report_overflow=*/false,
                             inset, false);
+        } else {
+          truncated = true;
         }
         y += line_h;
       }
-      return;
+      return truncated;
     }
     // Single line that fits: fall through to normal single-line rendering.
   }
@@ -1117,7 +1210,7 @@ static inline void draw_text_in_rect(
   // MIN_FONT_SIZE, so any text below the floor was silently not drawn, and the
   // clamp above was the only thing keeping that from happening.
   if (result.rect.height < 1.f) {
-    return;
+    return !text.empty();
   }
 
   // Handle text overflow ellipsis truncation
@@ -1139,6 +1232,9 @@ static inline void draw_text_in_rect(
         });
     return truncated_text;
   }();
+  const bool truncated = text_overflow == TextOverflow::Ellipsis
+                             ? render_text != text
+                             : !result.text_fits;
 
   RectangleType sizing = result.rect;
 
@@ -1167,6 +1263,7 @@ static inline void draw_text_in_rect(
   detail::draw_text_at_position(fm, render_text, rect, alignment, sizing, color,
                                 rotation, rot_center_x, rot_center_y,
                                 letter_spacing);
+  return truncated;
 }
 
 // Draw coloured runs through the same wrap primitive as the plain path.
@@ -1175,7 +1272,7 @@ static inline void draw_text_in_rect(
 // Non-const fm: per-run weights are drawn by swapping the active font around
 // each run, since draw_text_in_rect resolves the face itself. The active font
 // is restored before returning.
-static inline void draw_runs_in_rect(
+static inline bool draw_runs_in_rect(
     ui::FontManager &fm, const std::vector<TextSpan> &runs,
     RectangleType rect, TextAlignment alignment,
     bool show_debug_indicator = false,
@@ -1189,7 +1286,7 @@ static inline void draw_runs_in_rect(
     // Pinned row height; 0 means the measured one.
     float line_height_px = 0.0f) {
   if (runs.empty() || rect.width <= 0.f)
-    return;
+    return false;
 
   Font font = fm.get_active_font();
   float font_size = explicit_font_size;
@@ -1215,27 +1312,38 @@ static inline void draw_runs_in_rect(
     return measure_text(font, s.c_str(), font_size, spacing).x;
   };
 
+  std::vector<TextSpan> ellipsized;
+  const std::vector<TextSpan> *runs_ptr = &runs;
+  if (text_overflow == TextOverflow::Ellipsis) {
+    const float max_width = rect.width - 2.f * inset.x;
+    if (max_width > 0.f) {
+      ellipsized = detail::ellipsize_runs(runs, max_width, weighted_width);
+      runs_ptr = &ellipsized;
+    }
+  }
+
   // Only wrap when asked and a size is known, matching draw_text_in_rect.
   const bool wants_wrap =
       text_overflow == TextOverflow::Wrap && explicit_font_size > 0.f;
   const float wrap_width = wants_wrap ? (rect.width - 2.f * inset.x) : 1e9f;
   if (wrap_width <= 0.f)
-    return;
+    return false;
 
   // Memoised: this runs every frame, usually on text that hasn't changed.
-  const std::uint64_t wrap_key =
-      detail::wrap_memo::key_for(runs, wrap_width, font_size, spacing, base_font);
+  const std::uint64_t wrap_key = detail::wrap_memo::key_for(
+      *runs_ptr, wrap_width, font_size, spacing, base_font);
   const std::vector<detail::TextRunLine> *cached =
       detail::wrap_memo::lookup(wrap_key);
   const std::vector<detail::TextRunLine> &lines =
       cached ? *cached
              : detail::wrap_memo::store(
                    wrap_key,
-                   detail::wrap_runs_to_width(runs, wrap_width,
+                   detail::wrap_runs_to_width(*runs_ptr, wrap_width,
                                               weighted_width));
   float line_h = line_height_px > 0.f
                      ? line_height_px
                      : measure_text(font, "Ag", font_size, spacing).y;
+  bool truncated = false;
   // Auto-fit above sized the font against the joined text, i.e. for a single
   // line. Hard breaks still split it, so shrink to fit every line. A pinned
   // row height is not shrunk: lines past the bottom are dropped below.
@@ -1258,6 +1366,7 @@ static inline void draw_runs_in_rect(
     // A line that does not fully fit is dropped, not drawn: the
     // own-box clip would otherwise slice it mid-glyph.
     if (y + line_h > rect.y + rect.height + 0.5f) {
+      truncated = true;
       y += line_h;
       continue;
     }
@@ -1286,16 +1395,19 @@ static inline void draw_runs_in_rect(
         fm.set_active(want);
       // Same as the per-line calls above: a run's rect is sized to that run,
       // so charging it margins would report overflow for every one of them.
-      draw_text_in_rect(fm, run.text, run_rect, TextAlignment::Left, run.color,
-                        show_debug_indicator, stroke, shadow, rotation,
-                        rot_center_x, rot_center_y, TextOverflow::Clip,
-                        letter_spacing, font_size, /*report_overflow=*/false,
-                        Vector2Type{0.f, 0.f}, register_text);
+      truncated = draw_text_in_rect(fm, run.text, run_rect, TextAlignment::Left,
+                                    run.color, show_debug_indicator, stroke,
+                                    shadow, rotation, rot_center_x, rot_center_y,
+                                    TextOverflow::Clip, letter_spacing, font_size,
+                                    false,
+                                    Vector2Type{0.f, 0.f}, register_text) ||
+                  truncated;
       if (swap)
         fm.set_active(base_font);
     }
     y += line_h;
   }
+  return truncated;
 }
 
 static inline Vector2Type
@@ -1388,10 +1500,11 @@ void draw_layer_scrollbars(UIContext<InputAction> &context, size_t begin,
       const auto geometry = scrollbar_geometry(
           scroll, view, vertical, metrics.thickness, metrics.min_thumb);
       if (!geometry.visible) return;
+      const Theme &theme = theme_for(entity, context.theme);
       const auto track = colors::opacity_pct(scroll.scrollbar_track_color.value_or(
-          context.theme.from_usage(scroll.scrollbar_track_usage)), opacity);
+          theme.from_usage(scroll.scrollbar_track_usage)), opacity);
       const auto thumb = colors::opacity_pct(scroll.scrollbar_thumb_color.value_or(
-          context.theme.from_usage(scroll.scrollbar_thumb_usage)), opacity);
+          theme.from_usage(scroll.scrollbar_thumb_usage)), opacity);
       // Fully rounded: at 6px wide that is a capsule, which reads as a bar.
       draw(cmd, geometry.track, track, has_clip, clip);
       draw(cmd, geometry.thumb, thumb, has_clip, clip);
@@ -1803,10 +1916,12 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                        ? entity.get<HasRoundedCorners>().segments
                        : 8;
 
-    // Push rotation transform - all subsequent drawing will be rotated around
-    // component center
-    const float centerX = rect::center(draw_rect).x;
-    const float centerY = rect::center(draw_rect).y;
+    const Vector2Type rot_center = entity.has<HasUIModifiers>()
+        ? entity.get<HasUIModifiers>().rotation_center(draw_rect)
+        : Vector2Type{draw_rect.x + draw_rect.width / 2.0f,
+                      draw_rect.y + draw_rect.height / 2.0f};
+    float centerX = rot_center.x;
+    float centerY = rot_center.y;
     push_rotation(centerX, centerY, rotation);
 
     // Draw shadow first (behind the element)
@@ -1837,8 +1952,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       }
 
       if (col.a > 0) {
-        draw_rectangle_rounded(draw_rect, roundness, segments, col,
-                               corner_settings);
+        draw_rectangle_rounded(detail::fill_rect_for(entity, draw_rect),
+                               roundness, segments, col, corner_settings);
       }
     }
 
@@ -1880,15 +1995,10 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
               draw_rectangle(RectangleType{sx, sy + pos, sw, seg}, c);
           }
         };
-        bool uniform_dotted =
-            border.is_uniform() && border.top.style == BorderStyle::Dotted;
-        if (border.is_uniform() && !uniform_dotted) {
-          Color border_col = border.uniform_color();
-          if (effective_opacity < 1.0f) {
-            border_col = colors::opacity_pct(border_col, effective_opacity);
-          }
+        if (auto stroke = detail::border_stroke(border, roundness, corner_settings)) {
+          const auto &[edge, side] = *stroke;
           draw_uniform_border(draw_rect, roundness, segments, corner_settings,
-                              border.uniform_thickness().value, border_col);
+                              side.thickness.value, colors::opacity_pct(side.color, effective_opacity), edge);
         } else {
           // Per-side (and uniform-dotted) border rendering
           float x = draw_rect.x, y = draw_rect.y;
@@ -1918,12 +2028,12 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     }
 
     if (entity.has<HasCheckboxMark>()) {
-      render_checkbox_mark(draw_rect, entity.get<HasLabel>(), context.theme,
+      render_checkbox_mark(draw_rect, entity.get<HasLabel>(), detail::theme_for(entity, context.theme),
                            effective_opacity, draw_line_ex);
     } else if (entity.has<HasLabel>()) {
       const HasLabel &hasLabel = entity.get<HasLabel>();
       warn_ignored_label_padding(entity, cmp);
-      Color font_col = detail::resolve_label_color(hasLabel, context.theme);
+      Color font_col = detail::resolve_label_color(hasLabel, detail::theme_for(entity, context.theme));
 
       if (effective_opacity < 1.0f) {
         font_col = colors::opacity_pct(font_col, effective_opacity);
@@ -1950,19 +2060,21 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       // (see position_text_ex call ~100 lines below) so they don't diverge.
       float explicit_fs = 0.f;
       if (cmp.font_size_explicitly_set) {
-        float uis = imm::ThemeDefaults::get().theme.ui_scale;
-        explicit_fs = resolve_to_pixels(cmp.font_size, context.screen_height,
-                                        cmp.resolved_scaling_mode, uis);
+        const auto &theme = imm::ThemeDefaults::get().theme;
+        explicit_fs = resolve_font_size(cmp.font_size, context.screen_height,
+                                        cmp.resolved_scaling_mode, theme.ui_scale,
+                                        theme.text_scale);
       }
       const float label_line_h =
           hasLabel.line_height.has_value()
-              ? resolve_to_pixels(*hasLabel.line_height, context.screen_height,
+              ? resolve_font_size(*hasLabel.line_height, context.screen_height,
                                   cmp.resolved_scaling_mode,
-                                  imm::ThemeDefaults::get().theme.ui_scale)
+                                  imm::ThemeDefaults::get().theme.ui_scale,
+                                  imm::ThemeDefaults::get().theme.text_scale)
               : 0.f;
 
       const Vector2Type immediate_inset =
-          resolve_text_inset(context.theme, hasLabel.text_inset);
+          resolve_text_inset(detail::theme_for(entity, context.theme), hasLabel.text_inset);
 
       RectangleType label_rect = text_rect;
       label_rect.x += hasLabel.text_x_offset;
@@ -1974,13 +2086,11 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       // are exempt: an axis-aligned scissor would cut their corners.
       RectangleType label_clip = text_rect;
       std::optional<RectangleType> ancestor_clip;
-      if (!entity.has<HasScrollView>()) {
-        auto [has_clip, clip_rect] =
-            detail::compute_intersected_clip_rect(entity);
-        if (has_clip) {
-          ancestor_clip = clip_rect;
-          label_clip = detail::intersect_rects(label_clip, clip_rect);
-        }
+      auto [has_clip, clip_rect] =
+          detail::compute_intersected_clip_rect(entity);
+      if (has_clip) {
+        ancestor_clip = clip_rect;
+        label_clip = detail::intersect_rects(label_clip, clip_rect);
       }
       const bool clip_label = rotation == 0.f && label_clip.width > 0.f &&
                               label_clip.height > 0.f;
@@ -2018,20 +2128,18 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       // Without this branch with_styled_label is a no-op here, so the same
       // UI renders differently depending on `use_batched`.
       if (!hasLabel.spans.empty()) {
-        draw_runs_in_rect(font_manager, hasLabel.spans, label_rect,
-                          hasLabel.alignment, SHOW_TEXT_OVERFLOW_DEBUG, stroke,
-                          shadow, rotation, centerX, centerY,
-                          hasLabel.text_overflow, hasLabel.letter_spacing,
-                          explicit_fs, hasLabel.label, immediate_inset, false,
-                          label_line_h);
+        entity.get<HasLabel>().truncated = draw_runs_in_rect(
+            font_manager, hasLabel.spans, label_rect, hasLabel.alignment,
+            SHOW_TEXT_OVERFLOW_DEBUG, stroke, shadow, rotation, centerX, centerY,
+            hasLabel.text_overflow, hasLabel.letter_spacing, explicit_fs,
+            hasLabel.label, immediate_inset, false, label_line_h);
       } else {
-        draw_text_in_rect(font_manager, hasLabel.label.c_str(), label_rect,
-                          hasLabel.alignment, font_col,
-                          SHOW_TEXT_OVERFLOW_DEBUG, stroke, shadow, rotation,
-                          centerX, centerY, hasLabel.text_overflow,
-                          hasLabel.letter_spacing, explicit_fs,
-                          /*report_overflow=*/true, immediate_inset, false,
-                          label_line_h);
+        entity.get<HasLabel>().truncated = draw_text_in_rect(
+            font_manager, hasLabel.label.c_str(), label_rect, hasLabel.alignment,
+            font_col, SHOW_TEXT_OVERFLOW_DEBUG, stroke, shadow, rotation,
+            centerX, centerY, hasLabel.text_overflow, hasLabel.letter_spacing,
+            explicit_fs, true, immediate_inset, false,
+            label_line_h);
       }
       if (clip_label) {
         if (ancestor_clip)
@@ -2105,36 +2213,31 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
           font_manager.resolve_weighted(cmp.font_name, cmp.font_weight));
     }
 
-    // Scroll views define their own viewport — don't clip them by ancestors.
-    // Everything else (including HasClipChildren) gets clipped by the
-    // intersection of ALL ancestor clip rects.
     bool needs_scissor = false;
-    if (!entity.has<HasScrollView>()) {
-      auto [has_clip, clip_rect] =
-          detail::compute_intersected_clip_rect(entity);
-      if (has_clip) {
-        // Off-screen cull: if this entity is entirely outside its clip
-        // viewport, skip drawing it. Scrolled-away rows (e.g. the thousands of
-        // diff lines in a long diff) no longer pay text-shaping + draw cost
-        // every frame — only the visible slice does. Children carry their own
-        // render_cmds and are culled the same way, so returning here is safe.
-        // Use the same scroll-adjusted rect render_me draws with, so the
-        // intersection is against where the row actually paints on screen.
-        // Skip the cull for modifier-transformed elements — their painted rect
-        // is offset by apply_modifier() (translate/rotate) which we don't model
-        // here, so culling on the untransformed rect could wrongly drop them.
-        if (!entity.has<HasUIModifiers>()) {
-          const RectangleType er = detail::apply_ancestor_transform(entity, cmp.rect());
-          RectangleType vis = detail::intersect_rects(er, clip_rect);
-          if (vis.width <= 0.0f || vis.height <= 0.0f)
-            return;
-        }
-        begin_scissor_mode(static_cast<int>(clip_rect.x),
-                           static_cast<int>(clip_rect.y),
-                           static_cast<int>(clip_rect.width),
-                           static_cast<int>(clip_rect.height));
-        needs_scissor = true;
+    auto [has_clip, clip_rect] =
+        detail::compute_intersected_clip_rect(entity);
+    if (has_clip) {
+      // Off-screen cull: if this entity is entirely outside its clip
+      // viewport, skip drawing it. Scrolled-away rows (e.g. the thousands of
+      // diff lines in a long diff) no longer pay text-shaping + draw cost
+      // every frame — only the visible slice does. Children carry their own
+      // render_cmds and are culled the same way, so returning here is safe.
+      // Use the same scroll-adjusted rect render_me draws with, so the
+      // intersection is against where the row actually paints on screen.
+      // Skip the cull for modifier-transformed elements — their painted rect
+      // is offset by apply_modifier() (translate/rotate) which we don't model
+      // here, so culling on the untransformed rect could wrongly drop them.
+      if (!entity.has<HasUIModifiers>()) {
+        const RectangleType er = detail::apply_ancestor_transform(entity, cmp.rect());
+        RectangleType vis = detail::intersect_rects(er, clip_rect);
+        if (vis.width <= 0.0f || vis.height <= 0.0f)
+          return;
       }
+      begin_scissor_mode(static_cast<int>(clip_rect.x),
+                         static_cast<int>(clip_rect.y),
+                         static_cast<int>(clip_rect.width),
+                         static_cast<int>(clip_rect.height));
+      needs_scissor = true;
     }
 
     // Update scroll view content size before rendering (after layout is done)
@@ -2489,9 +2592,9 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       }
 
       if (col.a > 0) {
-        buffer.add_rounded_rectangle(draw_rect, col, roundness, segments,
-                                     corner_settings, layer, entity.id,
-                                     rotation);
+        buffer.add_rounded_rectangle(
+            detail::fill_rect_for(entity, draw_rect), col, roundness, segments,
+            corner_settings, layer, entity.id, rotation);
       }
     }
 
@@ -2535,15 +2638,10 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                                          entity.id, 0.f);
           }
         };
-        bool uniform_dotted =
-            border.is_uniform() && border.top.style == BorderStyle::Dotted;
-        if (border.is_uniform() && !uniform_dotted) {
-          Color border_col = border.uniform_color();
-          if (effective_opacity < 1.0f) {
-            border_col = colors::opacity_pct(border_col, effective_opacity);
-          }
-          buffer.add_border(draw_rect, border_col, roundness, segments, corner_settings,
-                            border.uniform_thickness().value, layer, entity.id);
+        if (auto stroke = detail::border_stroke(border, roundness, corner_settings)) {
+          const auto &[edge, side] = *stroke;
+          buffer.add_border(draw_rect, colors::opacity_pct(side.color, effective_opacity), roundness,
+                            segments, corner_settings, side.thickness.value, layer, entity.id, edge);
         } else {
           // Per-side (and uniform-dotted) border rendering (filled rectangles)
           float x = draw_rect.x, y = draw_rect.y;
@@ -2577,7 +2675,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
     // Label/text
     if (entity.has<HasCheckboxMark>()) {
-      render_checkbox_mark(draw_rect, entity.get<HasLabel>(), context.theme,
+      render_checkbox_mark(draw_rect, entity.get<HasLabel>(), detail::theme_for(entity, context.theme),
                            effective_opacity,
                            [&](Vector2Type start, Vector2Type end, float thickness, Color color) {
         buffer.add_line(start, end, thickness, color, layer, entity.id);
@@ -2585,7 +2683,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     } else if (entity.has<HasLabel>()) {
       const HasLabel &hasLabel = entity.get<HasLabel>();
       warn_ignored_label_padding(entity, cmp);
-      Color font_col = detail::resolve_label_color(hasLabel, context.theme);
+      Color font_col = detail::resolve_label_color(hasLabel, detail::theme_for(entity, context.theme));
 
       if (effective_opacity < 1.0f) {
         font_col = colors::opacity_pct(font_col, effective_opacity);
@@ -2612,19 +2710,21 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       if (cmp.font_size_explicitly_set) {
         // Use scaling-mode-aware resolution so font pixels scale with
         // ui_scale in Adaptive mode.
-        float uis = imm::ThemeDefaults::get().theme.ui_scale;
-        explicit_fs = resolve_to_pixels(cmp.font_size, context.screen_height,
-                                        cmp.resolved_scaling_mode, uis);
+        const auto &theme = imm::ThemeDefaults::get().theme;
+        explicit_fs = resolve_font_size(cmp.font_size, context.screen_height,
+                                        cmp.resolved_scaling_mode, theme.ui_scale,
+                                        theme.text_scale);
       }
       const float label_line_h =
           hasLabel.line_height.has_value()
-              ? resolve_to_pixels(*hasLabel.line_height, context.screen_height,
+              ? resolve_font_size(*hasLabel.line_height, context.screen_height,
                                   cmp.resolved_scaling_mode,
-                                  imm::ThemeDefaults::get().theme.ui_scale)
+                                  imm::ThemeDefaults::get().theme.ui_scale,
+                                  imm::ThemeDefaults::get().theme.text_scale)
               : 0.f;
 
       const Vector2Type label_inset =
-          resolve_text_inset(context.theme, hasLabel.text_inset);
+          resolve_text_inset(detail::theme_for(entity, context.theme), hasLabel.text_inset);
 
       // Position text to get font size
       TextPositionResult result = position_text_ex(
@@ -2645,13 +2745,11 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       // would cut their corners.
       RectangleType label_clip = text_rect;
       std::optional<RectangleType> ancestor_clip;
-      if (!entity.has<HasScrollView>()) {
-        auto [has_clip, clip_rect] =
-            detail::compute_intersected_clip_rect(entity);
-        if (has_clip) {
-          ancestor_clip = clip_rect;
-          label_clip = detail::intersect_rects(label_clip, clip_rect);
-        }
+      auto [has_clip, clip_rect] =
+          detail::compute_intersected_clip_rect(entity);
+      if (has_clip) {
+        ancestor_clip = clip_rect;
+        label_clip = detail::intersect_rects(label_clip, clip_rect);
       }
       const bool clip_label = rotation == 0.f && label_clip.width > 0.f &&
                               label_clip.height > 0.f;
@@ -2663,6 +2761,23 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
               static_cast<int>(label_clip.x), static_cast<int>(label_clip.y),
               static_cast<int>(label_clip.width),
               static_cast<int>(label_clip.height), layer, entity.id);
+        if (SHOW_TEXT_OVERFLOW_DEBUG && !result.text_fits) {
+          RectangleType dr = text_rect;
+          dr.x += hasLabel.text_x_offset;
+          dr.width -= hasLabel.text_x_offset;
+          dr.y += hasLabel.text_y_offset;
+          const Color overlay{255, 50, 50, 60}, border{255, 50, 50, 200};
+          const float t = 2.f;
+          buffer.add_rectangle(dr, overlay, layer, entity.id);
+          buffer.add_rectangle({dr.x, dr.y, dr.width, t}, border, layer,
+                               entity.id);
+          buffer.add_rectangle({dr.x, dr.y + dr.height - t, dr.width, t},
+                               border, layer, entity.id);
+          buffer.add_rectangle({dr.x, dr.y, t, dr.height}, border, layer,
+                               entity.id);
+          buffer.add_rectangle({dr.x + dr.width - t, dr.y, t, dr.height},
+                               border, layer, entity.id);
+        }
         // Handle text overflow ellipsis truncation for batched path
         std::string display_text = hasLabel.label;
         if (hasLabel.text_overflow == TextOverflow::Ellipsis &&
@@ -2677,6 +2792,10 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                   return measure_text(font, s.c_str(), font_size, spacing).x;
                 });
         }
+        entity.get<HasLabel>().truncated =
+            hasLabel.text_overflow == TextOverflow::Ellipsis
+                ? display_text != hasLabel.label
+                : !result.text_fits;
 
         // Pass the container rect (text_rect) not the position rect
         // (result.rect) render_text will handle centering within the container
@@ -2688,8 +2807,12 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         label_rect.y += label_inset.y;
         label_rect.width = std::max(0.f, label_rect.width - 2.f * label_inset.x);
         label_rect.height = std::max(0.f, label_rect.height - 2.f * label_inset.y);
-        const float centerX = rect::center(draw_rect).x;
-        const float centerY = rect::center(draw_rect).y;
+        const Vector2Type rot_center = entity.has<HasUIModifiers>()
+            ? entity.get<HasUIModifiers>().rotation_center(draw_rect)
+            : Vector2Type{draw_rect.x + draw_rect.width / 2.0f,
+                          draw_rect.y + draw_rect.height / 2.0f};
+        float centerX = rot_center.x;
+        float centerY = rot_center.y;
 
         if (entity.has<HasSelectableText>()) {
           const std::string sel_font = cmp.resolved_font_name();
@@ -2752,10 +2875,13 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
               wants_wrap ? label_rect.width : 1e9f;
 
           if (wrap_width > 0.f) {
-            const std::vector<TextSpan> runs =
+            std::vector<TextSpan> runs =
                 has_spans ? hasLabel.spans
                           : std::vector<TextSpan>{
                                 TextSpan{display_text, font_col}};
+            if (hasLabel.text_overflow == TextOverflow::Ellipsis && has_spans)
+              runs = detail::ellipsize_runs(runs, label_rect.width,
+                                            weighted_width);
             // Memoised, same as the immediate path.
             const std::uint64_t wrap_key = detail::wrap_memo::key_for(
                 runs, wrap_width, font_size, spacing, cmp.font_name);
@@ -2821,6 +2947,13 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           }
         }
 
+        if (wrapped && entity.template has<HasTextUnitMotion>()) {
+          static std::atomic_bool warned_unit_motion_wrapped{false};
+          if (!warned_unit_motion_wrapped.exchange(true))
+            log_warn("per-unit text motion is skipped for wrapped text "
+                     "(entity {}); the label draws without unit animation",
+                     entity.id);
+        }
         const bool per_unit = !wrapped && entity.template has<HasTextUnitMotion>() &&
                               hasLabel.alignment == TextAlignment::Left &&
                               display_text == hasLabel.label &&
@@ -2951,20 +3084,15 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           font_manager.resolve_weighted(cmp.font_name, cmp.font_weight));
     }
 
-    // Scroll views define their own viewport — don't clip them by ancestors.
-    // Everything else (including HasClipChildren) gets clipped by the
-    // intersection of ALL ancestor clip rects.
     bool needs_scissor = false;
-    if (!entity.has<HasScrollView>()) {
-      auto [has_clip, clip_rect] =
-          detail::compute_intersected_clip_rect(entity);
-      if (has_clip) {
-        buffer.add_scissor_start(
-            static_cast<int>(clip_rect.x), static_cast<int>(clip_rect.y),
-            static_cast<int>(clip_rect.width),
-            static_cast<int>(clip_rect.height), layer, entity.id);
-        needs_scissor = true;
-      }
+    auto [has_clip, clip_rect] =
+        detail::compute_intersected_clip_rect(entity);
+    if (has_clip) {
+      buffer.add_scissor_start(
+          static_cast<int>(clip_rect.x), static_cast<int>(clip_rect.y),
+          static_cast<int>(clip_rect.width),
+          static_cast<int>(clip_rect.height), layer, entity.id);
+      needs_scissor = true;
     }
 
     // Update scroll view content size
