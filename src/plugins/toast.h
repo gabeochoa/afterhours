@@ -428,6 +428,23 @@ struct toast : developer::Plugin {
     }
 };
 
+template <typename InputAction> struct ToastPlugin {
+    void install(PluginContext &ctx) const {
+        auto &root = ctx.ensure_singleton<toast::ToastRoot>();
+        if (root.entity_id < 0) {
+            Entity &root_entity = ctx.collection.createEntity();
+            root_entity.addComponent<ui::UIComponent>(root_entity.id);
+            root_entity.get<ui::UIComponent>().make_absolute();
+            root.entity_id = root_entity.id;
+            ctx.collection.merge_entity_arrays();
+        }
+        ctx.add_system(Stage::Update,
+                       std::make_unique<toast::ToastUpdateSystem>());
+        ctx.add_system(Stage::PreRender,
+                       std::make_unique<toast::ToastLayoutSystem<InputAction>>());
+    }
+};
+
 // Compile-time verification that toast satisfies the PluginCore concept
 static_assert(developer::PluginCore<toast>,
               "toast must implement the core plugin interface");

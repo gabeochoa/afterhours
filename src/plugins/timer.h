@@ -130,6 +130,15 @@ struct timer : developer::Plugin {
   }
 };
 
+struct TimerPlugin {
+  void install(PluginContext &ctx) const {
+    ctx.add_system(Stage::Update, std::make_unique<timer::TimerUpdateSystem>());
+    ctx.add_system(Stage::Update,
+                   std::make_unique<timer::TriggerUpdateSystem>());
+  }
+};
+static_assert(InstallablePlugin<TimerPlugin>);
+
 // Compile-time verification that timer satisfies the PluginCore concept
 static_assert(developer::PluginCore<timer>,
               "timer must implement the core plugin interface");

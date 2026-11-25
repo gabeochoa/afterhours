@@ -187,6 +187,7 @@ ALL_TESTS := \
 	system_profile_test \
 	allocation_counters_test \
 	system_groups_test \
+	plugin_context_test \
 	profiling_test \
 	profiling_disabled_test \
 	profiling_collapsed_test \

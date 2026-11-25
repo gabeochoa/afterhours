@@ -557,6 +557,16 @@ struct CallbackSystem : System<> {
     void once(const float dt) override { cb_(dt); }
 };
 
+enum class Stage {
+    PreUpdate,
+    FixedUpdate,
+    Update,
+    PostUpdate,
+    PreRender,
+    Render,
+    OverlayRender
+};
+
 // Separates a render cost from an update cost with the same name.
 enum struct SystemPhase { Update, FixedUpdate, Render };
 
@@ -672,6 +682,10 @@ struct SystemManager {
     std::vector<std::unique_ptr<SystemBase>> update_systems_;
     std::vector<std::unique_ptr<SystemBase>> fixed_update_systems_;
     std::vector<std::unique_ptr<SystemBase>> render_systems_;
+    std::vector<std::unique_ptr<SystemBase>> pre_update_systems;
+    std::vector<std::unique_ptr<SystemBase>> post_update_systems;
+    std::vector<std::unique_ptr<SystemBase>> pre_render_systems;
+    std::vector<std::unique_ptr<SystemBase>> overlay_render_systems;
 
    private:
     std::unordered_map<SystemBase *, std::string> system_groups;
@@ -686,6 +700,45 @@ struct SystemManager {
         if (it == system_groups.end()) return true;
         const auto g = group_states.find(it->second);
         return g == group_states.end() || g->second;
+    }
+
+    void run_update_list(std::vector<std::unique_ptr<SystemBase>> &list,
+                         Entities &entities, const float dt,
+                         SystemPhase phase, bool merge_after) {
+        for (auto &system : list) {
+            if (!system_group_enabled(system.get()) ||
+                !system->advance_lifecycle(dt))
+                continue;
+            ProfileScope profile_scope(system.get(), phase);
+            system->once(dt);
+            profile_scope.entity_count = run_system_over(
+                *system, entities, dt, EntityHelper::get_default_collection(),
+                false);
+            system->after(dt);
+            if (merge_after) EntityHelper::merge_entity_arrays();
+        }
+    }
+
+    void run_render_list(std::vector<std::unique_ptr<SystemBase>> &list,
+                         Entities &entities, const float dt) {
+        for (auto &system : list) {
+            if (!system_group_enabled(system.get()) ||
+                !system->advance_lifecycle(dt))
+                continue;
+            ProfileScope profile_scope(system.get(), SystemPhase::Render);
+            system->once(dt);
+            profile_scope.entity_count = run_system_over(
+                *system, entities, dt, EntityHelper::get_default_collection(),
+                false);
+            system->after(dt);
+#ifndef AFTERHOURS_SINGLE_RENDER_PASS
+            const SystemBase &sys = *system;
+            sys.once(dt);
+            run_system_over(sys, entities, dt,
+                            EntityHelper::get_default_collection(), false);
+            sys.after(dt);
+#endif
+        }
     }
 
    public:
@@ -719,6 +772,40 @@ struct SystemManager {
         render_systems_.emplace_back(std::move(system));
     }
 
+    void register_system(Stage stage, std::unique_ptr<SystemBase> system,
+                         std::string_view group = {}) {
+        if (!group.empty()) assign_group(system.get(), group);
+        switch (stage) {
+            case Stage::PreUpdate:
+                pre_update_systems.emplace_back(std::move(system));
+                break;
+            case Stage::FixedUpdate:
+                fixed_update_systems_.emplace_back(std::move(system));
+                break;
+            case Stage::Update:
+                update_systems_.emplace_back(std::move(system));
+                break;
+            case Stage::PostUpdate:
+                post_update_systems.emplace_back(std::move(system));
+                break;
+            case Stage::PreRender:
+                pre_render_systems.emplace_back(std::move(system));
+                break;
+            case Stage::Render:
+                render_systems_.emplace_back(std::move(system));
+                break;
+            case Stage::OverlayRender:
+                overlay_render_systems.emplace_back(std::move(system));
+                break;
+        }
+    }
+
+    void register_system(Stage stage,
+                         const std::function<void(float)> &cb,
+                         std::string_view group = {}) {
+        register_system(stage, std::make_unique<CallbackSystem>(cb), group);
+    }
+
     void set_group_enabled(std::string_view group, bool enabled) {
         group_states[std::string(group)] = enabled;
     }
@@ -738,9 +825,13 @@ struct SystemManager {
                     out.push_back(sys->name());
             }
         };
+        scan(pre_update_systems);
         scan(update_systems_);
+        scan(post_update_systems);
         scan(fixed_update_systems_);
+        scan(pre_render_systems);
         scan(render_systems_);
+        scan(overlay_render_systems);
         return out;
     }
 
@@ -757,53 +848,23 @@ struct SystemManager {
     }
 
     void tick(Entities &entities, const float dt) {
-        for (auto &system : update_systems_) {
-            if (!system_group_enabled(system.get()) ||
-                !system->advance_lifecycle(dt))
-                continue;
-            ProfileScope profile_scope(system.get(), SystemPhase::Update);
-            system->once(dt);
-            profile_scope.entity_count = run_system_over(
-                *system, entities, dt, EntityHelper::get_default_collection(),
-                false);
-            system->after(dt);
-            EntityHelper::merge_entity_arrays();
-        }
+        run_update_list(pre_update_systems, entities, dt, SystemPhase::Update,
+                        true);
+        run_update_list(update_systems_, entities, dt, SystemPhase::Update,
+                        true);
+        run_update_list(post_update_systems, entities, dt, SystemPhase::Update,
+                        true);
     }
 
     void fixed_tick(Entities &entities, const float dt) {
-        for (auto &system : fixed_update_systems_) {
-            if (!system_group_enabled(system.get()) ||
-                !system->advance_lifecycle(dt))
-                continue;
-            ProfileScope profile_scope(system.get(), SystemPhase::FixedUpdate);
-            system->once(dt);
-            profile_scope.entity_count = run_system_over(
-                *system, entities, dt, EntityHelper::get_default_collection(),
-                false);
-            system->after(dt);
-        }
+        run_update_list(fixed_update_systems_, entities, dt,
+                        SystemPhase::FixedUpdate, false);
     }
 
     void render(Entities &entities, const float dt) {
-        for (auto &system : render_systems_) {
-            if (!system_group_enabled(system.get()) ||
-                !system->advance_lifecycle(dt))
-                continue;
-            ProfileScope profile_scope(system.get(), SystemPhase::Render);
-            system->once(dt);
-            profile_scope.entity_count = run_system_over(
-                *system, entities, dt, EntityHelper::get_default_collection(),
-                false);
-            system->after(dt);
-#ifndef AFTERHOURS_SINGLE_RENDER_PASS
-            const SystemBase &sys = *system;
-            sys.once(dt);
-            run_system_over(sys, entities, dt,
-                            EntityHelper::get_default_collection(), false);
-            sys.after(dt);
-#endif
-        }
+        run_render_list(pre_render_systems, entities, dt);
+        run_render_list(render_systems_, entities, dt);
+        run_render_list(overlay_render_systems, entities, dt);
     }
 
     void tick_all(Entities &entities, const float dt) { tick(entities, dt); }
