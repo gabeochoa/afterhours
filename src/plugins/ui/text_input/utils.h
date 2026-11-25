@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../../animation/instant.h"
 #include "../../clipboard.h"
 #include "../text_selection.h"
 #include "../text_units.h"
@@ -19,6 +20,8 @@ namespace text_input {
 // Canonical definition lives in ui/text_selection.h; selection geometry needs
 // it and must not depend on the editing module.
 using afterhours::ui::utf8_char_length;
+using afterhours::ui::is_valid_utf8;
+using afterhours::ui::sanitize_utf8;
 
 
 // Get number of bytes in a UTF-8 character starting at pos
@@ -163,7 +166,7 @@ inline bool insert_char(AnyTextInputState auto &s, int codepoint) {
 template <typename State>
 inline void replace_text_externally(State &s, const std::string &text) {
   s.storage.clear();
-  s.storage.insert(0, text);
+  s.storage.insert(0, sanitize_utf8(text));
   s.cursor_position = std::min(s.cursor_position, s.text_size());
   const std::string stored = s.text();
   if (s.cursor_position > 0 && s.cursor_position < stored.size() &&
@@ -214,6 +217,8 @@ inline void move_cursor_right(AnyTextInputState auto &s) {
 
 // Update blink timer, returns true if cursor visible
 inline bool update_blink(AnyTextInputState auto &s, float dt) {
+  if (motion::is_instant())
+    return true;
   s.cursor_blink_timer += dt;
   if (s.cursor_blink_timer >= s.cursor_blink_rate * 2.0f)
     s.cursor_blink_timer = 0.0f;
@@ -618,12 +623,15 @@ template <typename State> inline void insert_newline_if_multiline(State &s) {
 /// insert_char.
 template <typename State>
 inline void insert_pasted_text(State &s, const std::string &clip) {
-  for (size_t i = 0; i < clip.size();) {
-    const int cp = utf8_to_codepoint(clip, i);
-    const size_t len = utf8_char_length(clip, i);
+  std::string sanitized;
+  const std::string &text =
+      is_valid_utf8(clip) ? clip : (sanitized = sanitize_utf8(clip));
+  for (size_t i = 0; i < text.size();) {
+    const int cp = utf8_to_codepoint(text, i);
+    const size_t len = utf8_char_length(text, i);
     i += len > 0 ? len : 1;
     if (cp == '\r') {
-      if (i < clip.size() && clip[i] == '\n')
+      if (i < text.size() && text[i] == '\n')
         continue; // CRLF: the \n below is the one break
     }
     const bool is_break = cp == '\n' || cp == '\r';

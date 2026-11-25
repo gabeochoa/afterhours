@@ -361,6 +361,7 @@ enum struct AlignItems {
   FlexEnd,   // Align to end of cross axis
   Center,    // Center on cross axis
   Stretch,   // Stretch to fill (for items without explicit cross-axis size)
+  Baseline,
 };
 
 /// Controls how an individual element aligns itself within its parent.
@@ -371,6 +372,7 @@ enum struct SelfAlign {
   FlexStart, // Align to start of cross axis
   FlexEnd,   // Align to end of cross axis
   Center,    // Center on cross axis - common for centering content containers
+  Baseline,
 };
 
 /// Controls whether children wrap to new rows/columns when they exceed
@@ -467,9 +469,11 @@ static_assert(set(Padding::Right(kProbe).right) &&
 constexpr bool only_vertical(auto p) {
   return set(p.top) && set(p.bottom) && !set(p.left) && !set(p.right);
 }
+
 constexpr bool only_horizontal(auto p) {
   return set(p.left) && set(p.right) && !set(p.top) && !set(p.bottom);
 }
+
 static_assert(only_vertical(Padding::vertical(kProbe)) &&
               only_vertical(Margin::vertical(kProbe)));
 static_assert(only_horizontal(Padding::horizontal(kProbe)) &&

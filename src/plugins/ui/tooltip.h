@@ -80,7 +80,11 @@ struct UpdateTooltips : System<UIContext<InputAction>> {
         if (!oe.valid())
           break;
         Entity &e = oe.asE();
-        if (e.has<HasTooltip>() && e.has<UIComponent>()) {
+        if (e.has<HasTooltip>() && e.has<UIComponent>() &&
+            !(e.has<HasLabel>() &&
+              !e.get<HasLabel>().label.empty() &&
+              e.get<HasTooltip>().text == e.get<HasLabel>().label &&
+              !e.get<HasLabel>().truncated)) {
           owner = id;
           anchor = e.get<UIComponent>().rect();
           text = e.get<HasTooltip>().text;
