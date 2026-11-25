@@ -522,6 +522,7 @@ public:
         rect, color, roundness, segments, corners, layer, id, thickness, 0.f,
         0.f, 0.f, chamfer, edge);
     command.type = RenderPrimitiveType::Border;
+    command.data.outline.edge = edge;
     commands_.push_back(command);
   }
 
