@@ -6,6 +6,7 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+- **Logical scroll anchors follow item keys.** `anchor_scroll` now re-pins by the keyed item (`mk_keyed` key) instead of the recycled child entity, so a prepend above the viewport holds the view on the same item. Covered by `scroll_logical_anchor_test`.
 - **Glyph atlas-packing failure reporting.** Raylib font loads log unpacked glyphs once and expose them via `FontManager::packing_failures`. Covered by `glyph_packing_test`.
 - **Flex shrink content floor.** Shrink distribution stops at content size so fixed controls are not crushed below their content. Covered by `flex_shrink_test`.
 - **Drag-group reorder Escape cancel and edge autoscroll.** Covered by `reorder_drag_test`.
