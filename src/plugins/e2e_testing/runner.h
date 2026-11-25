@@ -188,6 +188,11 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
         if (cmd.name == "type") {
             cmd.args.push_back(args.rest());
             cmd.wait_seconds = (cmd.args[0].size() + 2) * frame;
+        } else if (cmd.name == "expect_unread_key") {
+            cmd.args.push_back(args.next());
+            if (key_from_name(cmd.args[0]) == 0 || !args.empty())
+                args.error = "expect_unread_key requires one key name";
+            cmd.wait_ticks = 3; // let the injected press expire before checking
         } else if (cmd.name == "key" || cmd.name == "select_all") {
             std::string arg = args.next();
             if (cmd.name == "select_all") {
@@ -314,8 +319,51 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
             cmd.args.push_back(dir);
             cmd.wait_seconds = 2 * frame;
         } else if (detail::contains(detail::single_arg_commands, cmd.name)) {
-            if (!args.empty()) cmd.args.push_back(args.rest());
-            cmd.wait_seconds = 2 * frame;
+            const bool scoped_ui =
+                cmd.name == "click_ui" || cmd.name == "click_text" ||
+                cmd.name == "click_button" || cmd.name == "focus_ui" ||
+                cmd.name == "toggle_checkbox" || cmd.name == "expect_focused" ||
+                cmd.name == "right_click_ui" || cmd.name == "right_click_text";
+            if (scoped_ui && !args.empty()) {
+                const auto start = static_cast<size_t>(iss.tellg());
+                std::vector<std::string> tokens;
+                std::vector<size_t> starts;
+                const bool starts_quoted = args.input.peek() == '"';
+                while (!args.empty()) {
+                    starts.push_back(static_cast<size_t>(iss.tellg()));
+                    tokens.push_back(args.next());
+                }
+                std::vector<std::string> scopes;
+                while (tokens.size() > 1 &&
+                       (tokens.back().starts_with("under=") ||
+                        tokens.back().starts_with("in="))) {
+                    scopes.push_back(std::move(tokens.back()));
+                    tokens.pop_back();
+                }
+                if (starts_quoted) {
+                    for (auto &t : tokens) cmd.args.push_back(std::move(t));
+                } else if (!tokens.empty()) {
+                    // Free text is literal, including repeated spaces and quotes.
+                    const size_t end = scopes.empty() ? line.size() :
+                        line.find_last_not_of(" \t", starts[tokens.size()] - 1) + 1;
+                    cmd.args.push_back(line.substr(start, end - start));
+                }
+                for (auto it = scopes.rbegin(); it != scopes.rend(); ++it)
+                    cmd.args.push_back(std::move(*it));
+            } else if (!args.empty()) {
+                cmd.args.push_back(args.rest());
+            }
+            if (cmd.name == "click_ui" || cmd.name == "click_text" ||
+                cmd.name == "click_button" || cmd.name == "right_click_ui" ||
+                cmd.name == "right_click_text" ||
+                cmd.name == "toggle_checkbox") {
+                // simulate_click holds for press_frames=1 and auto-releases on
+                // the following frame, so settle needs 1 tick after consumption
+                // regardless of --time-scale.
+                cmd.wait_ticks = 1;
+            } else {
+                cmd.wait_seconds = 2 * frame;
+            }
         } else if (detail::contains(detail::two_arg_commands, cmd.name) ||
                    detail::contains(detail::three_arg_commands, cmd.name)) {
             const size_t count = detail::contains(detail::two_arg_commands, cmd.name) ? 2 : 3;
@@ -408,17 +456,31 @@ class E2ERunner {
                  script_results_.size(), commands_.size());
     }
 
+    std::optional<std::string> expected_unread;
+
     void fail_unread_presses() {
         for (const auto &label : input_injector::take_unread_presses()) {
+            if (expected_unread == label) {
+                expected_unread.reset();
+                continue;
+            }
             failed_ = true;
             current_script_errors_++;
             log_warn("[E2E ERROR] {} (line {}): injected press {} was never "
                      "read by any system",
                      current_script_name(), last_dispatched_line, label);
         }
+        if (expected_unread) {
+            failed_ = true;
+            current_script_errors_++;
+            log_warn("[E2E ERROR] {} (line {}): expected {} to expire unread",
+                     current_script_name(), last_dispatched_line, *expected_unread);
+            expected_unread.reset();
+        }
     }
 
     void reset() {
+        expected_unread.reset();
         test_input::reset_all();
         key_release_detail::reset();
         index_ = 0;
@@ -462,23 +524,31 @@ class E2ERunner {
 
         // Handle wait between commands - don't count explicit wait time
         // against the per-script timeout so that `wait 5` doesn't eat into
-        // the timeout budget.
-        if (wait_ticks_ > 0) {
-            wait_ticks_--;
-            return;
-        }
-        if (wait_time_ > 0) {
-            wait_time_ -= dt;
-            return;
+        // the timeout budget. Don't burn the post-command settle wait while
+        // the command itself is still pending (e.g. waiting on a render
+        // checkpoint).
+        if (wait_ticks_ > 0 || wait_time_ > 0) {
+            EntityHelper::get_default_collection().merge_entity_arrays();
+            if (!has_pending_commands()) {
+                if (wait_ticks_ > 0) {
+                    wait_ticks_--;
+                    return;
+                }
+                if (wait_time_ > 0) {
+                    wait_time_ -= dt;
+                    return;
+                }
+            }
         }
 
         fail_unread_presses();
 
-        if (!wall_deadline || std::chrono::steady_clock::now() >= *wall_deadline)
-            elapsed_time_ += dt;
-
-        // Timeout check (only active time, not wait time)
-        if (timeout_seconds_ > 0 && elapsed_time_ > timeout_seconds_) {
+        if (!wall_deadline) elapsed_time_ += dt;
+        // Cleanup observes a wall deadline on the next system update. Charge
+        // only real time past it, not a full simulated tick for that handoff.
+        const float wall_overrun = wall_deadline ? std::max(0.f,
+            std::chrono::duration<float>(std::chrono::steady_clock::now() - *wall_deadline).count()) : 0.f;
+        if (timeout_seconds_ > 0 && elapsed_time_ + wall_overrun > timeout_seconds_) {
             timed_out_ = true;
             failed_ = true;
             current_script_errors_++;
@@ -743,6 +813,10 @@ class E2ERunner {
         auto &pending = entity.addComponent<PendingE2ECommand>();
         pending_cmds_.push_back(EntityHelper::getEntityAsSharedPtr(entity));
         pending.name = cmd.name;
+        if (cmd.name == "expect_unread_key") {
+            pending.name = "key";
+            expected_unread = "key '" + key_to_name(key_from_name(cmd.args[0])) + "'";
+        }
         pending.args = cmd.args;
         pending.line_number = cmd.line_number;
         pending.wait_until_seconds = cmd.wait_until_seconds;

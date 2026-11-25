@@ -101,17 +101,14 @@ struct input : developer::Plugin {
     }
     static bool is_mouse_button_down(const MouseButton button) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
-        if (button == 0 && testing::test_input::detail::test_mode &&
+        if (testing::test_input::detail::test_mode &&
             testing::input_injector::detail::mouse.active) {
-            return testing::input_injector::detail::mouse.left_down;
-        }
-        if (button == 1 && testing::test_input::detail::test_mode &&
-            testing::input_injector::detail::mouse.active) {
-            return testing::input_injector::detail::mouse.right_down;
-        }
-        if (button == 2 && testing::test_input::detail::test_mode &&
-            testing::input_injector::detail::mouse.active) {
-            return testing::input_injector::detail::mouse.middle_down;
+            if (button == 0)
+                return testing::input_injector::is_mouse_button_down();
+            if (button == 1)
+                return testing::input_injector::is_mouse_right_button_down();
+            if (button == 2)
+                return testing::input_injector::is_mouse_middle_button_down();
         }
 #endif
         return raylib::IsMouseButtonDown(button);
@@ -1145,12 +1142,14 @@ struct input : developer::Plugin {
         BindingActivity activity;
     };
 
-    template <typename KeyCheckFn, typename ButtonCheckFn, typename AxisCheckFn>
+    template <typename KeyCheckFn, typename ButtonCheckFn, typename AxisCheckFn,
+              typename ModCheckFn>
     static ActionCheckResult check_single_action_impl(
         const GamepadID id, const ValidInputs &valid_inputs,
-        KeyCheckFn key_check, ButtonCheckFn button_check, AxisCheckFn axis_check) {
+        KeyCheckFn key_check, ButtonCheckFn button_check, AxisCheckFn axis_check,
+        ModCheckFn mod_check) {
         ActionCheckResult result;
-        uint8_t current_mods = modifiers_from(key_check);
+        uint8_t current_mods = modifiers_from(mod_check);
         for (const auto &inp : valid_inputs) {
             DeviceMedium temp_medium = DeviceMedium::None;
             float temp = 0.f;
@@ -1200,23 +1199,33 @@ struct input : developer::Plugin {
         return result;
     }
 
+    template <typename KeyCheckFn, typename ButtonCheckFn, typename AxisCheckFn>
+    static ActionCheckResult check_single_action_impl(
+        const GamepadID id, const ValidInputs &valid_inputs,
+        KeyCheckFn key_check, ButtonCheckFn button_check, AxisCheckFn axis_check) {
+        return check_single_action_impl(id, valid_inputs, key_check,
+                                        button_check, axis_check, key_check);
+    }
+
     static ActionCheckResult check_single_action_down(
         const GamepadID id, const ValidInputs &vis, const AxisEdges &) {
         return check_single_action_impl(id, vis, is_key_down,
             [](GamepadID gid, auto btn) { return visit_button_down(gid, btn); },
-            visit_axis);
+            visit_axis, is_key_down);
     }
     static ActionCheckResult check_single_action_pressed(
         const GamepadID id, const ValidInputs &vis, const AxisEdges &edges) {
         return check_single_action_impl(id, vis, is_key_pressed,
             [](GamepadID gid, auto btn) { return is_gamepad_button_pressed(gid, btn) ? 1.f : 0.f; },
-            [&](GamepadID gid, GamepadAxisWithDir a) { return edges.pressed(gid, a) ? visit_axis(gid, a) : 0.f; });
+            [&](GamepadID gid, GamepadAxisWithDir a) { return edges.pressed(gid, a) ? visit_axis(gid, a) : 0.f; },
+            is_key_down);
     }
     static ActionCheckResult check_single_action_pressed_repeat(
         const GamepadID id, const ValidInputs &vis, const AxisEdges &edges) {
         return check_single_action_impl(id, vis, is_key_pressed_repeat,
             [](GamepadID gid, auto btn) { return is_gamepad_button_pressed(gid, btn) ? 1.f : 0.f; },
-            [&](GamepadID gid, GamepadAxisWithDir a) { return edges.pressed(gid, a) ? visit_axis(gid, a) : 0.f; });
+            [&](GamepadID gid, GamepadAxisWithDir a) { return edges.pressed(gid, a) ? visit_axis(gid, a) : 0.f; },
+            is_key_down);
     }
 
     // When an exclusive chord matches a key, suppress permissive (bare-key)
