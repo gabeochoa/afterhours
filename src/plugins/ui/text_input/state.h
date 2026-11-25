@@ -26,6 +26,7 @@ struct HasTextInputStateT : BaseComponent {
   bool copy_disabled = false;  // Copy refused (opt-in; masking alone is not)
   bool cut_disabled = false;
   bool paste_disabled = false;
+  bool escape_blurs = true;
   size_t max_length = 256; // Maximum text length in bytes (0 = unlimited)
   float cursor_blink_timer = 0.f;  // Current timer value
   float cursor_blink_rate = 0.53f; // Seconds per half-cycle (configurable)
@@ -124,6 +125,15 @@ struct HasTextInputStateT : BaseComponent {
 
 // Default alias for simple std::string-based text input
 using HasTextInputState = HasTextInputStateT<StringStorage>;
+
+// Submit state for text_input/text_area, on the field's root entity:
+// `submitted` is set on the frame Enter submits (the same frame on_submit
+// fires) and cleared at the start of that entity's next widget call, so a
+// caller or system can read it via the entity after the widget call instead
+// of it floating on the transient ElementResult.
+struct IsSubmittable : BaseComponent {
+  bool submitted = false;
+};
 
 // Listener for text input events (character typing)
 struct HasTextInputListener : BaseComponent {
