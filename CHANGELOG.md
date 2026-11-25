@@ -6,6 +6,7 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+- **Reusable `imm::keycap()` and `imm::prompt_bar()` widgets** (`src/plugins/ui/prompt_bar.h`, via `imm::PromptItem`). Centered auto-sized keycap badges and a horizontal `[keycap] label` prompt row with optional clickable `on_press` items (indexed `ElementResult`), replacing hand-rolled bottom prompt bars. Covered by `prompt_bar_test`.
 - **Scale-aware `on_draw_bg` / `on_draw_fg` callbacks (`RenderPrimitive::DrawContext{rect, scale}`).** Additive overload passing the resolved `ui_scale` for Adaptive widgets (1.0 for Proportional), keeping existing `RectangleType`-only callbacks unchanged. Covered by `draw_context_scale_test`.
 - **Word selection policy (`ui::text_selection::WordPolicy`: `Prose`, `Identifier`, `Path`).** Unifies word-boundary helpers in `text_selection.h` and defaults to `Prose`. Covered by `word_policy_test`.
 - **Global text scale (`Theme::text_scale`).** Multiplies every resolved font size via `ui::resolve_font_size` (layout, baseline alignment, immediate & batched renderers, text inputs, tooltips, and validation) without scaling widget boxes. Covered by `text_scale_test`.
