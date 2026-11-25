@@ -17,6 +17,7 @@ namespace {
 // Rows alternate short and tall, so a uniform assumption cannot be right for
 // both and the window has to come from the running total.
 float alternating_height(size_t i) { return (i % 2 == 0) ? 10.f : 40.f; }
+struct RowStamp : BaseComponent { size_t key = 0; };
 } // namespace
 
 TEST(uniform_rows_build_only_the_window) {
@@ -552,6 +553,78 @@ TEST(measured_extents_do_not_drift_at_large_n) {
                  exact_mid) < 0.5);
   // Small lists unchanged.
   CHECK_APPROX(virtual_row_offset(ent, 3), 40.2f + 25.6f + 18.75f);
+}
+
+TEST(virtual_list_visible_range_at_offsets_and_boundaries) {
+  ImmTestHarness h;
+  EntityID list_id = -1;
+  auto frame = [&](float offset) {
+    h.begin_frame();
+    auto list = virtual_list(h.context(), mk(h.root(), 0), 100, 20.f,
+                             [&](size_t, Entity &) {},
+                             ComponentConfig{}.with_size({pixels(300), pixels(200)}));
+    list_id = list.id();
+    h.layout_only();
+    auto &sv = AutoLayout::to_ent_static(list_id).get<HasScrollView>();
+    sv.viewport_size = {300.f, 200.f};
+    sv.scroll_offset.y = sv.scroll_target.y = offset;
+    sv.last_eased_offset = sv.scroll_offset;
+  };
+  auto range = [&] { return virtual_list_range(AutoLayout::to_ent_static(list_id)); };
+
+  frame(0.f); frame(0.f);
+  CHECK(range().visible_first == 0 && range().visible_last == 10);
+  CHECK(range().first == 0 && range().last == 15);
+  CHECK(range().count == 100 && !range().near_end(5));
+
+  frame(20.f); frame(20.f);
+  CHECK(range().visible_first == 1 && range().visible_last == 11);
+  frame(25.f); frame(25.f);
+  CHECK(range().visible_first == 1 && range().visible_last == 12);
+  frame(200.f); frame(200.f);
+  CHECK(range().visible_first == 10 && range().visible_last == 20);
+
+  frame(1800.f); frame(1800.f);
+  CHECK(range().visible_first == 90 && range().visible_last == 100);
+  CHECK(range().last == 100 && range().near_end(5));
+}
+
+TEST(virtual_list_keyed_identity_survives_insert_and_remove_above) {
+  ImmTestHarness h;
+  std::vector<size_t> items{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21};
+  std::map<size_t, EntityID> row_for;
+  std::map<size_t, size_t> stamp_for;
+  auto frame = [&] {
+    h.begin_frame();
+    row_for.clear();
+    virtual_list_keyed(
+        h.context(), mk(h.root(), 0), items.size(), 20.f,
+        [&](size_t i) { return items[i]; },
+        [&](size_t i, Entity &row) {
+          row_for[items[i]] = row.id;
+          if (!row.has<RowStamp>())
+            row.addComponent<RowStamp>().key = items[i];
+        },
+        ComponentConfig{}.with_size({pixels(300), pixels(200)}));
+    h.layout_only();
+  };
+
+  frame();
+  const auto before = row_for;
+  for (const auto &[key, id] : before)
+    stamp_for[key] = AutoLayout::to_ent_static(id).get<RowStamp>().key;
+  CHECK(before.size() >= 10);
+
+  items = {8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21};
+  frame();
+  for (const auto &[key, id] : before) {
+    if (key == 10) { CHECK(row_for.count(key) == 0); continue; }
+    if (!row_for.count(key)) continue;
+    CHECK(row_for[key] == id);
+    CHECK(AutoLayout::to_ent_static(id).get<RowStamp>().key == stamp_for[key]);
+  }
+  CHECK(row_for.count(8) && row_for.count(9));
+  CHECK(row_for[8] != before.at(11) && row_for[9] != before.at(11));
 }
 
 int main() { return ui_test::run_registered_tests("virtual_list"); }
