@@ -62,6 +62,7 @@ $(shell mkdir -p $(OUT))
 
 ALL_TESTS := \
 	build_geometry_test \
+	prompt_bar_test \
 	subtree_rotation_test \
 	window_events_test \
 	text_input_no_host_enum_test \
@@ -71,6 +72,7 @@ ALL_TESTS := \
 	draw_context_scale_test \
 	focus_return_test \
 	border_width_test \
+	ui_glow_test \
 	border_only_test \
 	checkbox_mark_test \
 	touch_target_test \
@@ -492,9 +494,11 @@ RAYLIB_TESTS := \
 	font_display_size_test \
 	load_font_size_test \
 	glyph_packing_test \
+	prompt_bar_test \
 	subtree_rotation_test \
 	font_unload_manager_test \
 	border_width_test \
+	ui_glow_test \
 	border_only_test \
 	text_visibility_test \
 	image_tint_test \
