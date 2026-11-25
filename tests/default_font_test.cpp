@@ -1,9 +1,9 @@
 // default_font_test.cpp
 // set_default_font replaces the library's bundled Roboto Regular wherever the
-// library falls back to "no font": get_default_font, get_unset_font, and the
-// UI plugin's default and unset fonts. With no override set, the default is
-// the bundled face (src/assets/fonts/Roboto-Regular.ttf), not raylib's
-// built-in pixel font. No window: the font is a plain struct.
+// library falls back to "no font": get_default_font, get_unset_font,
+// draw_text, and the UI plugin's default and unset fonts. With no override
+// set, the default is the bundled face (src/assets/fonts/Roboto-Regular.ttf),
+// not raylib's built-in pixel font. No window: the font is a plain struct.
 
 #include <cstdio>
 #include <string>
@@ -50,6 +50,23 @@ int main() {
   clear_default_font();
   check(get_default_font().glyphCount == unset.glyphCount,
         "clear_default_font restores the bundled default");
+
+  capture::enable();
+  capture::clear();
+  draw_text("hello", 0.f, 0.f, 20.f, Color{255, 255, 255, 255});
+  check(capture::calls().size() == 1 &&
+            capture::calls()[0].op == std::string("text") &&
+            capture::calls()[0].text == std::string("hello"),
+        "unset draw_text draws through the default font");
+  set_default_font(mono);
+  capture::clear();
+  draw_text("hello", 0.f, 0.f, 20.f, Color{255, 255, 255, 255});
+  check(capture::calls().size() == 1 &&
+            get_default_font().baseSize == 42,
+        "draw_text with an explicit override still uses that override");
+  capture::clear();
+  capture::disable();
+  clear_default_font();
 
   printf("default_font_test: %d/%d checks passed\n", checks_passed, checks_run);
   return checks_passed == checks_run ? 0 : 1;

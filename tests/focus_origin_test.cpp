@@ -104,16 +104,16 @@ TEST(visual_focus_skips_pointer_focus_in_split_mode_only) {
   h.layout_only();
   ComputeVisualFocusId<ui_test::TestInputAction> derive;
   ctx.set_focus(a.ent().id, FocusSource::Pointer);
-  derive.for_each_with(h.context_entity(), 0.f);
+  derive.for_each_with(h.context_entity(), ctx, 0.f);
   CHECK(ctx.visual_focus_id == ctx.ROOT);
   ctx.set_focus(b.ent().id, FocusSource::Explicit);
-  derive.for_each_with(h.context_entity(), 0.f);
+  derive.for_each_with(h.context_entity(), ctx, 0.f);
   CHECK(ctx.visual_focus_id == b.ent().id);
   // FollowsMostRecentInput drives the ring with the mouse on purpose; the
   // :focus-visible gate must not suppress it there.
   ctx.theme.highlight_mode = HighlightMode::FollowsMostRecentInput;
   ctx.set_focus(a.ent().id, FocusSource::Pointer);
-  derive.for_each_with(h.context_entity(), 0.f);
+  derive.for_each_with(h.context_entity(), ctx, 0.f);
   CHECK(ctx.visual_focus_id == a.ent().id);
 }
 

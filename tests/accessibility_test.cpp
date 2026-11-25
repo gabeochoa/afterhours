@@ -247,4 +247,30 @@ TEST(expect_accessible_by_accessible_name) {
   CHECK(missing.is_retry());
 }
 
+// Read-only dump/check code often holds a const view of the entity (from a
+// whereLambda predicate or a snapshot). The dump/check helpers must accept
+// that view: taking Entity& there forced every const caller into a
+// const_cast. This is the compile coverage plus a smoke check.
+std::string const_context_reads(const Entity &entity) {
+  if (entity.has<HasAccessibility>()) {
+    const auto &a = entity.get<HasAccessibility>();
+    (void)a;
+  }
+  (void)testing::ui_commands::get_screen_rect(entity);
+  CHECK(testing::ui_commands::is_within_scope(entity, entity.id));
+  (void)testing::ui_commands::is_partially_visible(entity);
+  (void)testing::ui_commands::check_ui_property(entity, "role", "button");
+  std::string out;
+  testing::ui_commands::dump_ui_node(out, entity, 0);
+  return out;
+}
+
+TEST(const_context_can_read_ui_helpers) {
+  ImmTestHarness h;
+  button(h.context(), mk(h.root(), 0),
+         ComponentConfig{}.with_label("Save").with_debug_name("btn"));
+  h.layout_only();
+  (void)const_context_reads(h.root());
+}
+
 int main() { return ui_test::run_registered_tests("accessibility"); }

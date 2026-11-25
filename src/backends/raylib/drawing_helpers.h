@@ -17,6 +17,7 @@
 #include "../../render_capture.h"
 #include "../../developer.h"
 #include "../../graphics.h"
+#include "../../render_counters.h"
 #include "../../plugins/color.h"
 #include "../../plugins/texture_manager.h"
 #include "font_helper.h"
@@ -220,13 +221,7 @@ inline void draw_text_ex(const raylib::Font font, const char *content,
 inline void draw_text(const char *content, const float x, const float y,
                       const float font_size, const Color color) {
   if (!content) return;
-  if (!detail::default_font_override()) {
-    raylib::DrawText(content, static_cast<int>(x), static_cast<int>(y),
-                     static_cast<int>(font_size), color);
-    return;
-  }
-  raylib::DrawTextEx(*detail::default_font_override(), content, {x, y},
-                     font_size, 1.f, color);
+  draw_text_ex(get_default_font(), content, {x, y}, font_size, 1.f, color);
 }
 
 inline void draw_rectangle_outline(const RectangleType rect,
@@ -263,11 +258,12 @@ inline void draw_rectangle_rounded(
 
   const float ROUND = roundness;
   const float SHARP = 0.f;
+  // DrawRectangleCustom takes its roundness args bottom-right first.
   raylib::DrawRectangleCustom(rect,
-                              corners.test(3) ? ROUND : SHARP, // Top-Left
-                              corners.test(2) ? ROUND : SHARP, // Top Right
-                              corners.test(1) ? ROUND : SHARP, // Bototm Left
                               corners.test(0) ? ROUND : SHARP, // Bottom Right
+                              corners.test(1) ? ROUND : SHARP, // Bottom Left
+                              corners.test(2) ? ROUND : SHARP, // Top Right
+                              corners.test(3) ? ROUND : SHARP, // Top-Left
                               segments, color);
 }
 
@@ -286,7 +282,41 @@ inline void draw_rectangle_rounded_lines(
     return;
   }
 
-  raylib::DrawRectangleRoundedLines(rect, roundness, segments, color);
+  // Partial mask: DrawRectangleRoundedLines rounds every corner, so walk
+  // the perimeter with a per-corner radius (0 = sharp), like the sokol path.
+  const float x = rect.x, y = rect.y, w = rect.width, h = rect.height;
+  const float r = (w < h ? w : h) * 0.5f * roundness;
+  const float rTL = corners.test(3) ? r : 0.f;
+  const float rTR = corners.test(2) ? r : 0.f;
+  const float rBL = corners.test(1) ? r : 0.f;
+  const float rBR = corners.test(0) ? r : 0.f;
+  const int segs = segments > 0 ? segments : 8;
+  const float PI_HALF = PI * 0.5f;
+
+  Vector2Type prev{x + rTL, y};
+  bool has_prev = true;
+  auto line_to = [&](Vector2Type p) {
+    if (has_prev && (p.x != prev.x || p.y != prev.y))
+      raylib::DrawLineEx(prev, p, 1.f, color);
+    prev = p;
+    has_prev = true;
+  };
+  auto arc_to = [&](float cx, float cy, float radius, float start) {
+    for (int i = 0; i <= segs; i++) {
+      const float a = start + PI_HALF * static_cast<float>(i) / segs;
+      line_to(Vector2Type{cx + radius * cosf(a), cy + radius * sinf(a)});
+    }
+  };
+
+  line_to(Vector2Type{x + w - rTR, y});
+  arc_to(x + w - rTR, y + rTR, rTR, -PI_HALF);
+  line_to(Vector2Type{x + w, y + h - rBR});
+  arc_to(x + w - rBR, y + h - rBR, rBR, 0.f);
+  line_to(Vector2Type{x + rBL, y + h});
+  arc_to(x + rBL, y + h - rBL, rBL, PI_HALF);
+  line_to(Vector2Type{x, y + rTL});
+  arc_to(x + rTL, y + rTL, rTL, PI);
+  line_to(Vector2Type{x + rTL, y});
 }
 
 inline void draw_rectangle_rounded_lines_ex(const RectangleType rect,
@@ -591,11 +621,15 @@ inline void set_mouse_cursor(int cursor_id) {
 }
 
 inline graphics::RenderTextureType load_render_texture(int w, int h) {
-  return raylib::LoadRenderTexture(w, h);
+  auto rt = raylib::LoadRenderTexture(w, h);
+  if (rt.id != 0) render_counters::note_create();
+  return rt;
 }
+
 inline graphics::RenderTextureType load_render_texture_with_samples(int w, int h, int) {
   return raylib::LoadRenderTexture(w, h);
 }
+
 inline graphics::RenderTextureType load_msaa_render_texture(int w, int h, int) {
   return raylib::LoadRenderTexture(w, h);
 }
@@ -674,7 +708,7 @@ inline bool capture_render_texture(const graphics::RenderTextureType &rt,
   return ok;
 }
 
-inline std::optional<RgbaCapture>
+inline std::optional<RGBACapture>
 capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
   if (rt.texture.id == 0) return std::nullopt;
   raylib::Image img = raylib::LoadImageFromTexture(rt.texture);
@@ -687,12 +721,12 @@ capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
   }
   const auto *bytes = static_cast<const uint8_t *>(img.data);
   const auto size = static_cast<size_t>(img.width) * static_cast<size_t>(img.height) * 4;
-  RgbaCapture result{img.width, img.height, {bytes, bytes + size}};
+  RGBACapture result{img.width, img.height, {bytes, bytes + size}};
   raylib::UnloadImage(img);
   return result;
 }
 
-inline std::optional<PngCapture>
+inline std::optional<PNGCapture>
 capture_render_texture_png(const graphics::RenderTextureType &rt) {
   if (rt.texture.id == 0) return std::nullopt;
   raylib::Image img = raylib::LoadImageFromTexture(rt.texture);
@@ -709,7 +743,7 @@ capture_render_texture_png(const graphics::RenderTextureType &rt) {
   }
   raylib::UnloadImage(img);
   if (result.empty()) return std::nullopt;
-  return PngCapture{std::move(result)};
+  return PNGCapture{std::move(result)};
 }
 
 inline std::vector<uint8_t>
@@ -742,7 +776,14 @@ inline constexpr int TEXTURE_WRAP_MIRROR_REPEAT =
     raylib::TEXTURE_WRAP_MIRROR_REPEAT;
 
 inline TextureType load_texture(const char *path) {
-  return raylib::LoadTexture(path);
+  auto texture = raylib::LoadTexture(path);
+  if (texture.id != 0) render_counters::note_create();
+  return texture;
+}
+
+// Uploading needs a live GL context: a window, or the headless session.
+inline bool texture_is_usable() {
+  return raylib::IsWindowReady() || graphics::is_headless();
 }
 
 inline TextureType load_texture_from_rgba(const std::uint8_t *rgba, int w,
@@ -759,6 +800,7 @@ inline TextureType load_texture_from_rgba(const std::uint8_t *rgba, int w,
     log_error("load_texture_from_rgba: upload failed ({}x{})", w, h);
     return texture;
   }
+  render_counters::note_create();
   raylib::SetTextureFilter(texture, filter);
   known_texture_filters()[texture.id] = filter;
   return texture;
@@ -804,6 +846,7 @@ load_texture_with_color_key(const char *path, const Color key,
   TextureType texture = raylib::LoadTextureFromImage(img);
   raylib::UnloadImage(img);
   if (texture.id != 0) {
+    render_counters::note_create();
     raylib::SetTextureFilter(texture, filter);
     known_texture_filters()[texture.id] = filter;
   }
