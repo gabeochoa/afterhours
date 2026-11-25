@@ -241,6 +241,83 @@ inline void draw_cylinder(Vector3Type pos, float rtop, float rbot, float h,
   }
 }
 
+inline void draw_cylinder_ex(Vector3Type start, Vector3Type end,
+                             float start_radius, float end_radius, int sides,
+                             Color c) {
+  detail_3d::set_color(c);
+
+  float ax = end.x - start.x;
+  float ay = end.y - start.y;
+  float az = end.z - start.z;
+  float axis_len = sqrtf(ax * ax + ay * ay + az * az);
+  if (axis_len < 1e-6f || sides < 3) return;
+  ax /= axis_len;
+  ay /= axis_len;
+  az /= axis_len;
+
+  float hx = 0.f;
+  float hy = 1.f;
+  float hz = 0.f;
+  if (fabsf(ay) > 0.9f) {
+    hx = 1.f;
+    hy = 0.f;
+  }
+  float ux = hy * az - hz * ay;
+  float uy = hz * ax - hx * az;
+  float uz = hx * ay - hy * ax;
+  float ulen = sqrtf(ux * ux + uy * uy + uz * uz);
+  if (ulen < 1e-6f) return;
+  ux /= ulen;
+  uy /= ulen;
+  uz /= ulen;
+  float vx = ay * uz - az * uy;
+  float vy = az * ux - ax * uz;
+  float vz = ax * uy - ay * ux;
+
+  sgl_begin_triangle_strip();
+  for (int i = 0; i <= sides; i++) {
+    float a = 2.0f * detail_3d::PI * static_cast<float>(i) / sides;
+    float ca = cosf(a);
+    float sa = sinf(a);
+    float ox = ux * ca + vx * sa;
+    float oy = uy * ca + vy * sa;
+    float oz = uz * ca + vz * sa;
+    sgl_v3f(start.x + start_radius * ox, start.y + start_radius * oy,
+            start.z + start_radius * oz);
+    sgl_v3f(end.x + end_radius * ox, end.y + end_radius * oy,
+            end.z + end_radius * oz);
+  }
+  sgl_end();
+
+  if (end_radius > 0.0f) {
+    sgl_begin_triangle_strip();
+    for (int i = 0; i <= sides; i++) {
+      float a = 2.0f * detail_3d::PI * static_cast<float>(i) / sides;
+      float ca = cosf(a);
+      float sa = sinf(a);
+      sgl_v3f(end.x, end.y, end.z);
+      sgl_v3f(end.x + end_radius * (ux * ca + vx * sa),
+              end.y + end_radius * (uy * ca + vy * sa),
+              end.z + end_radius * (uz * ca + vz * sa));
+    }
+    sgl_end();
+  }
+
+  if (start_radius > 0.0f) {
+    sgl_begin_triangle_strip();
+    for (int i = 0; i <= sides; i++) {
+      float a = 2.0f * detail_3d::PI * static_cast<float>(i) / sides;
+      float ca = cosf(a);
+      float sa = sinf(a);
+      sgl_v3f(start.x + start_radius * (ux * ca + vx * sa),
+              start.y + start_radius * (uy * ca + vy * sa),
+              start.z + start_radius * (uz * ca + vz * sa));
+      sgl_v3f(start.x, start.y, start.z);
+    }
+    sgl_end();
+  }
+}
+
 inline void draw_cylinder_wires(Vector3Type start, Vector3Type end, float rtop,
                                 float rbot, int slices, Color c) {
   detail_3d::set_color(c);
@@ -294,9 +371,11 @@ inline void draw_line_3d(Vector3Type a, Vector3Type b, Color c) {
   sgl_end();
 }
 
-inline Vector2Type get_world_to_screen(Vector3Type pos, Camera3D cam) {
-  float sw = detail_3d::screen_w();
-  float sh = detail_3d::screen_h();
+inline Vector2Type get_world_to_screen(Vector3Type pos, Camera3D cam,
+                                       int width, int height) {
+  float sw = static_cast<float>(width);
+  float sh = static_cast<float>(height);
+  if (sw <= 0.f || sh <= 0.f) return {0, 0};
   float aspect = sw / sh;
 
   // View basis vectors
@@ -346,6 +425,12 @@ inline Vector2Type get_world_to_screen(Vector3Type pos, Camera3D cam) {
     float ndcy = vy / top;
     return {(ndcx * 0.5f + 0.5f) * sw, (0.5f - ndcy * 0.5f) * sh};
   }
+}
+
+inline Vector2Type get_world_to_screen(Vector3Type pos, Camera3D cam) {
+  return get_world_to_screen(pos, cam,
+                             static_cast<int>(detail_3d::screen_w()),
+                             static_cast<int>(detail_3d::screen_h()));
 }
 
 } // namespace afterhours
