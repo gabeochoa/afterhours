@@ -138,6 +138,26 @@ inline void set_right_button_down(bool down) {
   input_injector::set_right_button_down(down);
 }
 
+inline void simulate_right_press(float x, float y) {
+  set_mouse_position(x, y);
+  auto &m = input_injector::detail::mouse;
+  m.right_down = true;
+  m.right_just_pressed = true;
+  m.right_press_read = false;
+  m.press_frames = 1;
+  m.auto_release = false;
+  m.active = true;
+}
+
+inline void simulate_right_release() {
+  auto &m = input_injector::detail::mouse;
+  m.right_down = false;
+  m.right_just_released = true;
+  m.press_frames = 0;
+  m.auto_release = false;
+  m.active = true;
+}
+
 // Middle click. Same one-frame hold and auto-release as the other two.
 inline void simulate_middle_click(float x, float y) {
   set_mouse_position(x, y);
