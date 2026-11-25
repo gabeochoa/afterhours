@@ -50,6 +50,21 @@ static inline RectangleType snap_origin(RectangleType rect,
   return rect;
 }
 
+static inline RectangleType apply_text_offset(RectangleType rect,
+                                              TextAlignment alignment,
+                                              float dx, float dy) {
+  rect.y += dy;
+  if (alignment == TextAlignment::Right) {
+    rect.width = std::max(0.f, rect.width + dx);
+  } else if (alignment == TextAlignment::Center) {
+    rect.x += dx;
+  } else {
+    rect.x += dx;
+    rect.width = std::max(0.f, rect.width - dx);
+  }
+  return rect;
+}
+
 static inline float compute_effective_opacity(const Entity &entity);
 
 static inline const Theme &theme_for(const Entity &entity,
@@ -988,10 +1003,9 @@ resolved_text_origin(const Entity &entity,
                                     cmp.resolved_scaling_mode, uis);
   }
   const Vector2Type inset = resolve_text_inset(theme, hasLabel.text_inset);
-  RectangleType label_rect = cmp.rect();
-  label_rect.x += hasLabel.text_x_offset;
-  label_rect.width -= hasLabel.text_x_offset;
-  label_rect.y += hasLabel.text_y_offset;
+  RectangleType label_rect = detail::apply_text_offset(
+      cmp.rect(), hasLabel.alignment, hasLabel.text_x_offset,
+      hasLabel.text_y_offset);
   const TextPositionResult pos = position_text_ex(
       fm, hasLabel.label.c_str(), label_rect, hasLabel.alignment, inset,
       explicit_fs, hasLabel.letter_spacing, hasLabel.text_overflow,
@@ -2130,10 +2144,9 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       const Vector2Type immediate_inset =
           resolve_text_inset(detail::theme_for(entity, context.theme), hasLabel.text_inset);
 
-      RectangleType label_rect = text_rect;
-      label_rect.x += hasLabel.text_x_offset;
-      label_rect.width -= hasLabel.text_x_offset;
-      label_rect.y += hasLabel.text_y_offset;
+      RectangleType label_rect = detail::apply_text_offset(
+          text_rect, hasLabel.alignment, hasLabel.text_x_offset,
+          hasLabel.text_y_offset);
       // Same own-box clip as the batched path: a label is scissored to
       // its box (intersected with any ancestor clip, restored after),
       // so over-long text cannot spill over neighbours. Rotated labels
@@ -2855,10 +2868,9 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
               static_cast<int>(label_clip.width),
               static_cast<int>(label_clip.height), layer, entity.id);
         if (SHOW_TEXT_OVERFLOW_DEBUG && !result.text_fits) {
-          RectangleType dr = text_rect;
-          dr.x += hasLabel.text_x_offset;
-          dr.width -= hasLabel.text_x_offset;
-          dr.y += hasLabel.text_y_offset;
+          RectangleType dr = detail::apply_text_offset(
+              text_rect, hasLabel.alignment, hasLabel.text_x_offset,
+              hasLabel.text_y_offset);
           const Color overlay{255, 50, 50, 60}, border{255, 50, 50, 200};
           const float t = 2.f;
           buffer.add_rectangle(dr, overlay, layer, entity.id);
@@ -2892,10 +2904,9 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
         // Pass the container rect (text_rect) not the position rect
         // (result.rect) render_text will handle centering within the container
-        RectangleType label_rect = text_rect;
-        label_rect.x += hasLabel.text_x_offset;
-        label_rect.width -= hasLabel.text_x_offset;
-        label_rect.y += hasLabel.text_y_offset;
+        RectangleType label_rect = detail::apply_text_offset(
+            text_rect, hasLabel.alignment, hasLabel.text_x_offset,
+            hasLabel.text_y_offset);
         label_rect.x += label_inset.x;
         label_rect.y += label_inset.y;
         label_rect.width = std::max(0.f, label_rect.width - 2.f * label_inset.x);
@@ -3101,10 +3112,9 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         }
 
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
-        RectangleType visibility_bounds = text_rect;
-        visibility_bounds.x += hasLabel.text_x_offset;
-        visibility_bounds.width -= hasLabel.text_x_offset;
-        visibility_bounds.y += hasLabel.text_y_offset;
+        RectangleType visibility_bounds = detail::apply_text_offset(
+            text_rect, hasLabel.alignment, hasLabel.text_x_offset,
+            hasLabel.text_y_offset);
         detail::register_label_for_testing(entity, hasLabel.label, visibility_bounds,
                                            context.screen_width, context.screen_height);
 #endif
