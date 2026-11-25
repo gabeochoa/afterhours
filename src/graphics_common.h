@@ -326,6 +326,7 @@ struct BackendInterface {
   float (*get_delta_time)() = nullptr;
   bool (*is_headless)() = nullptr;
   RenderTextureType &(*get_render_texture)() = nullptr;
+  bool (*resize_render_target)(int, int, int) = nullptr;
 };
 
 namespace detail {
@@ -481,6 +482,14 @@ inline RenderTextureType &get_render_texture() {
     return backend.get_render_texture();
   }
   return detail::dummy_texture();
+}
+
+inline bool resize_render_target(int logical_w, int logical_h, int scale = 0) {
+  auto &backend = get_backend();
+  if (backend.resize_render_target) {
+    return backend.resize_render_target(logical_w, logical_h, scale);
+  }
+  return false;
 }
 
 } // namespace afterhours::graphics

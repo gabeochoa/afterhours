@@ -187,6 +187,26 @@ struct RaylibHeadless {
 
   /// Get a reference to the underlying render texture.
   inline RenderTextureType &get_render_texture() { return render_texture; }
+
+  inline bool resize_render_target(int logical_w, int logical_h, int scale) {
+    if (!initialized || logical_w <= 0 || logical_h <= 0)
+      return false;
+    const int new_scale = scale <= 0 ? render_scale_ : scale;
+    if (logical_w == logical_w_ && logical_h == logical_h_ &&
+        new_scale == render_scale_)
+      return true;
+    RenderTextureType replacement =
+        raylib::LoadRenderTexture(logical_w * new_scale, logical_h * new_scale);
+    if (replacement.id == 0)
+      return false;
+    raylib::UnloadRenderTexture(render_texture);
+    render_texture = replacement;
+    logical_w_ = logical_w;
+    logical_h_ = logical_h;
+    render_scale_ = new_scale;
+    graphics::render_scale() = new_scale;
+    return true;
+  }
 };
 
 // Verify RaylibHeadless satisfies the GraphicsBackend concept

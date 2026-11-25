@@ -175,6 +175,7 @@ ALL_TESTS := \
 	file_watcher_test \
 	render_capture_test \
 	presented_frame_test \
+	resize_render_target_test \
 	triangle_winding_test \
 	bug_note_test \
 	charts_test \
@@ -504,6 +505,7 @@ RAYLIB_TESTS := \
 	input_axis_edge_test \
 	render_capture_test \
 	presented_frame_test \
+	resize_render_target_test \
 	triangle_winding_test \
 	bug_note_test \
 	blur_shader_test \

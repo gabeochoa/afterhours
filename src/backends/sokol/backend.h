@@ -131,6 +131,7 @@ inline uint32_t g_active_shader_id = 0;
 inline RenderTextureType g_headless_rt{};
 inline std::optional<std::pair<int, int>> g_pending_headless_size;
 inline std::optional<std::pair<int, int>> g_headless_min_size;
+inline int g_pending_headless_scale = 0;
 
 inline bool request_headless_resize(int width, int height) {
   if (!g_headless || !g_initialized || width <= 0 || height <= 0)
@@ -151,10 +152,14 @@ inline void apply_headless_resize() {
   if (!g_pending_headless_size || g_pass_active)
     return;
   const auto [width, height] = *g_pending_headless_size;
+  const int pending_scale = g_pending_headless_scale;
   g_pending_headless_size.reset();
-  if (width == g_headless_w && height == g_headless_h)
+  g_pending_headless_scale = 0;
+  const int scale =
+      pending_scale > 0 ? pending_scale : std::max(1, g_headless_rt.scale);
+  if (width == g_headless_w && height == g_headless_h &&
+      scale == std::max(1, g_headless_rt.scale))
     return;
-  const int scale = std::max(1, g_headless_rt.scale);
   auto replacement = ::afterhours::load_render_texture_with_samples(
       width * scale, height * scale, g_headless_rt.sample_count);
   if (replacement.color_img_id == 0)
@@ -164,6 +169,7 @@ inline void apply_headless_resize() {
   g_headless_rt = replacement;
   g_headless_w = width;
   g_headless_h = height;
+  graphics::render_scale() = scale;
 }
 
 // src-over for 2D drawing; sgl_defaults() loads a pipeline with blending off,
@@ -1141,6 +1147,7 @@ inline bool metal_init(const Config &cfg) {
     // set up sokol_gfx against it with no swapchain, and render into an
     // offscreen texture we can read back to PNG.
     metal_detail::g_pending_headless_size.reset();
+    metal_detail::g_pending_headless_scale = 0;
     metal_detail::g_headless_min_size.reset();
     metal_detail::g_headless = true;
     metal_detail::g_headless_w = cfg.width;
@@ -1215,6 +1222,7 @@ inline void metal_shutdown() {
   if (!metal_detail::g_headless)
     return;
   metal_detail::g_pending_headless_size.reset();
+  metal_detail::g_pending_headless_scale = 0;
   metal_detail::g_headless_min_size.reset();
   unload_render_texture(metal_detail::g_headless_rt);
   if (metal_detail::g_fons_ctx) {
@@ -1270,6 +1278,28 @@ inline RenderTextureType &metal_get_render_texture() {
   return metal_detail::g_headless_rt;
 }
 
+inline bool metal_resize_render_target(int logical_w, int logical_h,
+                                       int scale) {
+  if (!metal_detail::g_headless || !metal_detail::g_initialized ||
+      logical_w <= 0 || logical_h <= 0)
+    return false;
+  const int new_scale =
+      scale <= 0 ? std::max(1, metal_detail::g_headless_rt.scale) : scale;
+  const int limit = sg_query_limits().max_image_size_2d / new_scale;
+  if (logical_w > limit || logical_h > limit)
+    return false;
+  if (logical_w == metal_detail::g_headless_w &&
+      logical_h == metal_detail::g_headless_h &&
+      new_scale == std::max(1, metal_detail::g_headless_rt.scale) &&
+      !metal_detail::g_pending_headless_size)
+    return true;
+  if (!metal_detail::request_headless_resize(logical_w, logical_h))
+    return false;
+  metal_detail::g_pending_headless_scale = new_scale;
+  metal_detail::apply_headless_resize();
+  return true;
+}
+
 inline void ensure_registered() {
   static bool registered = false;
   if (!registered) {
@@ -1282,6 +1312,7 @@ inline void ensure_registered() {
     iface.get_delta_time = metal_get_delta_time;
     iface.is_headless = metal_is_headless;
     iface.get_render_texture = metal_get_render_texture;
+    iface.resize_render_target = metal_resize_render_target;
     register_backend(iface);
     registered = true;
   }

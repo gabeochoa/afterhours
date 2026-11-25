@@ -160,6 +160,19 @@ inline RenderTextureType &raylib_get_render_texture() {
       storage());
 }
 
+inline bool raylib_resize_render_target(int logical_w, int logical_h,
+                                        int scale) {
+  return std::visit(
+      [&](auto &backend) -> bool {
+        using T = std::decay_t<decltype(backend)>;
+        if constexpr (!std::is_same_v<T, std::monostate>) {
+          return backend.resize_render_target(logical_w, logical_h, scale);
+        }
+        return false;
+      },
+      storage());
+}
+
 inline bool raylib_capture_presented_frame(const std::filesystem::path &path,
                                            int window_w, int window_h) {
   RenderTextureType &rt = raylib_get_render_texture();
@@ -203,6 +216,7 @@ inline void ensure_registered() {
     iface.get_delta_time = raylib_get_delta_time;
     iface.is_headless = raylib_is_headless;
     iface.get_render_texture = raylib_get_render_texture;
+    iface.resize_render_target = raylib_resize_render_target;
     register_backend(iface);
     registered = true;
   }
