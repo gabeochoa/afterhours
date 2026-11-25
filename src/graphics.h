@@ -151,22 +151,60 @@ inline int get_char_pressed() { return PlatformAPI::get_char_pressed(); }
 inline int get_key_pressed() { return PlatformAPI::get_key_pressed(); }
 #endif
 
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+inline bool is_mouse_button_pressed(int btn) {
+  return testing::test_input::is_mouse_button_pressed(
+      btn, [](int b) { return PlatformAPI::is_mouse_button_pressed(b); });
+}
+
+inline bool is_mouse_button_down(int btn) {
+  return testing::test_input::is_mouse_button_down(
+      btn, [](int b) { return PlatformAPI::is_mouse_button_down(b); });
+}
+
+inline bool is_mouse_button_released(int btn) {
+  return testing::test_input::is_mouse_button_released(
+      btn, [](int b) { return PlatformAPI::is_mouse_button_released(b); });
+}
+
+inline bool is_mouse_button_up(int btn) {
+  return testing::test_input::is_mouse_button_up(
+      btn, [](int b) { return PlatformAPI::is_mouse_button_up(b); });
+}
+
+inline float get_mouse_wheel_move() {
+  return testing::test_input::get_mouse_wheel_move(
+      [] { return PlatformAPI::get_mouse_wheel_move(); });
+}
+
+inline auto get_mouse_position() {
+  return testing::test_input::get_mouse_position<
+      decltype(PlatformAPI::get_mouse_position())>(
+      [] { return PlatformAPI::get_mouse_position(); });
+}
+#else
 inline bool is_mouse_button_pressed(int btn) {
   return PlatformAPI::is_mouse_button_pressed(btn);
 }
+
 inline bool is_mouse_button_down(int btn) {
   return PlatformAPI::is_mouse_button_down(btn);
 }
+
 inline bool is_mouse_button_released(int btn) {
   return PlatformAPI::is_mouse_button_released(btn);
 }
+
 inline bool is_mouse_button_up(int btn) {
   return PlatformAPI::is_mouse_button_up(btn);
 }
+
 inline float get_mouse_wheel_move() {
   return PlatformAPI::get_mouse_wheel_move();
 }
+
 inline auto get_mouse_position() { return PlatformAPI::get_mouse_position(); }
+#endif
 inline auto get_screen_to_world_2d(const PlatformAPI::Vec2 &position,
                                    const PlatformAPI::Camera2D &camera) {
   return PlatformAPI::get_screen_to_world_2d(position, camera);

@@ -169,6 +169,7 @@ ALL_TESTS := \
 	input_activity_snapshot_test \
 	input_chord_specificity_test \
 	input_enum_actions_test \
+	mouse_injection_parity_test \
 	input_repeat_test \
 	input_remap_test \
 	input_axis_edge_test \
@@ -501,6 +502,7 @@ RAYLIB_TESTS := \
 	input_device_activity_test \
 	input_activity_snapshot_test \
 	input_enum_actions_test \
+	mouse_injection_parity_test \
 	input_axis_edge_test \
 	render_capture_test \
 	presented_frame_test \
@@ -884,3 +886,5 @@ $(OUT)/sokol_mouse_pre_init_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_mouse_pre_init_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_mouse_pre_init_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_mouse_pre_init_test: ../src/backends/sokol/backend.h
+
+$(OUT)/mouse_injection_parity_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING

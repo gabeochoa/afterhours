@@ -49,13 +49,12 @@ TEST(first_set_has_zero_delta) {
   CHECK(d.x == 0.0f);
   CHECK(d.y == 0.0f);
 
-  // Consumed deltas are one-shot.
   auto d2 = input_injector::consume_mouse_delta();
   CHECK(d2.x == 0.0f);
   CHECK(d2.y == 0.0f);
 }
 
-TEST(move_produces_delta_once) {
+TEST(move_delta_is_stable_until_reset_frame) {
   input_injector::reset_all();
   input_injector::set_mouse_position(10.0f, 15.0f);
   (void)input_injector::consume_mouse_delta();
@@ -65,9 +64,16 @@ TEST(move_produces_delta_once) {
   CHECK(d.x == 7.0f);
   CHECK(d.y == 10.0f);
 
+  // Stable within the frame: a second reader sees the same delta, and
+  // reset_frame() is what clears it.
   auto d2 = input_injector::consume_mouse_delta();
-  CHECK(d2.x == 0.0f);
-  CHECK(d2.y == 0.0f);
+  CHECK(d2.x == 7.0f);
+  CHECK(d2.y == 10.0f);
+
+  input_injector::reset_frame();
+  auto d3 = input_injector::consume_mouse_delta();
+  CHECK(d3.x == 0.0f);
+  CHECK(d3.y == 0.0f);
 }
 
 TEST(reset_frame_clears_unconsumed_delta) {
@@ -172,7 +178,7 @@ TEST(pinch_is_delivered_exactly_once) {
   CHECK(input_injector::consume_pinch() == 0.0f);
 }
 
-TEST(last_move_wins_within_frame) {
+TEST(moves_accumulate_within_frame) {
   input_injector::reset_all();
   input_injector::set_mouse_position(0.0f, 0.0f);
   (void)input_injector::consume_mouse_delta();
@@ -180,8 +186,8 @@ TEST(last_move_wins_within_frame) {
   input_injector::set_mouse_position(5.0f, 7.0f);
   input_injector::set_mouse_position(9.0f, 14.0f);
   auto d = input_injector::consume_mouse_delta();
-  CHECK(d.x == 4.0f);
-  CHECK(d.y == 7.0f);
+  CHECK(d.x == 9.0f);
+  CHECK(d.y == 14.0f);
 }
 
 TEST(release_clears_pressed_edge_same_frame) {
