@@ -5,6 +5,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
     runs-on: macos-latest
@@ -12,10 +16,28 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: brew install raylib fmt
+        run: brew install raylib fmt nlohmann-json
 
       - name: Check boundaries
         run: make -C tests check-boundaries
+
+      - name: Backend smoke (NONE, RAYLIB, SOKOL)
+        shell: bash
+        run: |
+          mkdir -p /tmp/afh-include
+          ln -sfn "$GITHUB_WORKSPACE" /tmp/afh-include/afterhours
+          printf '#include <afterhours/ah.h>\nint main() { return 0; }\n' > /tmp/backend_smoke.cpp
+          for backend in NONE RAYLIB SOKOL; do
+            echo "Compiling backend smoke ($backend)"
+            clang++ -std=c++20 -Wall -Wextra \
+              -DAFTER_HOURS_USE_${backend} \
+              -isystem /tmp/afh-include \
+              -isystem "$GITHUB_WORKSPACE/vendor" \
+              -isystem "$(brew --prefix)/include" \
+              -I"$(brew --prefix raylib)/include" \
+              -c /tmp/backend_smoke.cpp \
+              -o "/tmp/backend_smoke_${backend}.o"
+          done
 
       - name: Build all tests
         run: make -C tests all -j4
@@ -42,30 +64,3 @@ jobs:
           else
             make -C examples all
           fi
-
-  backend-smoke:
-    runs-on: macos-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        backend: [NONE, RAYLIB, SOKOL]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: brew install raylib fmt
-
-      - name: Compile backend smoke (${{ matrix.backend }})
-        shell: bash
-        run: |
-          mkdir -p /tmp/afh-include
-          ln -sfn "$GITHUB_WORKSPACE" /tmp/afh-include/afterhours
-          printf '#include <afterhours/ah.h>\nint main() { return 0; }\n' > /tmp/backend_smoke.cpp
-          clang++ -std=c++20 -Wall -Wextra \
-            -DAFTER_HOURS_USE_${{ matrix.backend }} \
-            -isystem /tmp/afh-include \
-            -isystem "$GITHUB_WORKSPACE/vendor" \
-            -isystem "$(brew --prefix)/include" \
-            -I"$(brew --prefix raylib)/include" \
-            -c /tmp/backend_smoke.cpp \
-            -o "/tmp/backend_smoke_${{ matrix.backend }}.o"
