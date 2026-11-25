@@ -397,7 +397,7 @@ struct FontManager final : BaseComponent {
   // Add codepoint-based font loading for CJK support
   auto &load_font_with_codepoints(const std::string &font_name,
                                   const char *font_file, int *codepoints,
-                                  int codepoint_count, int size = 32) {
+                                  int codepoint_count, int size = 0) {
     if (font_name.empty()) {
       log_error("Cannot load font with empty name");
       return *this;
@@ -591,11 +591,16 @@ inline bool operator==(const TextSpan &a, const TextSpan &b) {
          a.color.a == b.color.a && a.weight == b.weight;
 }
 
+struct HasThemeSnapshot : BaseComponent {
+  Theme theme;
+};
+
 struct HasCheckboxMark : BaseComponent {};
 
 struct HasLabel : BaseComponent {
   TextAlignment alignment = TextAlignment::None;
   TextOverflow text_overflow = TextOverflow::Clip;
+  bool truncated = false;
   float letter_spacing = 0.f; // Additional spacing between characters (pixels)
   // Per-side space between this label and its box; unset means Theme's value.
   std::optional<Vector2Type> text_inset;

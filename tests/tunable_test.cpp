@@ -3,7 +3,7 @@
 #include <cstdio>
 #include <string>
 
-using namespace afterhours;
+using namespace afterhours::developer;
 
 static int checks_run = 0;
 static int checks_passed = 0;

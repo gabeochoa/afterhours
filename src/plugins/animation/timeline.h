@@ -14,6 +14,7 @@ inline float ease_out_cubic(float u) {
   const float r = 1.f - u;
   return 1.f - r * r * r;
 }
+
 inline float ease_in_out_quad(float u) {
   return u < 0.5f ? 2.f * u * u : 1.f - (-2.f * u + 2.f) * (-2.f * u + 2.f) / 2.f;
 }
@@ -39,16 +40,19 @@ struct Timeline {
     const float len = length();
     if (len <= 0.f)
       return keys.back().v;
-    t = std::max(t, 0.f);
     switch (repeat) {
     case Repeat::Once:
-      t = std::min(t, len);
+      t = std::clamp(t, 0.f, len);
       break;
     case Repeat::Loop:
       t = std::fmod(t, len);
+      if (t < 0.f)
+        t += len;
       break;
     case Repeat::PingPong: {
-      const float cycle = std::fmod(t, 2.f * len);
+      float cycle = std::fmod(t, 2.f * len);
+      if (cycle < 0.f)
+        cycle += 2.f * len;
       t = cycle <= len ? cycle : 2.f * len - cycle;
       break;
     }

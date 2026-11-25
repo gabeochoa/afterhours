@@ -13,16 +13,24 @@ namespace afterhours {
 
 using Font = FontType;
 
+inline float font_display_scale() { return 1.f; }
+
+inline int display_scaled_size(int nominal) { return nominal; }
+
+inline Font load_font_at_display_size(const char *, int = 32) { return Font(); }
+
 inline Font load_font_from_file(const char *, int = 0) {
   warn_once(0, "@notimplemented load_font_from_file on the none backend; "
                "returning an empty font");
   return Font();
 }
+
 inline Font load_font_from_file_with_codepoints(const char *, int *, int,
-                                                int = 32) {
+                                                int = 0) {
   log_warn("Codepoint-based font loading not supported without a backend");
   return Font();
 }
+
 inline Font load_font_from_memory(const unsigned char *, int, const char *,
                                   int = 0) {
   warn_once(0, "@notimplemented load_font_from_memory on the none backend; "
@@ -72,6 +80,7 @@ inline Vector2Type measure_text(const Font, const char *text, const float size,
   const size_t len = text ? std::strlen(text) : 0;
   return Vector2Type{static_cast<float>(len) * size * 0.5f, size};
 }
+
 inline Vector2Type measure_text_utf8(const Font f, const char *text,
                                      const float size, const float spacing) {
   return measure_text(f, text, size, spacing);
@@ -81,6 +90,10 @@ inline float monospace_cell_advance(const Font font, const float size) {
   if (!std::isfinite(size) || size <= 0.f)
     return 0.f;
   return measure_text(font, "0", size, 1.f).x;
+}
+
+inline float text_ascent(const Font, const float size) {
+  return size > 0.f ? size * 0.8f : 0.f;
 }
 
 inline float get_first_glyph_bearing(const Font, const char *) { return 0.0f; }

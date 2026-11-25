@@ -41,6 +41,10 @@ inline Image LoadImageFromTexture(Texture2D) { return {}; }
 inline void UnloadImage(Image) {}
 inline bool ExportImage(Image, const char *) { return false; }
 inline void ImageFlipVertical(Image *) {}
+inline Image GenImageColor(int, int, Color) { return {}; }
+inline Image ImageCopy(Image) { return {}; }
+inline void ImageDraw(Image *, Image, Rectangle, Rectangle, Color) {}
+inline void ImageResize(Image *, int, int) {}
 inline RenderTexture2D LoadRenderTexture(int, int) { return {}; }
 inline void UnloadRenderTexture(RenderTexture2D) {}
 

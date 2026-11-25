@@ -8,18 +8,20 @@
 
 namespace afterhours::ui {
 
+enum class BorderEdge { Top, Right, Bottom, Left, All };
+
 inline void draw_uniform_border(RectangleType rect, float roundness, int segments,
-                                std::bitset<4> corners, float thickness, Color color) {
+                                std::bitset<4> corners, float thickness, Color color,
+                                BorderEdge edge = BorderEdge::All) {
   const float shorter = std::min(rect.width, rect.height);
   if (shorter <= 0.f || thickness <= 0.f || color.a == 0) return;
   const float width = std::min(thickness, shorter * .5f);
   const float radius = std::clamp(roundness, 0.f, 1.f) * shorter * .5f;
   const int steps = std::max(4, segments);
-#ifdef AFTER_HOURS_USE_RAYLIB
-  const std::array<int, 4> bits{1, 3, 2, 0};
-#else
   const std::array<int, 4> bits{2, 0, 1, 3};
-#endif
+  const auto draws = [edge](int side) {
+    return edge == BorderEdge::All || static_cast<int>(edge) == side;
+  };
   Vector2Type first_outer{}, first_inner{}, previous_outer{}, previous_inner{};
   const auto join = [&](Vector2Type outer, Vector2Type inner) {
     draw_triangle(previous_outer, previous_inner, outer, color);
@@ -32,13 +34,19 @@ inline void draw_uniform_border(RectangleType rect, float roundness, int segment
     const bool bottom = corner == 1 || corner == 2;
     const Vector2Type center{rect.x + (right ? rect.width - r : r),
                              rect.y + (bottom ? rect.height - r : r)};
-    const Vector2Type inner_center{
+    Vector2Type inner_center{
         rect.x + (right ? rect.width - width - inner_radius : width + inner_radius),
         rect.y + (bottom ? rect.height - width - inner_radius : width + inner_radius)};
+    // A lone stroke owns the full arc at either end. At a square end,
+    // extend it to the edge instead of leaving half of a miter unpainted.
+    if (r == 0.f && edge != BorderEdge::All) {
+      if (edge == BorderEdge::Top || edge == BorderEdge::Bottom) inner_center.x = center.x;
+      else inner_center.y = center.y;
+    }
     const int count = r > 0.f ? steps : 1;
     for (int step = 0; step <= count; ++step) {
       const float angle = (static_cast<float>(corner - 1) +
-                           static_cast<float>(step) / count) * 1.57079632679f;
+                           static_cast<float>(step) / count) * PI * 0.5f;
       const float x = std::cos(angle), y = std::sin(angle);
       const Vector2Type outer{center.x + r * x, center.y + r * y};
       const Vector2Type inner{inner_center.x + inner_radius * x,
@@ -46,14 +54,14 @@ inline void draw_uniform_border(RectangleType rect, float roundness, int segment
       if (corner == 0 && step == 0) {
         first_outer = outer;
         first_inner = inner;
-      } else {
+      } else if (draws(corner) || (step > 0 && draws((corner + 1) % 4))) {
         join(outer, inner);
       }
       previous_outer = outer;
       previous_inner = inner;
     }
   }
-  join(first_outer, first_inner);
+  if (draws(0)) join(first_outer, first_inner);
 }
 
 }
