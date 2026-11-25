@@ -659,6 +659,103 @@ TEST(popover_closed_builds_nothing) {
                  __FILE__, __LINE__);
 }
 
+TEST(popover_closed_creates_no_menu_state) {
+  ImmTestHarness h;
+  bool open = false;
+  h.begin_frame();
+  auto pop = popover(h.context(), mk(h.root(), 0),
+                     RectangleType{100, 100, 120, 30}, open,
+                     overlay::Placement::Below,
+                     ComponentConfig{}.with_size(
+                         ComponentSize{pixels(200), pixels(120)}));
+  h.layout_only();
+  CHECK(!pop);
+  auto holder = UICollectionHolder::getEntityForID(pop.ent().id);
+  CHECK(holder.valid());
+  if (holder.valid())
+    CHECK(!holder.asE().has<HasMenuState>());
+}
+
+TEST(popover_keeps_caller_debug_name) {
+  ImmTestHarness h;
+  bool open = true;
+  h.begin_frame();
+  popover(h.context(), mk(h.root(), 0), RectangleType{100, 100, 120, 30}, open,
+          overlay::Placement::Below,
+          ComponentConfig{}
+              .with_debug_name("model_popover")
+              .with_size(ComponentSize{pixels(200), pixels(120)}));
+  h.layout_only();
+  CHECK(h.find("model_popover") != nullptr);
+  CHECK(h.find("popover_panel") == nullptr);
+}
+
+TEST(popover_delivers_pending_click_before_focus_loss_dismissal) {
+  ImmTestHarness h;
+  bool open = true;
+  bool clicked = false;
+  int body_runs = 0;
+  auto emit = [&] {
+    auto pop = popover(h.context(), mk(h.root(), 0),
+                       RectangleType{100, 100, 120, 30}, open,
+                       overlay::Placement::Below,
+                       ComponentConfig{}.with_size(
+                           ComponentSize{pixels(200), pixels(120)}));
+    if (pop) {
+      body_runs++;
+      clicked = static_cast<bool>(
+          button(h.context(), mk(pop.ent(), 0),
+                 ComponentConfig{}
+                     .with_size(ComponentSize{pixels(80), pixels(24)})
+                     .with_label("Apply")
+                     .with_debug_name("popover_button")));
+    }
+  };
+  h.begin_frame(); emit(); h.layout_only();
+  h.begin_frame(); emit(); h.layout_only();
+  auto *btn = h.find("popover_button");
+  CHECK(btn != nullptr);
+  if (!btn) return;
+  auto btn_entity = UICollectionHolder::getEntityForID(btn->id);
+  btn_entity->get<HasClickListener>().down = true;
+  h.context().set_focus(h.root().id);
+  clicked = false;
+  h.begin_frame(); emit(); h.layout_only();
+  CHECK(clicked);
+  CHECK(!open);
+  const int runs_after_dismissal = body_runs;
+  clicked = false;
+  h.begin_frame(); emit(); h.layout_only();
+  CHECK(!clicked);
+  CHECK(body_runs == runs_after_dismissal);
+}
+
+TEST(popover_lifecycle_close_during_enter_anchor_gone_and_reopen) {
+  ImmTestHarness h;
+  bool open = true;
+  auto emit = [&] {
+    return popover(h.context(), mk(h.root(), 0),
+                   RectangleType{100, 100, 120, 30}, open,
+                   overlay::Placement::Below,
+                   ComponentConfig{}.with_size(
+                       ComponentSize{pixels(200), pixels(120)}));
+  };
+  h.begin_frame(); CHECK(emit()); h.layout_only();
+  open = false;
+  h.begin_frame(); CHECK(!emit()); h.layout_only();
+  open = true;
+  h.begin_frame(); CHECK(emit()); h.layout_only();
+  h.begin_frame(); CHECK(emit()); h.layout_only();
+  CHECK(open);
+  h.begin_frame(); h.layout_only();
+  open = false;
+  h.begin_frame(); CHECK(!emit()); h.layout_only();
+  open = true;
+  h.begin_frame(); CHECK(emit()); h.layout_only();
+  h.begin_frame(); CHECK(emit()); h.layout_only();
+  CHECK(open);
+}
+
 TEST(popover_anchors_and_flips_like_a_menu) {
   ImmTestHarness h;
   bool open = true;

@@ -46,7 +46,83 @@ inline bool is_space(uint32_t cp) {
   return cp == ' ' || cp == '\t' || cp == '\n' || cp == '\r' || cp == 0x00A0;
 }
 
+// Unit length at s[i]; sets valid (RFC 3629; invalid takes max subpart).
+inline size_t utf8_unit_length(std::string_view s, size_t i, bool &valid) {
+  const unsigned char c = static_cast<unsigned char>(s[i]);
+  if (c < 0x80) {
+    valid = true;
+    return 1;
+  }
+  size_t len = 0;
+  unsigned char lo = 0x80, hi = 0xBF;
+  if (c >= 0xC2 && c <= 0xDF)
+    len = 2;
+  else if (c == 0xE0) {
+    len = 3;
+    lo = 0xA0;
+  } else if ((c >= 0xE1 && c <= 0xEC) || (c >= 0xEE && c <= 0xEF)) {
+    len = 3;
+  } else if (c == 0xED) {
+    len = 3;
+    hi = 0x9F;
+  } else if (c == 0xF0) {
+    len = 4;
+    lo = 0x90;
+  } else if (c >= 0xF1 && c <= 0xF3) {
+    len = 4;
+  } else if (c == 0xF4) {
+    len = 4;
+    hi = 0x8F;
+  } else {
+    valid = false;
+    return 1;
+  }
+  const size_t avail = std::min(len, s.size() - i);
+  if (avail >= 2) {
+    const unsigned char b = static_cast<unsigned char>(s[i + 1]);
+    if (b < lo || b > hi) {
+      valid = false;
+      return 1;
+    }
+  }
+  for (size_t k = 2; k < avail; ++k) {
+    if ((static_cast<unsigned char>(s[i + k]) & 0xC0) != 0x80) {
+      valid = false;
+      return k;
+    }
+  }
+  if (avail < len) {
+    valid = false;
+    return avail;
+  }
+  valid = true;
+  return len;
+}
+
 } // namespace text_units_detail
+
+inline bool is_valid_utf8(std::string_view text) {
+  for (size_t i = 0; i < text.size();) {
+    bool valid = false;
+    i += text_units_detail::utf8_unit_length(text, i, valid);
+    if (!valid)
+      return false;
+  }
+  return true;
+}
+
+// Invalid sequences become U+FFFD (maximal subpart); valid passes through.
+inline std::string sanitize_utf8(std::string_view text) {
+  std::string out;
+  out.reserve(text.size());
+  for (size_t i = 0; i < text.size();) {
+    bool valid = false;
+    const size_t n = text_units_detail::utf8_unit_length(text, i, valid);
+    out += valid ? text.substr(i, n) : "\xEF\xBF\xBD";
+    i += n;
+  }
+  return out;
+}
 
 inline size_t next_grapheme_end(std::string_view text, size_t i) {
   using namespace text_units_detail;

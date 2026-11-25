@@ -6,7 +6,6 @@
 #include <utility>
 #include <vector>
 
-#include "../core/entity_collection.h"
 #include "../ecs.h"
 #include "../library.h"
 

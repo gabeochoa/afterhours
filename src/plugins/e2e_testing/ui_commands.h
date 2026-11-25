@@ -860,12 +860,7 @@ struct HandleSetSliderCommand : System<PendingE2ECommand> {
     target_x = std::min(rect.x + handle_w * 0.5f + pct * travel,
                         rect.x + rect.width - 0.5f);
     target_y = rect.y + rect.height / 2;
-    test_input::set_mouse_position(grab_x, target_y);
-    auto &m = input_injector::detail::mouse;
-    m.left_down = true;
-    m.just_pressed = true;
-    m.press_frames = 0;
-    m.active = true;
+    press_mouse_at(grab_x, target_y);
     phase = 1;
     cmd.retry();
   }

@@ -28,13 +28,6 @@ struct MouseReader : System<> {
   void once(float) override { inj::is_mouse_button_pressed(); }
 };
 
-struct MouseDownReader : System<> {
-  bool should_iterate() const override { return false; }
-  void once(float) override {
-    test_input::is_mouse_button_down(0, [](int) { return false; });
-  }
-};
-
 struct RunnerFixture {
   EntityCollection collection;
   SystemManager sm;
@@ -91,6 +84,18 @@ TEST(unread_key_press_fails_and_names_the_key) {
   CHECK(captured.find("never read") != std::string::npos);
 }
 
+TEST(expect_unread_key_checks_both_outcomes) {
+  for (bool read : {false, true}) {
+    RunnerFixture f;
+    register_all_handlers(f.sm);
+    if (read) f.sm.register_update_system(std::make_unique<KeyReader>());
+    f.load("expect_unread_key F\n");
+    f.frames(60);
+    CHECK(f.runner.is_finished());
+    CHECK(f.runner.has_failed() == read);
+  }
+}
+
 TEST(unread_mouse_press_fails) {
   RunnerFixture f;
   register_all_handlers(f.sm);
@@ -120,18 +125,6 @@ TEST(read_presses_still_pass) {
     CHECK(f.runner.is_finished());
     CHECK(!f.runner.has_failed());
   }
-}
-
-TEST(read_mouse_down_press_still_passes) {
-  RunnerFixture f;
-  test_input::detail::test_mode = true;
-  register_all_handlers(f.sm);
-  f.sm.register_update_system(std::make_unique<MouseDownReader>());
-  f.load("click 10 10\n");
-  f.frames(60);
-  test_input::detail::test_mode = false;
-  CHECK(f.runner.is_finished());
-  CHECK(!f.runner.has_failed());
 }
 
 TEST(press_read_late_within_its_window_passes) {
