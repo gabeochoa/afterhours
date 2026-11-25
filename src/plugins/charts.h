@@ -28,6 +28,13 @@ inline std::optional<Bounds> bounds(std::span<const Point> points) {
     return result;
 }
 
+inline Bounds apply_domains(Bounds data, std::optional<std::pair<double, double>> x_domain = {},
+                            std::optional<std::pair<double, double>> y_domain = {}) {
+    if (x_domain) { data.min_x = std::min(x_domain->first, x_domain->second); data.max_x = std::max(x_domain->first, x_domain->second); }
+    if (y_domain) { data.min_y = std::min(y_domain->first, y_domain->second); data.max_y = std::max(y_domain->first, y_domain->second); }
+    return data;
+}
+
 inline double fraction(double value, double low, double high) {
     if (low == high) return 0.5;
     const double scale = std::max({std::abs(value), std::abs(low), std::abs(high)});

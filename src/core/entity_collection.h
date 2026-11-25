@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <set>
@@ -57,6 +58,7 @@ struct EntityCollection {
   Entities entity_pool_;
   size_t max_pool_size_ = 0;
   std::vector<EntityID> free_ids_;
+  std::uint64_t session_generation_ = 0;
 
   struct CreationOptions {
     bool is_permanent;
@@ -198,42 +200,54 @@ struct EntityCollection {
     };
   }
 
+  struct MembershipStamp {
+    std::size_t version = static_cast<std::size_t>(-1);
+    std::size_t global_gen = static_cast<std::size_t>(-1);
+    std::size_t component_gen = static_cast<std::size_t>(-1);
+    std::size_t entity_size = static_cast<std::size_t>(-1);
+  };
   mutable std::vector<Entities> membership_lists_;
-  mutable std::size_t membership_version_ = static_cast<std::size_t>(-1);
-  mutable std::size_t membership_mutation_ = static_cast<std::size_t>(-1);
-  mutable std::size_t membership_size_ = static_cast<std::size_t>(-1);
+  mutable std::vector<MembershipStamp> membership_stamps_;
 
-  bool membership_is_fresh() const {
-    return membership_version_ == version &&
-           membership_mutation_ ==
+  bool membership_is_fresh(ComponentID id) const {
+    if (id >= membership_stamps_.size())
+      return false;
+    const MembershipStamp &s = membership_stamps_[id];
+    return s.version == version &&
+           s.global_gen ==
                COMPONENT_MUTATION_GEN.load(std::memory_order_relaxed) &&
-           membership_size_ == entities_DO_NOT_USE.size();
+           s.component_gen == component_mutation_gen(id) &&
+           s.entity_size == entities_DO_NOT_USE.size();
   }
 
-  void ensure_membership_fresh() const {
-    if (membership_is_fresh())
+  void ensure_membership_fresh(ComponentID id) const {
+    if (id >= max_num_components)
       return;
-    if (membership_lists_.size() != max_num_components)
+    if (membership_lists_.size() != max_num_components) {
       membership_lists_.assign(max_num_components, Entities{});
-    for (auto &list : membership_lists_)
-      list.clear();
+      membership_stamps_.assign(max_num_components, MembershipStamp{});
+    }
+    if (membership_is_fresh(id))
+      return;
+    Entities &list = membership_lists_[id];
+    list.clear();
     ++stats().membership_rebuilds;
     for (const auto &sp : entities_DO_NOT_USE) {
-      if (!sp)
-        continue;
-      for (std::size_t c = sp->componentSet.next_set(0);
-           c < max_num_components; c = sp->componentSet.next_set(c + 1))
-        membership_lists_[c].push_back(sp);
+      if (sp && sp->componentSet.test(id))
+        list.push_back(sp);
     }
-    membership_version_ = version;
-    membership_mutation_ =
-        COMPONENT_MUTATION_GEN.load(std::memory_order_relaxed);
-    membership_size_ = entities_DO_NOT_USE.size();
+    membership_stamps_[id] = {version,
+                              COMPONENT_MUTATION_GEN.load(
+                                  std::memory_order_relaxed),
+                              component_mutation_gen(id),
+                              entities_DO_NOT_USE.size()};
   }
 
   const Entities &membership_for(ComponentID id) const {
     static const Entities none;
-    ensure_membership_fresh();
+    if (id >= max_num_components)
+      return none;
+    ensure_membership_fresh(id);
     if (id >= membership_lists_.size())
       return none;
     return membership_lists_[id];
@@ -244,7 +258,11 @@ struct EntityCollection {
     Entities out;
     if (ids.empty())
       return out;
-    ensure_membership_fresh();
+    for (const ComponentID id : ids) {
+      if (id >= max_num_components)
+        return out;
+      ensure_membership_fresh(id);
+    }
     const Entities *smallest = nullptr;
     for (const ComponentID id : ids) {
       if (id >= membership_lists_.size())
@@ -368,7 +386,7 @@ struct EntityCollection {
       return;
     for (size_t c = sp->componentSet.next_set(0); c < max_num_components;
          c = sp->componentSet.next_set(c + 1))
-      bump_component_generation(c);
+      note_component_mutation(c);
     const EntityID id = sp->id;
     const EntityHandle::Slot slot = sp->ah_slot_index;
     sp->ah_slot_index = EntityHandle::INVALID_SLOT;
@@ -507,7 +525,8 @@ struct EntityCollection {
 
   template <typename Component> RefEntity get_singleton() const {
     const ComponentID id = components::get_type_id<Component>();
-    if (!singletonMap.contains(id)) {
+    const auto it = singletonMap.find(id);
+    if (it == singletonMap.end()) {
       // Warn once per component id, not every frame — a missing singleton is
       // queried per-frame and would otherwise flood the log.
       static std::unordered_set<ComponentID> warned;
@@ -521,7 +540,7 @@ struct EntityCollection {
       static Entity dummy_entity;
       return dummy_entity;
     }
-    auto *entity_ptr = singletonMap.at(id);
+    auto *entity_ptr = it->second;
     if (!entity_ptr) {
       log_error("Singleton map contains null pointer for component {} ({})", id,
                 type_name<Component>());
@@ -561,12 +580,13 @@ struct EntityCollection {
 
   template <typename Component> Component &get_singleton_cmp_enforce() const {
     const ComponentID id = components::get_type_id<Component>();
-    if (!singletonMap.contains(id)) {
+    const auto it = singletonMap.find(id);
+    if (it == singletonMap.end()) {
       log_error("get_singleton_cmp_enforce: Missing required singleton {} ({})",
                 id, type_name<Component>());
       std::abort();
     }
-    Entity &ent = *singletonMap.at(id);
+    Entity &ent = *it->second;
     return ent.get<Component>();
   }
 
@@ -679,6 +699,23 @@ struct EntityCollection {
     singletonMap.clear();
   }
 
+  std::uint64_t session_generation() const { return session_generation_; }
+
+  void reset_for_new_session() {
+    delete_all_entities_NO_REALLY_I_MEAN_ALL();
+    slots.clear();
+    free_slots.clear();
+    id_to_slot.clear();
+    free_ids_.clear();
+    entity_pool_.clear();
+    for (auto &[_, idx] : indexes)
+      idx->clear();
+    indexed_version = static_cast<std::size_t>(-1);
+    ++version;
+    ENTITY_ID_GEN.store(0);
+    ++session_generation_;
+  }
+
   void delete_all_entities(const bool include_permanent) {
     merge_entity_arrays();
 
@@ -756,7 +793,7 @@ struct EntityCollection {
         continue;
       for (size_t c = sp->componentSet.next_set(0); c < max_num_components;
            c = sp->componentSet.next_set(c + 1))
-        bump_component_generation(c);
+        note_component_mutation(c);
       assign_slot_to_entity(sp);
     }
   }

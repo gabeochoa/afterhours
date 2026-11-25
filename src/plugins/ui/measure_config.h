@@ -75,9 +75,9 @@ inline MeasuredConfig measure_config(const ComponentConfig &config,
   const float screen_h = detail::measure_screen_dim(Axis::Y);
 
   const float font_px =
-      resolve_to_pixels(config.font_size, screen_h,
+      resolve_font_size(config.font_size, screen_h,
                         config.scaling_mode.value_or(UIStylingDefaults::get().scaling_mode),
-                        theme.ui_scale);
+                        theme.ui_scale, theme.text_scale);
   // A pinned line height replaces the measured one, matching the layout.
   const float line_px =
       config.text_area_line_height.has_value()

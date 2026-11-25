@@ -11,9 +11,11 @@
 
 #ifdef AFTER_HOURS_SOKOL
 
+#include "../../file_drop.h"
 #include "../../graphics_common.h"
 #include "../../logging.h"
 #include "../../warn_once.h"
+#include "../../window_events.h"
 
 // The implementation must be compiled in exactly one .cpp/.mm file
 // with SOKOL_IMPL defined before including these headers.
@@ -47,7 +49,7 @@
 #include <string>
 #include <unordered_map>
 
-// Shared state (also used by font_helper.h)
+#define AFTERHOURS_FONT_HELPER_HAS_ENSURE 1
 #include "font_helper.h"
 #include "metal_state.h"
 
@@ -78,6 +80,14 @@ extern "C" void metal_install_live_resize_draw(void);
 // (SOKOL_GLES3) builds never reference Metal symbols.
 #if defined(SOKOL_METAL)
 extern "C" const void *metal_create_system_device(void);
+#ifdef SOKOL_METAL
+extern "C" void metal_install_first_frame_early_draw(void);
+extern "C" bool metal_should_draw_first_frame_early(bool has_view,
+                                                    bool already_drawn);
+extern "C" int metal_first_frame_early_draw_count(void);
+extern "C" int metal_first_frame_early_attempt_count(void);
+extern "C" void metal_reset_first_frame_early_draw(void);
+#endif
 extern "C" bool metal_capture_render_texture(uint32_t color_img_id, int width,
                                              int height, const char *path);
 #endif
@@ -165,9 +175,12 @@ inline sgl_pipeline g_blend_pip_additive{};
 inline sgl_pipeline g_blend_pip_multiplied{};
 inline sgl_pipeline g_blend_pip_premultiplied{};
 
-// sokol_gl + fontstash setup shared by the windowed (sokol_init_cb) and headless
-// (metal_init) bootstraps. Assumes sg_setup() has already run.
-inline void setup_sokol_gl_and_fonts() {
+inline bool g_sgl_ready = false;
+
+inline void ensure_sokol_gl_and_fonts() {
+  if (g_sgl_ready)
+    return;
+  g_sgl_ready = true;
   sgl_desc_t sgl_desc{};
   sgl_desc.max_vertices = 1 << 18; // 262144 vertices
   sgl_desc.max_commands = 1 << 16; // 65536 commands
@@ -267,6 +280,7 @@ struct InputState {
   float mouse_dy = 0.f;
   float scroll_x = 0.f;
   float scroll_y = 0.f;
+  bool scroll_precise = false;
 
   // Character input queue (UTF-32 codepoints from CHAR events)
   static constexpr int CHAR_QUEUE_SIZE = 32;
@@ -301,6 +315,7 @@ inline void input_begin_frame() {
   s.mouse_dy = 0.f;
   s.scroll_x = 0.f;
   s.scroll_y = 0.f;
+  s.scroll_precise = false;
   s.key_queue_len = 0;
   s.key_queue_read = 0;
 }
@@ -374,8 +389,6 @@ inline void sokol_init_cb() {
   stm_setup();
   g_start_time = stm_now();
 
-  // Initialize sokol_gl (2D drawing) + fontstash (text). Shared with headless.
-  setup_sokol_gl_and_fonts();
 
   g_initialized = true;
 
@@ -410,7 +423,10 @@ inline void sokol_cleanup_cb() {
     sfons_destroy(g_fons_ctx);
     g_fons_ctx = nullptr;
   }
-  sgl_shutdown();
+  if (g_sgl_ready) {
+    sgl_shutdown();
+    g_sgl_ready = false;
+  }
   sg_shutdown();
   g_initialized = false;
 }
@@ -428,9 +444,44 @@ inline void sokol_event_cb(const sapp_event *ev) {
     case SAPP_EVENTTYPE_MOUSE_MOVE:
     case SAPP_EVENTTYPE_MOUSE_SCROLL:
     case SAPP_EVENTTYPE_RESIZED:
+    case SAPP_EVENTTYPE_FILES_DROPPED:
+    case SAPP_EVENTTYPE_ICONIFIED:
     case SAPP_EVENTTYPE_FOCUSED:
     case SAPP_EVENTTYPE_RESTORED:
+    case SAPP_EVENTTYPE_SUSPENDED:
+    case SAPP_EVENTTYPE_RESUMED:
       frame_loop::request_frame();
+      break;
+    default:
+      break;
+    }
+  }
+
+  {
+    using namespace window_events;
+    const float scale = ev->window_width > 0
+                            ? static_cast<float>(ev->framebuffer_width) /
+                                  static_cast<float>(ev->window_width)
+                            : 0.f;
+    switch (ev->type) {
+    case SAPP_EVENTTYPE_RESIZED: {
+      const float prev = last_scale();
+      push({Type::Resized, ev->window_width, ev->window_height, scale});
+      if (prev > 0.f && scale > 0.f && scale != prev)
+        push({Type::ScaleChanged, ev->window_width, ev->window_height, scale});
+      break;
+    }
+    case SAPP_EVENTTYPE_ICONIFIED:
+      push({Type::Occluded, ev->window_width, ev->window_height, scale});
+      break;
+    case SAPP_EVENTTYPE_RESTORED:
+      push({Type::Revealed, ev->window_width, ev->window_height, scale});
+      break;
+    case SAPP_EVENTTYPE_SUSPENDED:
+      push({Type::Suspended, ev->window_width, ev->window_height, scale});
+      break;
+    case SAPP_EVENTTYPE_RESUMED:
+      push({Type::Resumed, ev->window_width, ev->window_height, scale});
       break;
     default:
       break;
@@ -493,6 +544,7 @@ inline void sokol_event_cb(const sapp_event *ev) {
   case SAPP_EVENTTYPE_MOUSE_SCROLL:
     s.scroll_x += ev->scroll_x;
     s.scroll_y += ev->scroll_y;
+    s.scroll_precise = ev->scroll_precise;
     break;
   case SAPP_EVENTTYPE_FOCUSED:
     g_window_focused = true;
@@ -500,6 +552,13 @@ inline void sokol_event_cb(const sapp_event *ev) {
   case SAPP_EVENTTYPE_UNFOCUSED:
     g_window_focused = false;
     break;
+  case SAPP_EVENTTYPE_FILES_DROPPED: {
+    std::vector<std::string> paths;
+    const int n = sapp_get_num_dropped_files();
+    for (int i = 0; i < n; i++)
+      paths.emplace_back(sapp_get_dropped_file_path(i));
+    file_drop::push_dropped_files(std::move(paths));
+  }
   default:
     break;
   }
@@ -526,6 +585,7 @@ struct MetalPlatformAPI {
   static constexpr int SHADER_UNIFORM_VEC2 = 1;
   static constexpr int SHADER_UNIFORM_FLOAT = 0;
   static constexpr int SHADER_UNIFORM_VEC4 = 3;
+  static constexpr int SHADER_UNIFORM_VEC3 = 2;
 
   // ── Window lifecycle (legacy API -- prefer run()) ──
   static void init_window(int, int, const char *) {
@@ -604,6 +664,7 @@ struct MetalPlatformAPI {
 
   // ── Frame ──
   static void begin_drawing() {
+    metal_detail::ensure_sokol_gl_and_fonts();
     // Headless: no swapchain — render into the offscreen texture instead. This
     // sets up the ortho projection + GL→Metal fixup internally, so we return.
     if (metal_detail::g_headless) {
@@ -671,6 +732,7 @@ struct MetalPlatformAPI {
   }
 
   static void clear_background(::afterhours::ColorLike auto c) {
+    metal_detail::ensure_sokol_gl_and_fonts();
     // Update pass action so sg_begin_pass clears to this color
     metal_detail::g_pass_action.colors[0].clear_value = {
         static_cast<float>(c.r) / 255.0f,
@@ -904,16 +966,16 @@ struct MetalPlatformAPI {
     // struct, so it is applied in input_system.h's Metal branch instead --
     // which is where the raylib path does it as well.
     float dpi = sapp_dpi_scale();
+    if (!(dpi > 0.f)) dpi = 1.f; // pre-init reads 0; 0/0 is NaN
     return {s.mouse_x / dpi, s.mouse_y / dpi};
   }
   static Vec2 get_screen_to_world_2d(const Vec2 &position,
                                      const Camera2D &camera) {
-    constexpr float kDegToRad = 3.14159265358979323846f / 180.0f;
     const float zoom = (camera.zoom == 0.0f) ? 1.0f : camera.zoom;
     const float x = (position.x - camera.offset.x) / zoom;
     const float y = (position.y - camera.offset.y) / zoom;
 
-    const float rot = -camera.rotation * kDegToRad;
+    const float rot = -camera.rotation * DEG2RAD;
     const float c = std::cos(rot);
     const float s = std::sin(rot);
 
@@ -921,12 +983,11 @@ struct MetalPlatformAPI {
   }
   static Vec2 get_world_to_screen_2d(const Vec2 &position,
                                      const Camera2D &camera) {
-    constexpr float kDegToRad = 3.14159265358979323846f / 180.0f;
     const float zoom = (camera.zoom == 0.0f) ? 1.0f : camera.zoom;
     const float x = position.x - camera.target.x;
     const float y = position.y - camera.target.y;
 
-    const float rot = camera.rotation * kDegToRad;
+    const float rot = camera.rotation * DEG2RAD;
     const float c = std::cos(rot);
     const float s = std::sin(rot);
 
@@ -962,6 +1023,7 @@ struct MetalPlatformAPI {
   static Vec2 get_mouse_delta() {
     auto &s = metal_detail::input_state();
     float dpi = sapp_dpi_scale();
+    if (!(dpi > 0.f)) dpi = 1.f; // pre-init reads 0; 0/0 is NaN
     return {s.mouse_dx / dpi, s.mouse_dy / dpi};
   }
 
@@ -972,6 +1034,10 @@ struct MetalPlatformAPI {
   static Vec2 get_mouse_wheel_move_v() {
     auto &s = metal_detail::input_state();
     return {s.scroll_x, s.scroll_y};
+  }
+
+  static bool get_mouse_wheel_precise() {
+    return metal_detail::input_state().scroll_precise;
   }
 
   // ── Application control ──
@@ -1039,17 +1105,26 @@ struct MetalPlatformAPI {
     desc.sample_count = 1;
     desc.enable_clipboard = true;
     desc.clipboard_size = 16 * 1024;  // 16 KB clipboard buffer
+    file_drop::set_enabled(cfg.enable_file_drop);
+    desc.enable_dragndrop = cfg.enable_file_drop;
+    if (cfg.enable_file_drop)
+      desc.max_dropped_files = 8;
+    desc.macos.forward_cmd_chords = cfg.macos_forward_cmd_chords;
 
     // Map flags
     if (cfg.flags & FLAG_WINDOW_RESIZABLE) {
       // sokol windows are resizable by default
     }
 
+#ifdef SOKOL_METAL
+    metal_install_first_frame_early_draw();
+#endif
     // sapp_run blocks until the application quits
     sapp_run(&desc);
   }
 
   static void run_headless(const RunConfig &cfg) {
+    file_drop::clear();
     Config headless;
     headless.display = DisplayMode::Headless;
     headless.width = cfg.width;
@@ -1149,7 +1224,6 @@ inline bool metal_init(const Config &cfg) {
     }
     stm_setup();
     metal_detail::g_start_time = stm_now();
-    metal_detail::setup_sokol_gl_and_fonts();
     metal_detail::g_initialized = true;
 
     const int scale =
@@ -1182,7 +1256,10 @@ inline void metal_shutdown() {
     sfons_destroy(metal_detail::g_fons_ctx);
     metal_detail::g_fons_ctx = nullptr;
   }
-  sgl_shutdown();
+  if (metal_detail::g_sgl_ready) {
+    sgl_shutdown();
+    metal_detail::g_sgl_ready = false;
+  }
   sg_shutdown();
 #ifdef AFTER_HOURS_USE_VULKAN
   vulkan_destroy_headless_environment();

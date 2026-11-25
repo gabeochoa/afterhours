@@ -34,23 +34,28 @@ inline void note_component_mutation() {
   COMPONENT_MUTATION_GEN.fetch_add(1, std::memory_order_relaxed);
 }
 
-// Per-type membership generations, bumped only when a component of that type
-// is added or removed, so a system can cache against component_generation<T>()
-// and skip work while it is unchanged. Field writes are invisible: get<T>()
-// hands out a mutable reference, so this covers membership, not mutation.
-// If #188's global COMPONENT_MUTATION_GEN lands, fold it into these bumps.
 inline std::array<std::atomic<std::size_t>, max_num_components>
-    COMPONENT_GENERATIONS{};
-
-inline void bump_component_generation(ComponentID id) {
+    COMPONENT_MUTATION_GENS{};
+inline void note_component_mutation(ComponentID id) {
   if (id < max_num_components)
-    COMPONENT_GENERATIONS[id].fetch_add(1, std::memory_order_relaxed);
+    COMPONENT_MUTATION_GENS[id].fetch_add(1, std::memory_order_relaxed);
+}
+inline std::size_t component_mutation_gen(ComponentID id) {
+  if (id >= max_num_components)
+    return 0;
+  return COMPONENT_MUTATION_GENS[id].load(std::memory_order_relaxed);
 }
 
+// Per-type membership generation (#379's public spelling of the counter
+// above): bumps only when a component of that type is added or removed --
+// including when an entity holding it leaves a collection -- so a system
+// can cache against component_generation<T>() and skip work while it is
+// unchanged. Field writes are invisible: get<T>() hands out a mutable
+// reference, so this covers membership, not mutation. One storage, two
+// readings: this forwards to #459's component_mutation_gen so the two
+// can never disagree.
 [[nodiscard]] inline std::size_t component_generation(ComponentID id) {
-  return id < max_num_components
-             ? COMPONENT_GENERATIONS[id].load(std::memory_order_relaxed)
-             : 0;
+  return component_mutation_gen(id);
 }
 
 template <typename T>
@@ -84,11 +89,9 @@ struct Entity {
   virtual ~Entity() {}
 
   void recycle(EntityID new_id) {
-    if (componentSet.any())
-      note_component_mutation();
     for (size_t i = componentSet.next_set(0); i < max_num_components;
          i = componentSet.next_set(i + 1)) {
-      bump_component_generation(i);
+      note_component_mutation(i);
       componentArray[i].reset();
     }
     componentSet.reset();
@@ -170,10 +173,10 @@ struct Entity {
 #endif
       return;
     }
-    componentSet.set(components::get_type_id<T>(), false);
-    componentArray[components::get_type_id<T>()].reset();
-    note_component_mutation();
-    bump_component_generation(components::get_type_id<T>());
+    const ComponentID component_id = components::get_type_id<T>();
+    componentSet.set(component_id, false);
+    componentArray[component_id].reset();
+    note_component_mutation(component_id);
   }
 
   template <typename T, typename... TArgs> T &addComponent(TArgs &&...args) {
@@ -195,8 +198,7 @@ struct Entity {
     const ComponentID component_id = components::get_type_id<T>();
     componentArray[component_id] = std::move(component);
     componentSet.set(component_id, true);
-    note_component_mutation();
-    bump_component_generation(component_id);
+    note_component_mutation(component_id);
 
 #if defined(AFTER_HOURS_DEBUG)
     log_trace("your set is now {}", componentSet.to_string());
@@ -346,6 +348,13 @@ struct Entity {
   template <typename TEnum, std::enable_if_t<std::is_enum_v<TEnum>, int> = 0>
   void setTag(const TEnum tag_enum, bool enabled) {
     setTag(static_cast<TagId>(tag_enum), enabled);
+  }
+
+  void toggleTag(const TagId tag_id, bool on) { setTag(tag_id, on); }
+
+  template <typename TEnum, std::enable_if_t<std::is_enum_v<TEnum>, int> = 0>
+  void toggleTag(const TEnum tag_enum, bool on) {
+    toggleTag(static_cast<TagId>(tag_enum), on);
   }
 
   [[nodiscard]] bool hasTag(const TagId tag_id) const {
