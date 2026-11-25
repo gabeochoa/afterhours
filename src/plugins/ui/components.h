@@ -630,6 +630,8 @@ struct HasScrollView : BaseComponent {
   // above the fold is detected without anyone reporting one.
   EntityID anchor_child = -1;
   float anchor_child_y = 0.f;
+  size_t anchor_item_key = 0;
+  bool has_anchor_item_key = false;
   // Unset until a layout pass has measured it. A plain {0,0} could not be told
   // apart from a view genuinely measured as empty, so a consumer windowing its
   // content read zero on frame one and quietly built everything.

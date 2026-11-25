@@ -302,7 +302,7 @@ ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
   for (size_t i = first; i < last; ++i) {
     bool now_a_different_item = false;
     auto row = div(ctx,
-                   detail::mk_keyed(entity, static_cast<EntityID>(i % capacity),
+                   mk_keyed(entity, static_cast<EntityID>(i % capacity),
                                     i + 1, &now_a_different_item),
                    ComponentConfig{}
                        .with_size(

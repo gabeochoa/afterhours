@@ -569,16 +569,35 @@ private:
   // changed size by that much, and following it holds the view still.
   static void apply_scroll_anchor(HasScrollView &scroll, UIComponent &cmp,
                                   float container_y) {
-    if (scroll.anchor_child != -1) {
-      OptEntity prev = UICollectionHolder::getEntityForID(scroll.anchor_child);
-      if (prev.valid() && prev.asE().has<UIComponent>()) {
-        const float now =
-            child_y_in_content(prev.asE().get<UIComponent>(), container_y);
-        const float moved = now - scroll.anchor_child_y;
+    auto child_top = [&](EntityID child_id) -> std::optional<float> {
+      OptEntity child_opt = UICollectionHolder::getEntityForID(child_id);
+      if (!child_opt.valid() || !child_opt.asE().has<UIComponent>())
+        return std::nullopt;
+      return child_y_in_content(child_opt.asE().get<UIComponent>(),
+                                container_y);
+    };
+
+    if (scroll.has_anchor_item_key) {
+      for (EntityID child_id : cmp.children) {
+        auto key = imm::ui_element_key(child_id);
+        if (!key || *key != scroll.anchor_item_key)
+          continue;
+        if (auto now = child_top(child_id)) {
+          const float moved = *now - scroll.anchor_child_y;
+          if (moved != 0.f) {
+            scroll.scroll_offset.y += moved;
+            scroll.scroll_target.y += moved;
+            scroll.last_eased_offset = scroll.scroll_offset;
+          }
+        }
+        break;
+      }
+    } else if (scroll.anchor_child != -1) {
+      if (auto now = child_top(scroll.anchor_child)) {
+        const float moved = *now - scroll.anchor_child_y;
         if (moved != 0.f) {
           scroll.scroll_offset.y += moved;
           scroll.scroll_target.y += moved;
-          // The easing treats a caller's edit as authoritative; this is one.
           scroll.last_eased_offset = scroll.scroll_offset;
         }
       }
@@ -587,6 +606,7 @@ private:
     // Re-pin for next frame, against the offset as it now stands: the topmost
     // child the viewport still shows.
     scroll.anchor_child = -1;
+    scroll.has_anchor_item_key = false;
     for (EntityID child_id : cmp.children) {
       OptEntity child_opt = UICollectionHolder::getEntityForID(child_id);
       if (!child_opt.valid() || !child_opt.asE().has<UIComponent>())
@@ -599,6 +619,10 @@ private:
       if (bottom > scroll.scroll_offset.y) {
         scroll.anchor_child = child_id;
         scroll.anchor_child_y = top;
+        if (auto key = imm::ui_element_key(child_id)) {
+          scroll.anchor_item_key = *key;
+          scroll.has_anchor_item_key = true;
+        }
         break;
       }
     }
