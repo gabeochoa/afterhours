@@ -335,8 +335,14 @@ ElementResult virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
                            size_t count, float row_height,
                            RenderRow &&render_row,
                            ComponentConfig config = ComponentConfig()) {
-  return virtual_list_impl(ctx, ep_pair,
-                           detail::RowMetrics::uniform_rows(count, row_height),
+  auto [entity, parent] = deref(ep_pair);
+  auto &index = entity.template addComponentIfMissing<HasVirtualListIndex>();
+  index.uniform_height = row_height > 0.f ? row_height : 1.f;
+  index.pending_prepend = 0;
+  index.row_count = count;
+  auto rows = detail::RowMetrics::uniform_rows(count, row_height);
+  rows.index = &index;
+  return virtual_list_impl(ctx, ep_pair, rows,
                            std::forward<RenderRow>(render_row), config);
 }
 
@@ -359,6 +365,10 @@ ElementResult virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
 {
   auto [entity, parent] = deref(ep_pair);
   auto &index = entity.template addComponentIfMissing<HasVirtualListIndex>();
+  if (index.uniform_height > 0.f)
+    index.invalidate(0, count);
+  index.uniform_height = 0.f;
+  index.row_count = count;
   detail::refresh_virtual_index(index, count,
                                 std::forward<HeightFn>(height_of));
   detail::RowMetrics rows;
@@ -384,6 +394,8 @@ inline void prepend_virtual_rows(Entity &list, size_t count) {
   if (count == 0 || !list.template has<HasVirtualListIndex>())
     return;
   auto &idx = list.template get<HasVirtualListIndex>();
+  if (idx.uniform_height > 0.f)
+    return;
   idx.heights.insert(idx.heights.begin(), count, 0.f);
   idx.prefix.insert(idx.prefix.begin(), count, 0.0);
   // Shift the pending range by the insertion, saturating at the union
@@ -397,30 +409,55 @@ inline void prepend_virtual_rows(Entity &list, size_t count) {
 }
 
 /// Where row `index` starts inside the content, in pixels, as of the last
-/// build of a measured virtual_list. 0 when the list has no retained index.
+/// build of a virtual_list (uniform or measured). 0 when the list has no
+/// retained index, or `index` is past the last build's count.
 [[nodiscard]] inline float virtual_row_offset(const Entity &list,
                                               size_t index) {
   if (!list.template has<HasVirtualListIndex>())
     return 0.f;
   const auto &idx = list.template get<HasVirtualListIndex>();
+  if (idx.uniform_height > 0.f) {
+    if (index >= idx.row_count)
+      return 0.f;
+    return (idx.uniform_height * static_cast<float>(index)) * idx.last_scale +
+           static_cast<float>(index) * idx.last_gap;
+  }
   if (index >= idx.prefix.size())
     return 0.f;
   return static_cast<float>(idx.prefix[index] * idx.last_scale +
                             static_cast<double>(index) * idx.last_gap);
 }
 
-/// Total height of a measured virtual_list's rows, in pixels, as of its
-/// last build.
+/// Total height of a virtual_list's rows, in pixels, as of its last build.
 [[nodiscard]] inline float virtual_rows_total(const Entity &list) {
   if (!list.template has<HasVirtualListIndex>())
     return 0.f;
   const auto &idx = list.template get<HasVirtualListIndex>();
+  if (idx.uniform_height > 0.f) {
+    const size_t count = idx.row_count;
+    return count
+        ? (idx.uniform_height * static_cast<float>(count)) * idx.last_scale +
+              static_cast<float>(count - 1) * idx.last_gap
+        : 0.f;
+  }
   if (idx.prefix.empty())
     return 0.f;
   const size_t count = idx.prefix.size() - 1;
   return static_cast<float>(
       idx.prefix[count] * idx.last_scale +
       static_cast<double>(count ? count - 1 : 0) * idx.last_gap);
+}
+
+inline void scroll_to_item(Entity &list, size_t index) {
+  if (!list.template has<HasVirtualListIndex>() ||
+      !list.template has<HasScrollView>())
+    return;
+  const auto &idx = list.template get<HasVirtualListIndex>();
+  if (idx.row_count == 0)
+    return;
+  const size_t target = std::min(index, idx.row_count - 1);
+  auto &scroll = list.template get<HasScrollView>();
+  scroll.scroll_to({scroll.scroll_offset.x, virtual_row_offset(list, target)});
 }
 
 

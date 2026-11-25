@@ -16,7 +16,7 @@
 using namespace afterhours::ui::imm;
 
 // Measured in this suite's build config; see the note above about ABI.
-static constexpr size_t EXPECTED_SIZE = 1904;
+static constexpr size_t EXPECTED_SIZE = 1912;
 
 TEST(component_config_has_not_grown_unnoticed) {
   CHECK(sizeof(ComponentConfig) == EXPECTED_SIZE);

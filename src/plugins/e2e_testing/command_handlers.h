@@ -610,12 +610,7 @@ struct HandleDragToCommand : System<PendingE2ECommand> {
                 // Frame 0: press at start position
                 float x1 = cmd.coord_arg(0, sw);
                 float y1 = cmd.coord_arg(1, sh);
-                test_input::set_mouse_position(x1, y1);
-                auto &m = input_injector::detail::mouse;
-                m.left_down = true;
-                m.just_pressed = true;
-                m.press_frames = 0;  // no auto-release
-                m.active = true;
+                press_mouse_at(x1, y1);
                 phase = 1;
                 cmd.retry();  // Mark as in-progress so unknown handler skips it
                 break;

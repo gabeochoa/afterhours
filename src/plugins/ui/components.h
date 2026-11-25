@@ -374,6 +374,19 @@ struct HasUIModifiers : BaseComponent {
     return {rect.x + rect.width * origin_x, rect.y + rect.height * origin_y};
   }
 
+  bool contains_rotated(RectangleType rect, float px, float py) const {
+    if (rotation == 0.f)
+      return px >= rect.x && px <= rect.x + rect.width && py >= rect.y &&
+             py <= rect.y + rect.height;
+    const Vector2Type pivot = rotation_center(rect);
+    const float rad = -rotation * 3.14159265358979323846f / 180.f;
+    const float c = std::cos(rad), s = std::sin(rad);
+    const float dx = px - pivot.x, dy = py - pivot.y;
+    const float lx = pivot.x + dx * c - dy * s;
+    const float ly = pivot.y + dx * s + dy * c;
+    return lx >= rect.x && lx <= rect.x + rect.width && ly >= rect.y &&
+           ly <= rect.y + rect.height;
+  }
   RectangleType apply_modifier(RectangleType rect) const {
     // Apply scale first
     float s = scale;
@@ -767,6 +780,8 @@ struct HasVirtualListIndex : BaseComponent {
   std::vector<float> heights;
   // double: a float32 prefix sum drifts by hundreds of px at 100k rows
   std::vector<double> prefix; // prefix[i] = height of rows [0, i)
+  float uniform_height = 0.f;
+  size_t row_count = 0;
   // The pending re-measure range [dirty_from, dirty_to). Its empty value is
   // the union identity [kDirtyEmpty, 0), so invalidate is an unconditional
   // min/max with no empty case to branch on.

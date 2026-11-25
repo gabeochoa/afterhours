@@ -138,12 +138,15 @@ struct toast : developer::Plugin {
             const std::string label =
                 icon.empty() ? msg : icon + " " + msg;
 
-            for (Entity &entity : EntityQuery()
+            for (Entity &entity : EntityQuery({.force_merge = true})
                                       .whereHasComponent<Toast>()
                                       .gen()) {
                 Toast &existing = entity.get<Toast>();
                 if (!entity.cleanup && !existing.is_expired() &&
-                    existing.level == level && existing.message == label) {
+                    existing.level == level && existing.message == label &&
+                    (level != Level::Custom ||
+                     (existing.custom_color.r == custom_color.r && existing.custom_color.g == custom_color.g &&
+                      existing.custom_color.b == custom_color.b && existing.custom_color.a == custom_color.a))) {
                     existing.elapsed = 0.f;
                     existing.duration = duration;
                     return {true, entity};
