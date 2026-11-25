@@ -209,6 +209,7 @@ ALL_TESTS := \
 	get_unique_test \
 	singleton_add_test \
 	ui_idle_cost_test \
+	mk_cost_test \
 	cached_singleton_test \
 	press_delay_test \
 	graphics_key_injection_test \
@@ -276,7 +277,6 @@ lighting_zones_test \
 	scroll_anchor_test \
 	scroll_absolute_content_test \
 	measure_config_test \
-	scroll_anchor_test \
 	widget_retirement_test \
 	scroll_to_test \
 	text_line_edit_test \
@@ -304,6 +304,7 @@ lighting_zones_test \
 	draw_commands_test \
 	screen_luma_test \
 	color_contrast_test \
+	contrast_validation_test \
 	auto_text_color_test \
 	scissor_coalescing_test \
 	blend_batch_test \
@@ -343,6 +344,7 @@ lighting_zones_test \
 	text_stroke_test \
 	text_stroke_render_test \
 	multiline_text_test \
+	curved_text_test \
 	subtree_hover_test \
 	hover_focus_name_test \
 	inert_test \
@@ -360,7 +362,6 @@ lighting_zones_test \
 	draw_over_test \
 	imm_draw_order_test \
 	scroll_smoothing_test \
-	scroll_to_test \
 	scrollbar_gutter_test \
 	setup_test \
 	slot_at_creation_test \
@@ -491,6 +492,7 @@ RAYLIB_TESTS := \
 	command_picker_ui_test \
 	terminal_ui_test \
 	text_stroke_render_test \
+	curved_text_test \
 	input_device_activity_test \
 	input_activity_snapshot_test \
 	input_enum_actions_test \
@@ -807,6 +809,7 @@ win-vulkan: $(WIN_VULKAN_BINS)
 # Runs every test even when one fails, then reports. The old loop dropped each
 # exit code, so only the last test's status escaped and a red suite read green.
 check-boundaries:
+	sh check_test_hygiene.sh
 	bash ../check_plugin_boundaries.sh
 	sh ui_boundary_check.sh
 	sh theme_bypass_check.sh
