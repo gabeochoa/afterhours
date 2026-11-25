@@ -61,6 +61,12 @@ OUT := $(realpath ..)/output
 $(shell mkdir -p $(OUT))
 
 ALL_TESTS := \
+	subtree_rotation_test \
+	window_events_test \
+	text_input_no_host_enum_test \
+	scroll_logical_anchor_test \
+	flex_shrink_test \
+	reorder_drag_test \
 	draw_context_scale_test \
 	focus_return_test \
 	border_width_test \
@@ -210,6 +216,7 @@ ALL_TESTS := \
 	get_unique_test \
 	singleton_add_test \
 	ui_idle_cost_test \
+	mk_cost_test \
 	cached_singleton_test \
 	press_delay_test \
 	graphics_key_injection_test \
@@ -277,7 +284,6 @@ lighting_zones_test \
 	scroll_anchor_test \
 	scroll_absolute_content_test \
 	measure_config_test \
-	scroll_anchor_test \
 	widget_retirement_test \
 	scroll_to_test \
 	text_line_edit_test \
@@ -305,6 +311,7 @@ lighting_zones_test \
 	draw_commands_test \
 	screen_luma_test \
 	color_contrast_test \
+	contrast_validation_test \
 	auto_text_color_test \
 	scissor_coalescing_test \
 	blend_batch_test \
@@ -344,6 +351,7 @@ lighting_zones_test \
 	text_stroke_test \
 	text_stroke_render_test \
 	multiline_text_test \
+	curved_text_test \
 	subtree_hover_test \
 	hover_focus_name_test \
 	inert_test \
@@ -361,7 +369,6 @@ lighting_zones_test \
 	draw_over_test \
 	imm_draw_order_test \
 	scroll_smoothing_test \
-	scroll_to_test \
 	scrollbar_gutter_test \
 	setup_test \
 	slot_at_creation_test \
@@ -411,7 +418,9 @@ lighting_zones_test \
 	shared_handlers_test \
 	default_font_test \
 	load_font_size_test \
+	glyph_packing_test \
 	edit_keys_test \
+	raw_text_edit_test \
 	tab_container_test \
 	tab_toggle_geometry_test \
 	small_components_test \
@@ -467,6 +476,7 @@ ALL_TESTS += staging_texture_leak_test
 endif
 
 RAYLIB_TESTS := \
+	text_input_no_host_enum_test \
 	auto_text_color_test \
 	e2e_app_test \
 	skeletal_test \
@@ -477,9 +487,12 @@ RAYLIB_TESTS := \
 	window_state_test \
 	click_count_test \
 	edit_keys_test \
+	raw_text_edit_test \
 	default_font_test \
 	font_display_size_test \
 	load_font_size_test \
+	glyph_packing_test \
+	subtree_rotation_test \
 	font_unload_manager_test \
 	border_width_test \
 	border_only_test \
@@ -492,6 +505,7 @@ RAYLIB_TESTS := \
 	command_picker_ui_test \
 	terminal_ui_test \
 	text_stroke_render_test \
+	curved_text_test \
 	input_device_activity_test \
 	input_activity_snapshot_test \
 	input_enum_actions_test \
@@ -610,7 +624,9 @@ $(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test $(OUT)/input_ax
 # Linux too).
 $(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test $(OUT)/input_axis_edge_test: LDFLAGS_T = $(subst -lraylib,,$(subst $(RAYLIB_LIB)/libraylib.a,,$(LDFLAGS_RAYLIB)))
 
+$(OUT)/text_input_no_host_enum_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/middle_click_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
+$(OUT)/raw_text_edit_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/wheel_input_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test $(OUT)/graphics_key_injection_test $(OUT)/input_activity_snapshot_test $(OUT)/e2e_gamepad_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/wheel_input_test $(OUT)/wheel_delta_kind_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
@@ -808,6 +824,7 @@ win-vulkan: $(WIN_VULKAN_BINS)
 # Runs every test even when one fails, then reports. The old loop dropped each
 # exit code, so only the last test's status escaped and a red suite read green.
 check-boundaries:
+	sh check_test_hygiene.sh
 	bash ../check_plugin_boundaries.sh
 	sh ui_boundary_check.sh
 	sh theme_bypass_check.sh
@@ -858,6 +875,7 @@ $(OUT)/font_prewarm_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/f
 $(OUT)/sokol_letter_spacing_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/font_points_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/glyph_placeholder_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
+$(OUT)/glyph_packing_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/load_font_size_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/font_display_size_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/font_memory_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
