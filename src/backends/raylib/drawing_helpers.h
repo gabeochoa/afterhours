@@ -352,7 +352,13 @@ inline void draw_rectangle_gradient_ex(const RectangleType rect, const Color tl,
 
 inline void draw_circle_gradient(int centerX, int centerY, float radius,
                                  Color inner, Color outer) {
+#if RAYLIB_VERSION_MAJOR >= 6
+  raylib::DrawCircleGradient(
+      raylib::Vector2{static_cast<float>(centerX), static_cast<float>(centerY)},
+      radius, inner, outer);
+#else
   raylib::DrawCircleGradient(centerX, centerY, radius, inner, outer);
+#endif
 }
 
 // Draw a rotated rounded rectangle
