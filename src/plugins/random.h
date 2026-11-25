@@ -54,4 +54,19 @@ struct random_plugin : developer::Plugin {
   static void register_update_systems(SystemManager &) {}
 };
 
+struct RandomPlugin {
+  std::string seed{};
+
+  void install(PluginContext &ctx) const {
+    const bool existed =
+        ctx.collection.has_singleton<random_plugin::HasRandomSeed>();
+    auto &state = ctx.ensure_singleton<random_plugin::HasRandomSeed>();
+    if (!existed && !seed.empty()) {
+      state.seed = seed;
+      RandomEngine::get().set_seed(seed);
+    }
+  }
+};
+static_assert(InstallablePlugin<RandomPlugin>);
+
 } // namespace afterhours

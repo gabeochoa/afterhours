@@ -25,4 +25,14 @@ struct animation : developer::Plugin {
 static_assert(developer::PluginCore<animation>,
               "animation must implement the core plugin interface");
 
+struct AnimationPlugin {
+  bool instant = false;
+
+  void install(PluginContext &ctx) const {
+    animation::set_instant(instant);
+    ctx.add_system(Stage::Update, std::make_unique<motion::AdvanceTracks>());
+  }
+};
+static_assert(InstallablePlugin<AnimationPlugin>);
+
 } // namespace afterhours

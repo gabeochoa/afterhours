@@ -351,4 +351,29 @@ inline void telemetry::track_custom(std::string_view event_name,
       .name = std::string(event_name), .fields = fields, .retries = 0});
 }
 
+struct TelemetryPlugin {
+  telemetry::Config config{};
+  std::function<std::unique_ptr<TelemetryProvider>()> provider_factory{};
+
+  void install(PluginContext &ctx) const {
+    const bool existed =
+        ctx.collection.has_singleton<telemetry::ProvidesTelemetry>();
+    auto &state = ctx.ensure_singleton<telemetry::ProvidesTelemetry>();
+    if (!existed) {
+      state.config = config;
+      if (state.config.platform.empty())
+        state.config.platform = telemetry_detail::detect_platform();
+      state.session_id = telemetry_detail::random_session_id();
+      if (provider_factory) {
+        telemetry_detail::provider() = provider_factory();
+        if (telemetry_detail::provider()) telemetry_detail::provider()->init();
+      }
+    }
+    ctx.add_system(
+        Stage::Update,
+        std::make_unique<telemetry_detail::TelemetryFlushSystem>());
+  }
+};
+static_assert(InstallablePlugin<TelemetryPlugin>);
+
 }  // namespace afterhours

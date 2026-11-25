@@ -131,4 +131,16 @@ struct trigger_volume : developer::Plugin {
 static_assert(developer::PluginCore<trigger_volume>,
               "trigger_volume must implement the core plugin interface");
 
+template <typename TransformType> struct TriggerVolumePlugin {
+  std::function<trigger_volume::Candidate(const Entity &, const TransformType &)>
+      make_candidate{};
+
+  void install(PluginContext &ctx) const {
+    auto sys =
+        std::make_unique<trigger_volume::UpdateTriggerVolumes<TransformType>>();
+    sys->make_candidate = make_candidate;
+    ctx.add_system(Stage::Update, std::move(sys));
+  }
+};
+
 } // namespace afterhours

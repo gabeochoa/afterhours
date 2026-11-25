@@ -268,4 +268,18 @@ struct collision : developer::Plugin {
 static_assert(developer::PluginCore<collision>,
               "collision must implement the core plugin interface");
 
+template <typename TransformType> struct CollisionPlugin {
+  typename collision::UpdateCollidingEntities<TransformType>::Config config{};
+  typename collision::UpdateCollidingEntities<TransformType>::Callbacks
+      callbacks{};
+
+  void install(PluginContext &ctx) const {
+    auto sys =
+        std::make_unique<collision::UpdateCollidingEntities<TransformType>>();
+    sys->config = config;
+    sys->callbacks = callbacks;
+    ctx.add_system(Stage::Update, std::move(sys));
+  }
+};
+
 } // namespace afterhours
