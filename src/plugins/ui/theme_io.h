@@ -56,6 +56,7 @@ inline constexpr FloatField float_fields[] = {
     {"focus_ring_offset", &Theme::focus_ring_offset},
     {"disabled_opacity", &Theme::disabled_opacity, 0.f, 1.f},
     {"ui_scale", &Theme::ui_scale, 0.5f, 3.f},
+    {"text_scale", &Theme::text_scale, 0.5f, 3.f},
 };
 
 // ---------------------------------------------------------------------------

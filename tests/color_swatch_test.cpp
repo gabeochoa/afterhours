@@ -162,7 +162,7 @@ TEST(preset_popover_open_builds_grid_and_hex) {
   ui_test::check(count_named("color_hex_field") == 1,
                  "the custom hex field is built under the grid", __FILE__,
                  __LINE__);
-  const UIComponent *panel = h.find("popover_panel");
+  const UIComponent *panel = h.find("color_preset_popover");
   const UIComponent *chip = h.find("color_preset_3");
   ui_test::check(panel != nullptr && chip != nullptr,
                  "the popover panel and last chip exist", __FILE__, __LINE__);
@@ -293,7 +293,7 @@ TEST(editor_popover_open_builds_square_strips_hex_and_compare) {
   ui_test::check(count_named("color_hex_field") == 1,
                  "the hex field is built under the strips", __FILE__,
                  __LINE__);
-  const UIComponent *panel = h.find("popover_panel");
+  const UIComponent *panel = h.find("color_editor_popover");
   const UIComponent *square = h.find("color_sv_square");
   const UIComponent *after = h.find("color_editor_after");
   ui_test::check(panel != nullptr && square != nullptr && after != nullptr,
