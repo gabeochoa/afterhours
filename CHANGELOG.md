@@ -6,6 +6,7 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+- **`imm::prompt_bar` and `imm::keycap` widgets.** A row of `[key] label` prompts built from `PromptItem{key, label, on_press}`; interactive items are buttons, the rest are inert, with caller-overridable bar/keycap/label configs. Covered by `prompt_bar_test`.
 - **Subtree rotation inheritance.** A rotated container now rotates its whole subtree: rendering, images, focus rings, and hit-testing compose own plus ancestor rotations through `detail::resolve_world_transform`. Covered by `subtree_rotation_test`.
 - **Window exposure and backing-scale events (`afterhours::window_events`).** Raylib and Sokol push `Resized`, `ScaleChanged`, `Minimized`, `Restored`, `FocusGained`, and `FocusLost` into a backend-agnostic queue. Covered by `window_events_test`.
 - **`text_input` works without host `Text*` enum names.** Editing actions resolve by name with library-default chord fallback while host enumerators still win. Covered by `text_input_no_host_enum_test`.

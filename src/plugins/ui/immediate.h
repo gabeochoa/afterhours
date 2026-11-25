@@ -7,6 +7,7 @@
 #include "imm_components.h"
 #include "disclosure.h"
 #include "rounded_corners.h"
+#include "prompt_bar.h"
 #include "setting_row.h"
 #include "tree_view.h"
 #include "ui_decorators.h"
