@@ -917,6 +917,9 @@ struct DragGroupState : BaseComponent {
   int drag_source_index = -1;
   int hover_index = -1;
 
+  static constexpr float edge_scroll_margin_px = 24.f;
+  static constexpr float edge_scroll_speed_px_s = 240.f;
+
   // Pressed but not yet moved past the drag threshold.
   bool armed = false;
   EntityID armed_item = -1;
