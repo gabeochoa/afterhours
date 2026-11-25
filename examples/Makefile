@@ -52,7 +52,7 @@ INCLUDES_RAYLIB := -I$(RAYLIB_INCLUDE) $(INCLUDES)
 # Platform-specific settings
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
-    LDFLAGS_RAYLIB := $(RAYLIB_LIB)/libraylib.a -framework OpenGL -framework CoreFoundation -framework Cocoa -framework IOKit -framework CoreGraphics -framework CoreVideo -lobjc
+    LDFLAGS_RAYLIB := $(RAYLIB_LIB)/libraylib.a -framework OpenGL -framework CoreFoundation -framework Cocoa -framework IOKit -framework CoreGraphics -framework CoreVideo -framework QuartzCore -framework CoreAudio -lobjc
 else ifeq ($(UNAME_S),Linux)
     LDFLAGS_RAYLIB := -L$(RAYLIB_LIB) -lraylib -lGL -lX11 -lEGL
 endif

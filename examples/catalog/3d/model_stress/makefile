@@ -8,6 +8,6 @@ EXTRA_FLAGS = -O2 -DAFTER_HOURS_USE_RAYLIB -isystem $(BREW_PREFIX)/include \
               -DMODEL_PATH='"$(abspath ../tree-large.glb)"'
 LDFLAGS     = $(RAYLIB_PREFIX)/lib/libraylib.a -framework OpenGL \
               -framework CoreFoundation -framework Cocoa -framework IOKit \
-              -framework CoreGraphics -framework CoreVideo -lobjc
+              -framework CoreGraphics -framework CoreVideo -framework QuartzCore -framework CoreAudio -lobjc
 
 include ../../common.mk

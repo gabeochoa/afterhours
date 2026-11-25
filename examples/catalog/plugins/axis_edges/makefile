@@ -5,6 +5,6 @@ EXTRA_FLAGS = -DAFTER_HOURS_USE_RAYLIB \
               -isystem $(BREW_PREFIX)/include -isystem $(RAYLIB_PREFIX)/include
 LDFLAGS     = -L$(RAYLIB_PREFIX)/lib -lraylib -framework OpenGL \
               -framework CoreFoundation -framework Cocoa -framework IOKit \
-              -framework CoreGraphics -framework CoreVideo -lobjc
+              -framework CoreGraphics -framework CoreVideo -framework QuartzCore -framework CoreAudio -lobjc
 
 include ../../common.mk
