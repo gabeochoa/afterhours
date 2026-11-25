@@ -202,11 +202,16 @@ inline bool raylib_capture_presented_frame(const std::filesystem::path &path,
   raylib::Image scaled = raylib::ImageCopy(canvas);
   raylib::ImageResize(&scaled, static_cast<int>(pf.dest_w),
                       static_cast<int>(pf.dest_h));
+#if RAYLIB_VERSION_MAJOR >= 6
+  raylib::ImageDrawImage(&presented, scaled, static_cast<int>(pf.dest_x),
+                         static_cast<int>(pf.dest_y), raylib::WHITE);
+#else
   raylib::ImageDraw(&presented, scaled,
                     raylib::Rectangle{0.f, 0.f, pf.dest_w, pf.dest_h},
                     raylib::Rectangle{pf.dest_x, pf.dest_y, pf.dest_w,
                                       pf.dest_h},
                     raylib::WHITE);
+#endif
   const bool ok = raylib::ExportImage(presented, path.string().c_str());
   raylib::UnloadImage(scaled);
   raylib::UnloadImage(presented);
