@@ -526,10 +526,18 @@ inline int *remove_duplicate_codepoints(int *codepoints, int codepointCount,
   return codepointsNoDups;
 }
 
+inline bool font_same_face(const raylib::Font a, const raylib::Font b) {
+  return a.glyphs == b.glyphs && a.texture.id == b.texture.id;
+}
+
 // Convenience function to load a font with codepoints extracted from a string
 inline void unload_font(raylib::Font &font) {
   coverage_registry().erase(font_key(font));
   glyph_warn_generation()++;
+  auto &faces = fallback_faces();
+  std::erase_if(faces, [&](const raylib::Font &f) {
+    return f.glyphs == font.glyphs;
+  });
   measure_memo::invalidate();
   raylib::UnloadFont(font);
   font = raylib::Font{};
