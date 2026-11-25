@@ -17,6 +17,7 @@ namespace {
 // Rows alternate short and tall, so a uniform assumption cannot be right for
 // both and the window has to come from the running total.
 float alternating_height(size_t i) { return (i % 2 == 0) ? 10.f : 40.f; }
+struct RowStamp : BaseComponent { size_t key = 0; };
 } // namespace
 
 TEST(uniform_rows_build_only_the_window) {
@@ -33,6 +34,35 @@ TEST(uniform_rows_build_only_the_window) {
   printf("  uniform: built %d of 2000\n", built);
   CHECK(built > 0);
   CHECK(built < 100); // a window, not the list
+}
+
+TEST(fast_glide_still_builds_the_current_viewport) {
+  ImmTestHarness h;
+  std::vector<size_t> built;
+  Entity *list_ent = nullptr;
+  auto build = [&] {
+    built.clear();
+    auto r = virtual_list(
+        h.context(), mk(h.root(), 0), 1000, 20.f,
+        [&](size_t i, Entity &) { built.push_back(i); },
+        ComponentConfig{}
+            .with_size(ComponentSize{pixels(300), pixels(200)})
+            .with_debug_name("vl_glide"));
+    list_ent = &r.ent();
+  };
+  h.begin_frame(); build(); h.layout_only();
+  CHECK(list_ent && list_ent->has<HasScrollView>());
+  if (!list_ent || !list_ent->has<HasScrollView>()) return;
+  auto &sv = list_ent->get<HasScrollView>();
+  sv.viewport_size = {300.f, 200.f};
+  sv.scroll_offset.y = 0.f;
+  sv.scroll_target.y = 10000.f;
+  h.begin_frame(); build(); h.layout_only();
+  CHECK(!built.empty());
+  CHECK(built.front() == 0);
+  bool has_current = false;
+  for (size_t i : built) has_current |= (i < 10);
+  CHECK(has_current);
 }
 
 TEST(measured_rows_build_only_the_window) {
@@ -361,6 +391,240 @@ TEST(virtual_list_overscan_survives_apply_overrides) {
             .apply_overrides(
                 ComponentConfig{}.with_virtual_list_overscan(0))
             .virtual_list_overscan == 0);
+}
+
+TEST(scroll_to_item_uniform_lands_visible_at_offset) {
+  ImmTestHarness h;
+  std::vector<size_t> built;
+  EntityID list_id = -1;
+  auto frame = [&]() {
+    h.begin_frame();
+    built.clear();
+    auto list = virtual_list(
+        h.context(), mk(h.root(), 0), 2000, 20.f,
+        [&](size_t i, Entity &) { built.push_back(i); },
+        ComponentConfig{}
+            .with_size(ComponentSize{pixels(300), pixels(200)})
+            .with_debug_name("vl_scroll_uniform"));
+    list_id = list.id();
+    h.layout_only();
+  };
+  frame();
+  auto &list = AutoLayout::to_ent_static(list_id);
+  auto &scroll = list.get<HasScrollView>();
+  scroll.viewport_size = {300.f, 200.f};
+  scroll.content_size = measure_scroll_content(list.get<UIComponent>(), scroll);
+  CHECK_APPROX(virtual_row_offset(list, 50), 1000.f);
+  CHECK_APPROX(virtual_rows_total(list), 40000.f);
+
+  scroll_to_item(list, 50);
+  CHECK_APPROX(scroll.scroll_offset.y, 1000.f);
+  CHECK_APPROX(scroll.scroll_target.y, 1000.f);
+  scroll.ease_scroll(0.016f);
+  CHECK_APPROX(scroll.scroll_offset.y, 1000.f);
+
+  frame();
+  CHECK(std::any_of(built.begin(), built.end(),
+                    [](size_t i) { return i == 50; }));
+  CHECK(built.front() <= 50);
+  CHECK_APPROX(scroll.scroll_offset.y, 1000.f);
+}
+
+TEST(scroll_to_item_variable_lands_visible_at_offset) {
+  ImmTestHarness h;
+  std::vector<size_t> built;
+  EntityID list_id = -1;
+  auto frame = [&]() {
+    h.begin_frame();
+    built.clear();
+    auto list = virtual_list(
+        h.context(), mk(h.root(), 0), 2000, alternating_height,
+        [&](size_t i, Entity &) { built.push_back(i); },
+        ComponentConfig{}
+            .with_size(ComponentSize{pixels(300), pixels(200)})
+            .with_debug_name("vl_scroll_measured"));
+    list_id = list.id();
+    h.layout_only();
+  };
+  frame();
+  auto &list = AutoLayout::to_ent_static(list_id);
+  auto &scroll = list.get<HasScrollView>();
+  scroll.viewport_size = {300.f, 200.f};
+  scroll.content_size = measure_scroll_content(list.get<UIComponent>(), scroll);
+  CHECK_APPROX(virtual_row_offset(list, 20), 500.f);
+  CHECK_APPROX(virtual_rows_total(list), 50000.f);
+
+  scroll_to_item(list, 20);
+  CHECK_APPROX(scroll.scroll_offset.y, 500.f);
+  CHECK_APPROX(scroll.scroll_target.y, 500.f);
+
+  frame();
+  CHECK(std::any_of(built.begin(), built.end(),
+                    [](size_t i) { return i == 20; }));
+  CHECK_APPROX(scroll.scroll_offset.y, 500.f);
+}
+
+TEST(scroll_to_item_clamps) {
+  ImmTestHarness h;
+  EntityID list_id = -1;
+  auto frame = [&]() {
+    h.begin_frame();
+    auto list = virtual_list(
+        h.context(), mk(h.root(), 0), 100, 20.f,
+        [&](size_t, Entity &) {},
+        ComponentConfig{}
+            .with_size(ComponentSize{pixels(300), pixels(200)})
+            .with_debug_name("vl_scroll_clamp"));
+    list_id = list.id();
+    h.layout_only();
+  };
+  frame();
+  auto &list = AutoLayout::to_ent_static(list_id);
+  auto &scroll = list.get<HasScrollView>();
+  scroll.viewport_size = {300.f, 200.f};
+  scroll.content_size = measure_scroll_content(list.get<UIComponent>(), scroll);
+  scroll_to_item(list, 99999);
+  CHECK_APPROX(scroll.scroll_offset.y, 1800.f);
+  scroll_to_item(list, 0);
+  CHECK_APPROX(scroll.scroll_offset.y, 0.f);
+  CHECK_APPROX(scroll.scroll_target.y, 0.f);
+
+  EntityID empty_id = -1;
+  h.begin_frame();
+  auto empty = virtual_list(
+      h.context(), mk(h.root(), 0), 0, 20.f,
+      [&](size_t, Entity &) {},
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(300), pixels(200)})
+          .with_debug_name("vl_scroll_empty"));
+  empty_id = empty.id();
+  h.layout_only();
+  auto &empty_list = AutoLayout::to_ent_static(empty_id);
+  empty_list.get<HasScrollView>().scroll_offset.y = 42.f;
+  scroll_to_item(empty_list, 5);
+  CHECK_APPROX(empty_list.get<HasScrollView>().scroll_offset.y, 42.f);
+}
+
+// A float32 prefix sum drifted -369px at 100k x 25.6px rows (-13.6px at
+// 8192, floatinghotel's case); double accumulation must stay < 0.5px.
+TEST(measured_extents_do_not_drift_at_large_n) {
+  for (const size_t n : {size_t{8192}, size_t{100000}}) {
+    ImmTestHarness h;
+    EntityID list_id = -1;
+    h.begin_frame();
+    auto list = virtual_list(
+        h.context(), mk(h.root(), 0), n, [](size_t) { return 25.6f; },
+        [&](size_t, Entity &) {},
+        ComponentConfig{}
+            .with_size(ComponentSize{pixels(300), pixels(200)})
+            .with_debug_name("vl_drift"));
+    list_id = list.id();
+    h.layout_only();
+    const Entity &ent = AutoLayout::to_ent_static(list_id);
+    const double exact = static_cast<double>(25.6f) * static_cast<double>(n);
+    CHECK(std::abs(static_cast<double>(virtual_rows_total(ent)) - exact) <
+          0.5);
+    CHECK(std::abs(static_cast<double>(virtual_row_offset(ent, n)) - exact) <
+          0.5);
+    CHECK(std::abs(static_cast<double>(virtual_row_offset(ent, n / 2)) -
+                   exact / 2) < 0.5);
+  }
+  // Varying heights, so a uniform-multiply shortcut cannot pass this.
+  ImmTestHarness h;
+  constexpr size_t n = 100000;
+  auto height_of = [](size_t i) {
+    return i % 3 == 0 ? 40.2f : i % 3 == 1 ? 25.6f : 18.75f;
+  };
+  double exact = 0.0, exact_mid = 0.0;
+  for (size_t i = 0; i < n; i++) {
+    exact += static_cast<double>(height_of(i));
+    if (i < n / 2) exact_mid = exact;
+  }
+  h.begin_frame();
+  auto list = virtual_list(
+      h.context(), mk(h.root(), 0), n, height_of, [&](size_t, Entity &) {},
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(300), pixels(200)})
+          .with_debug_name("vl_drift_var"));
+  h.layout_only();
+  const Entity &ent = AutoLayout::to_ent_static(list.id());
+  CHECK(std::abs(static_cast<double>(virtual_rows_total(ent)) - exact) < 0.5);
+  CHECK(std::abs(static_cast<double>(virtual_row_offset(ent, n / 2)) -
+                 exact_mid) < 0.5);
+  // Small lists unchanged.
+  CHECK_APPROX(virtual_row_offset(ent, 3), 40.2f + 25.6f + 18.75f);
+}
+
+TEST(virtual_list_visible_range_at_offsets_and_boundaries) {
+  ImmTestHarness h;
+  EntityID list_id = -1;
+  auto frame = [&](float offset) {
+    h.begin_frame();
+    auto list = virtual_list(h.context(), mk(h.root(), 0), 100, 20.f,
+                             [&](size_t, Entity &) {},
+                             ComponentConfig{}.with_size({pixels(300), pixels(200)}));
+    list_id = list.id();
+    h.layout_only();
+    auto &sv = AutoLayout::to_ent_static(list_id).get<HasScrollView>();
+    sv.viewport_size = {300.f, 200.f};
+    sv.scroll_offset.y = sv.scroll_target.y = offset;
+    sv.last_eased_offset = sv.scroll_offset;
+  };
+  auto range = [&] { return virtual_list_range(AutoLayout::to_ent_static(list_id)); };
+
+  frame(0.f); frame(0.f);
+  CHECK(range().visible_first == 0 && range().visible_last == 10);
+  CHECK(range().first == 0 && range().last == 15);
+  CHECK(range().count == 100 && !range().near_end(5));
+
+  frame(20.f); frame(20.f);
+  CHECK(range().visible_first == 1 && range().visible_last == 11);
+  frame(25.f); frame(25.f);
+  CHECK(range().visible_first == 1 && range().visible_last == 12);
+  frame(200.f); frame(200.f);
+  CHECK(range().visible_first == 10 && range().visible_last == 20);
+
+  frame(1800.f); frame(1800.f);
+  CHECK(range().visible_first == 90 && range().visible_last == 100);
+  CHECK(range().last == 100 && range().near_end(5));
+}
+
+TEST(virtual_list_keyed_identity_survives_insert_and_remove_above) {
+  ImmTestHarness h;
+  std::vector<size_t> items{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21};
+  std::map<size_t, EntityID> row_for;
+  std::map<size_t, size_t> stamp_for;
+  auto frame = [&] {
+    h.begin_frame();
+    row_for.clear();
+    virtual_list_keyed(
+        h.context(), mk(h.root(), 0), items.size(), 20.f,
+        [&](size_t i) { return items[i]; },
+        [&](size_t i, Entity &row) {
+          row_for[items[i]] = row.id;
+          if (!row.has<RowStamp>())
+            row.addComponent<RowStamp>().key = items[i];
+        },
+        ComponentConfig{}.with_size({pixels(300), pixels(200)}));
+    h.layout_only();
+  };
+
+  frame();
+  const auto before = row_for;
+  for (const auto &[key, id] : before)
+    stamp_for[key] = AutoLayout::to_ent_static(id).get<RowStamp>().key;
+  CHECK(before.size() >= 10);
+
+  items = {8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21};
+  frame();
+  for (const auto &[key, id] : before) {
+    if (key == 10) { CHECK(row_for.count(key) == 0); continue; }
+    if (!row_for.count(key)) continue;
+    CHECK(row_for[key] == id);
+    CHECK(AutoLayout::to_ent_static(id).get<RowStamp>().key == stamp_for[key]);
+  }
+  CHECK(row_for.count(8) && row_for.count(9));
+  CHECK(row_for[8] != before.at(11) && row_for[9] != before.at(11));
 }
 
 int main() { return ui_test::run_registered_tests("virtual_list"); }

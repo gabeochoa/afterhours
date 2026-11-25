@@ -106,10 +106,17 @@ inline void update_text_units(Entity &entity, const std::string &label) {
     const float delay =
         stagger_delay(changed, changed_indices.size(), st.cfg.stagger, st.cfg.order, st.seed);
     ++changed;
-    tracks.track<float>(unit_key(i, UnitProp::X)).from(st.cfg.from_x).to(0.f, ease).delay(delay);
-    tracks.track<float>(unit_key(i, UnitProp::Y)).from(st.cfg.from_y).to(0.f, ease).delay(delay);
-    tracks.track<float>(unit_key(i, UnitProp::Opacity)).from(st.cfg.from_opacity).to(1.f, ease).delay(delay);
-    tracks.track<float>(unit_key(i, UnitProp::Scale)).from(st.cfg.from_scale).to(1.f, ease).delay(delay);
+    auto start = [&](UnitProp prop, float from_value, float to_value) {
+      auto &tr = tracks.track<float>(unit_key(i, prop));
+      if (tr.active())
+        tr.to(to_value, ease);
+      else
+        tr.from(from_value).to(to_value, ease).delay(delay);
+    };
+    start(UnitProp::X, st.cfg.from_x, 0.f);
+    start(UnitProp::Y, st.cfg.from_y, 0.f);
+    start(UnitProp::Opacity, st.cfg.from_opacity, 1.f);
+    start(UnitProp::Scale, st.cfg.from_scale, 1.f);
   }
   st.primed = true;
   st.last = st.units;
