@@ -6,6 +6,7 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+- **Window exposure and backing-scale events (`afterhours::window_events`).** Raylib and Sokol push `Resized`, `ScaleChanged`, `Minimized`, `Restored`, `FocusGained`, and `FocusLost` into a backend-agnostic queue. Covered by `window_events_test`.
 - **`text_input` works without host `Text*` enum names.** Editing actions resolve by name with library-default chord fallback while host enumerators still win. Covered by `text_input_no_host_enum_test`.
 - **`virtual_list_keyed` and `virtual_list_range`.** Keyed rows keep entity identity across inserts/removes above, and `virtual_list_range` exposes the built/visible window plus `near_end`. Covered by `virtual_list_test`.
 - **Logical scroll anchors follow item keys.** `anchor_scroll` now re-pins by the keyed item (`mk_keyed` key) instead of the recycled child entity, so a prepend above the viewport holds the view on the same item. Covered by `scroll_logical_anchor_test`.

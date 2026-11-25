@@ -61,6 +61,7 @@ OUT := $(realpath ..)/output
 $(shell mkdir -p $(OUT))
 
 ALL_TESTS := \
+	window_events_test \
 	text_input_no_host_enum_test \
 	scroll_logical_anchor_test \
 	flex_shrink_test \
