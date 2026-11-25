@@ -66,6 +66,14 @@ inline void clear_window_state(unsigned int flags) {
 }
 inline unsigned int window_state() { return PlatformAPI::window_state(); }
 
+inline CursorMode get_cursor_mode() { return cursor_mode_state(); }
+
+inline void set_cursor_mode(CursorMode mode) {
+  if (cursor_mode_state() == mode) return;
+  cursor_mode_state() = mode;
+  PlatformAPI::set_cursor_mode(mode);
+}
+
 inline void set_config_flags(unsigned int flags) {
   PlatformAPI::set_config_flags(flags);
 }

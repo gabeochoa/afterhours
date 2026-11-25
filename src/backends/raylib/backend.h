@@ -243,10 +243,13 @@ struct RaylibPlatformAPI {
 
   // ── Window lifecycle ──
   static void init_window(int w, int h, const char *title) {
+    cursor_mode_state() = CursorMode::Free;
     raylib::InitWindow(w, h, title);
   }
+
   static void close_window() {
     raylib::CloseWindow();
+    cursor_mode_state() = CursorMode::Free;
     bump_context_epoch();
   }
   static bool window_should_close() { return raylib::WindowShouldClose(); }
@@ -271,6 +274,23 @@ struct RaylibPlatformAPI {
     window_state_flags_ &= ~flags;
   }
   static unsigned int window_state() { return window_state_flags_; }
+
+  static void set_cursor_mode(CursorMode mode) {
+    if (!raylib::IsWindowReady()) return;
+    switch (mode) {
+    case CursorMode::Free:
+      raylib::EnableCursor();
+      raylib::ShowCursor();
+      break;
+    case CursorMode::Hidden:
+      raylib::EnableCursor();
+      raylib::HideCursor();
+      break;
+    case CursorMode::Captured:
+      raylib::DisableCursor();
+      break;
+    }
+  }
 
   // ── Config ──
   static void set_config_flags(unsigned int flags) {
