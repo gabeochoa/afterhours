@@ -429,6 +429,11 @@ inline void apply_shadow(Entity &entity, const ComponentConfig &config) {
     hs->shadow = config.shadow_config.value();
 }
 
+inline void apply_glow(Entity &entity, const ComponentConfig &config) {
+  if (auto *hg = entity.toggleComponent<HasGlow>(config.has_glow()))
+    hg->glow = config.glow_config.value();
+}
+
 inline void apply_border(Entity &entity, const ComponentConfig &config) {
   if (auto *hb = entity.toggleComponent<HasBorder>(config.has_border()))
     hb->border = config.border_config.value();
@@ -750,6 +755,7 @@ Entity &parent, const ComponentConfig &config,
                       default_accessible_role(component_type));
   apply_texture(entity, config);
   apply_shadow(entity, config);
+  apply_glow(entity, config);
   apply_border(entity, config);
   apply_bevel(entity, config);
   apply_nine_slice(entity, config);
