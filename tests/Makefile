@@ -202,6 +202,7 @@ ALL_TESTS := \
 	bitset_test \
 	log_file_test \
 	crash_handler_test \
+	default_logger_test \
 	crash_handler_reentry_test \
 	crash_handler_web_sim_test \
 	crash_report_file_test \
@@ -481,6 +482,7 @@ RAYLIB_TESTS := \
 	window_state_test \
 	click_count_test \
 	edit_keys_test \
+	default_logger_test \
 	default_font_test \
 	font_display_size_test \
 	load_font_size_test \

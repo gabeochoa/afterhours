@@ -32,6 +32,18 @@
 // pointer, not an include, so a TU that does not want it pays nothing.
 inline void (*log_sink_fn)(const char *level, const char *message) = nullptr;
 
+namespace afterhours {
+
+enum class LogLevel {
+  LOG_TRACE = 0,
+  LOG_DEBUG = 1,
+  LOG_INFO = 2,
+  LOG_WARN = 3,
+  LOG_ERROR = 4,
+};
+
+} // namespace afterhours
+
 #if (defined(AFTER_HOURS_LEAN_LOGGING) || !AFTER_HOURS_HAS_FORMAT) &&           \
     !defined(AFTER_HOURS_REPLACE_LOGGING)
 
@@ -46,37 +58,87 @@ inline void log_once_per(Duration, int, const char *, Args &&...) {}
 
 #elif !defined(AFTER_HOURS_REPLACE_LOGGING)
 
+#include <chrono>
 #include <format>
+#include <string>
+#include <string_view>
+#include <unordered_map>
 
 // C++20 format-based logging with {} placeholders
 
+namespace afterhours {
+
+inline LogLevel &min_log_level_storage() {
+  static LogLevel level = LogLevel::LOG_TRACE;
+  return level;
+}
+
+inline void set_log_level(LogLevel level) { min_log_level_storage() = level; }
+
+inline LogLevel get_log_level() { return min_log_level_storage(); }
+
+inline void log_v(LogLevel level, std::string_view message) {
+  if (level < get_log_level())
+    return;
+  const char *tag = "[INFO]";
+  std::FILE *stream = stdout;
+  switch (level) {
+  case LogLevel::LOG_TRACE:
+    tag = "[TRACE]";
+    break;
+  case LogLevel::LOG_DEBUG:
+    tag = "[DEBUG]";
+    break;
+  case LogLevel::LOG_INFO:
+    tag = "[INFO]";
+    break;
+  case LogLevel::LOG_WARN:
+    tag = "[WARN]";
+    break;
+  case LogLevel::LOG_ERROR:
+    tag = "[ERROR]";
+    stream = stderr;
+    break;
+  }
+  const std::string text{message};
+  std::fprintf(stream, "%s %s\n", tag, text.c_str());
+  if (log_sink_fn)
+    log_sink_fn(tag, text.c_str());
+}
+
 template <typename... Args>
-inline void log_trace(std::format_string<Args...>, Args &&...) {
-  // For now, trace logging is disabled
+inline void log_v(LogLevel level, std::format_string<Args...> fmt,
+                  Args &&...args) {
+  if (level < get_log_level())
+    return;
+  const std::string message = std::format(fmt, std::forward<Args>(args)...);
+  log_v(level, std::string_view{message});
+}
+
+} // namespace afterhours
+
+template <typename... Args>
+inline void log_trace(std::format_string<Args...> fmt, Args &&...args) {
+  afterhours::log_v(afterhours::LogLevel::LOG_TRACE, fmt,
+                    std::forward<Args>(args)...);
 }
 
 template <typename... Args>
 inline void log_info(std::format_string<Args...> fmt, Args &&...args) {
-  const std::string message = std::format(fmt, std::forward<Args>(args)...);
-  std::fprintf(stdout, "[INFO] %s\n", message.c_str());
-  if (log_sink_fn)
-    log_sink_fn("[INFO]", message.c_str());
+  afterhours::log_v(afterhours::LogLevel::LOG_INFO, fmt,
+                    std::forward<Args>(args)...);
 }
 
 template <typename... Args>
 inline void log_warn(std::format_string<Args...> fmt, Args &&...args) {
-  const std::string message = std::format(fmt, std::forward<Args>(args)...);
-  std::fprintf(stdout, "[WARN] %s\n", message.c_str());
-  if (log_sink_fn)
-    log_sink_fn("[WARN]", message.c_str());
+  afterhours::log_v(afterhours::LogLevel::LOG_WARN, fmt,
+                    std::forward<Args>(args)...);
 }
 
 template <typename... Args>
 inline void log_error(std::format_string<Args...> fmt, Args &&...args) {
-  const std::string message = std::format(fmt, std::forward<Args>(args)...);
-  std::fprintf(stderr, "[ERROR] %s\n", message.c_str());
-  if (log_sink_fn)
-    log_sink_fn("[ERROR]", message.c_str());
+  afterhours::log_v(afterhours::LogLevel::LOG_ERROR, fmt,
+                    std::forward<Args>(args)...);
 }
 
 template <typename... Args>
@@ -85,9 +147,16 @@ inline void log_clean(std::format_string<Args...>, Args &&...) {
 }
 
 template <typename Duration, typename... Args>
-inline void log_once_per(Duration, int, std::format_string<Args...>,
-                         Args &&...) {
-  // For now, once per logging is disabled
+inline void log_once_per(Duration interval, int key,
+                         std::format_string<Args...> fmt, Args &&...args) {
+  static std::unordered_map<int, std::chrono::steady_clock::time_point> last;
+  const auto now = std::chrono::steady_clock::now();
+  const auto it = last.find(key);
+  if (it != last.end() && now - it->second < interval)
+    return;
+  last[key] = now;
+  afterhours::log_v(afterhours::LogLevel::LOG_INFO, fmt,
+                    std::forward<Args>(args)...);
 }
 
 #endif
