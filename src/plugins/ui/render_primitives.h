@@ -67,6 +67,23 @@ struct RenderPrimitive {
   };
   using CustomDrawContextFn = std::function<void(const DrawContext &)>;
 
+  struct DrawCallback {
+    CustomDrawContextFn fn;
+    DrawCallback() = default;
+    DrawCallback(std::nullptr_t) : fn(nullptr) {}
+    template <typename F>
+      requires std::invocable<F &, const DrawContext &>
+    DrawCallback(F f) : fn(std::move(f)) {}
+    template <typename F>
+      requires(!std::invocable<F &, const DrawContext &> &&
+               std::invocable<F &, RectangleType>)
+    DrawCallback(F f)
+        : fn([f = std::move(f)](const DrawContext &d) mutable { f(d.rect); }) {}
+    explicit operator bool() const { return static_cast<bool>(fn); }
+    void operator()(const DrawContext &d) const { fn(d); }
+    void operator()(RectangleType r) const { fn(DrawContext{r, 1.f}); }
+  };
+
   RenderPrimitiveType type;
   int layer = 0;
   EntityID entity_id = -1; // For debugging
@@ -416,8 +433,8 @@ static_assert(std::is_trivially_destructible_v<RenderPrimitive>,
 // (gradients, feeds, brackets) inline, without a debug-name rect lookup or
 // separate BG/FG render systems. Set via ComponentConfig::with_on_draw_bg/fg.
 struct HasOnDraw : BaseComponent {
-  RenderPrimitive::CustomDrawContextFn bg;
-  RenderPrimitive::CustomDrawContextFn fg;
+  RenderPrimitive::DrawCallback bg;
+  RenderPrimitive::DrawCallback fg;
   // Drawn after the widget's whole subtree, unlike fg (own primitives only).
   RenderPrimitive::CustomDrawFn over;
 };

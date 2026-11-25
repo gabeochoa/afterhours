@@ -2568,7 +2568,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     // widget; the fn pointer is stable on the HasOnDraw component for the frame.
     if (entity.has<HasOnDraw>() && entity.get<HasOnDraw>().bg) {
       buffer.add_custom(
-          draw_rect, &entity.get<HasOnDraw>().bg,
+          draw_rect, &entity.get<HasOnDraw>().bg.fn,
           cmp.resolved_scaling_mode == ScalingMode::Adaptive
               ? context.theme.ui_scale
               : 1.f,
@@ -3060,7 +3060,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     // Custom draw (on top): enqueued after all of the widget's own primitives.
     if (entity.has<HasOnDraw>() && entity.get<HasOnDraw>().fg) {
       buffer.add_custom(
-          draw_rect, &entity.get<HasOnDraw>().fg,
+          draw_rect, &entity.get<HasOnDraw>().fg.fn,
           cmp.resolved_scaling_mode == ScalingMode::Adaptive
               ? context.theme.ui_scale
               : 1.f,
