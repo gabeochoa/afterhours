@@ -6,6 +6,7 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+- **Row baseline alignment (`AlignItems::Baseline`, `SelfAlign::Baseline`).** Aligns text children in a row on their first-line baseline via backend `text_ascent()`, with non-text children falling back to their top edge on the baseline. Covered by `autolayout_test`.
 - **`imm::disclosure` expand/collapse section widget** (`src/plugins/ui/disclosure.h`) with a polyline chevron that toggles on click or keyboard activation and persists expanded state. Covered by `disclosure_test`.
 - **`imm::scroll_to_item(list, index)`** top-aligns a `virtual_list` row (uniform or measured) using retained row geometry, clamping past the end. `virtual_row_offset` and `virtual_rows_total` now work for uniform lists as well. Covered by `virtual_list_test`.
 - **`imm::icon_row` forwards its container `ComponentConfig` directly to `hstack`** (gap, alignment, padding, absolute positioning, `skip_grid_snap` — also forwarded to icon items). Covered by `icon_row_test`.

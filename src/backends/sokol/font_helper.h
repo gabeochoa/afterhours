@@ -338,6 +338,25 @@ inline float monospace_cell_advance(const Font font, const float size) {
   return fonsTextAdvance(ctx, "0", nullptr) / dpi;
 }
 
+inline float text_ascent(const Font font, const float size) {
+  if (!std::isfinite(size) || size <= 0.f)
+    return 0.f;
+  auto *ctx = graphics::metal_detail::g_fons_ctx;
+  if (!ctx)
+    return size * 0.8f;
+  const int fid = (font.id != FONS_INVALID)
+                      ? font.id
+                      : graphics::metal_detail::g_active_font;
+  if (fid == FONS_INVALID)
+    return size * 0.8f;
+  fonsSetFont(ctx, fid);
+  const float dpi = graphics::metal_detail::dpi_scale();
+  fonsSetSize(ctx, size * dpi);
+  float ascender = 0.f, descender = 0.f, lineh = 0.f;
+  fonsVertMetrics(ctx, &ascender, &descender, &lineh);
+  return ascender / dpi;
+}
+
 inline float get_first_glyph_bearing(const Font, const char *) { return 0.0f; }
 
 inline bool is_font_loaded(const Font &font) { return font.id != FONS_INVALID; }

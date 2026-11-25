@@ -42,6 +42,7 @@ inline std::optional<raylib::Font> &bundled_default_font();
 inline void set_default_font(raylib::Font font) {
   detail::default_font_override() = font;
 }
+
 inline void clear_default_font() { detail::default_font_override().reset(); }
 
 inline raylib::Font get_default_font() {
@@ -52,6 +53,7 @@ inline raylib::Font get_default_font() {
     return *bundled;
   return raylib::GetFontDefault();
 }
+
 inline raylib::Font get_unset_font() { return get_default_font(); }
 
 inline float font_display_scale() {
@@ -675,6 +677,20 @@ inline float monospace_cell_advance(const raylib::Font font,
           ? static_cast<float>(font.recs[idx].width)
           : static_cast<float>(font.glyphs[idx].advanceX);
   return advance * size / static_cast<float>(font.baseSize);
+}
+
+inline float text_ascent(const raylib::Font font, const float size) {
+  if (!std::isfinite(size) || size <= 0.f)
+    return 0.f;
+  if (!font_is_usable(font) || font.baseSize <= 0 || !font.glyphs || !font.recs)
+    return size * 0.8f;
+  const int idx = raylib::GetGlyphIndex(font, 'H');
+  if (idx < 0 || idx >= font.glyphCount)
+    return size * 0.8f;
+  const float scale = size / static_cast<float>(font.baseSize);
+  return (static_cast<float>(font.glyphs[idx].offsetY) +
+          static_cast<float>(font.recs[idx].height)) *
+         scale;
 }
 
 // Get the left-side bearing (offsetX) for the first glyph in a string.
