@@ -91,6 +91,8 @@ struct RenderPrimitive {
       BorderEdge edge;
       float thickness; // Line thickness for outline (0 = default thin line)
       float rotation;
+      float rot_center_x;
+      float rot_center_y;
     } outline;
 
     struct {
@@ -253,6 +255,8 @@ public:
     cmd.data.outline.corners.reset();
     cmd.data.outline.thickness = thickness;
     cmd.data.outline.rotation = 0.f;
+    cmd.data.outline.rot_center_x = 0.f;
+    cmd.data.outline.rot_center_y = 0.f;
     return cmd;
   }
 
@@ -261,7 +265,8 @@ public:
                             float roundness, int segments,
                             const std::bitset<4> &corners, int layer,
                             EntityID entity_id = -1, float thickness = 0.0f,
-                            float rotation = 0.f) {
+                            float rotation = 0.f, float rot_center_x = 0.f,
+                            float rot_center_y = 0.f) {
     RenderPrimitive cmd(RenderPrimitiveType::RoundedRectangleOutline, layer,
                         entity_id);
     cmd.data.outline.rect = rect;
@@ -271,6 +276,8 @@ public:
     cmd.data.outline.corners = corners;
     cmd.data.outline.thickness = thickness;
     cmd.data.outline.rotation = rotation;
+    cmd.data.outline.rot_center_x = rot_center_x;
+    cmd.data.outline.rot_center_y = rot_center_y;
     return cmd;
   }
 
@@ -457,10 +464,12 @@ public:
                                      float roundness, int segments,
                                      const std::bitset<4> &corners, int layer,
                                      EntityID entity_id = -1,
-                                     float thickness = 0.0f, float rotation = 0.f) {
+                                     float thickness = 0.0f, float rotation = 0.f,
+                                     float rot_center_x = 0.f,
+                                     float rot_center_y = 0.f) {
     commands_.push_back(RenderPrimitive::rounded_rectangle_outline(
         rect, color, roundness, segments, corners, layer, entity_id,
-        thickness, rotation));
+        thickness, rotation, rot_center_x, rot_center_y));
   }
 
   // Add text with optional stroke and shadow
@@ -971,8 +980,13 @@ private:
     for (size_t i = start; i < end; ++i) {
       capture::Scope attribute(cmds[i].entity_id, cmds[i].layer);
       const auto &outline = cmds[i].data.outline;
-      push_rotation(outline.rect.x + outline.rect.width * .5f,
-                    outline.rect.y + outline.rect.height * .5f, outline.rotation);
+      push_rotation(outline.rot_center_x != 0.f || outline.rot_center_y != 0.f
+                        ? outline.rot_center_x
+                        : outline.rect.x + outline.rect.width * .5f,
+                    outline.rot_center_x != 0.f || outline.rot_center_y != 0.f
+                        ? outline.rot_center_y
+                        : outline.rect.y + outline.rect.height * .5f,
+                    outline.rotation);
       if (outline.thickness > 1.0f) {
         // roundness is a FRACTION of the shorter side, so reusing it on the
         // grown rect grows the radius too and the rings bow apart at the
