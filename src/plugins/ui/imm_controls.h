@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <bitset>
+#include <cmath>
 #include <chrono>
 #include <fstream>
 #include <string>
@@ -64,12 +65,17 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
 
     float icon_w = config.icon_source_rect->width;
     float icon_h = config.icon_source_rect->height;
-    // Native size means a 256px icon in a 46px button, covering the label.
-    // ScreenPercent counts as a known height too: with_720p_size is the
-    // spelling responsive buttons use, and gating on Pixels alone meant those
-    // were exactly the ones that got a native-size icon.
-    const Dim ydim = config.size.y_axis.dim;
-    if ((ydim == Dim::Pixels || ydim == Dim::ScreenPercent) && icon_h > 0.f) {
+    if (config.icon_size.has_value()) {
+      float screen_height = 720.f;
+      if (auto *pcr = EntityHelper::get_singleton_cmp<
+              window_manager::ProvidesCurrentResolution>()) {
+        screen_height = static_cast<float>(pcr->current_resolution.height);
+      }
+      icon_w = resolve_to_pixels(config.icon_size->x_axis, screen_height);
+      icon_h = resolve_to_pixels(config.icon_size->y_axis, screen_height);
+    } else if ((config.size.y_axis.dim == Dim::Pixels ||
+                config.size.y_axis.dim == Dim::ScreenPercent) &&
+               icon_h > 0.f) {
       float screen_height = 720.f;
       if (auto *pcr = EntityHelper::get_singleton_cmp<
               window_manager::ProvidesCurrentResolution>()) {
@@ -498,9 +504,16 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
       init_state<HasToggleSwitchState>(entity, [&](auto &) {}, value);
   state.on = value;
 
-  // Animate (smooth lerp toward target)
   float target = state.on ? 1.0f : 0.0f;
-  state.animation_progress += (target - state.animation_progress) * 0.2f;
+  if (motion::is_instant()) {
+    state.animation_progress = target;
+  } else {
+    const float dt = ctx.dt > 0.f ? ctx.dt : (1.f / 60.f);
+    const float factor = 1.f - std::pow(0.8f, dt * 60.f);
+    state.animation_progress += (target - state.animation_progress) * factor;
+    if (std::fabs(target - state.animation_progress) < 0.001f)
+      state.animation_progress = target;
+  }
 
   const Theme &theme = ctx.theme;
 

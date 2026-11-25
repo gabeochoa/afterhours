@@ -346,6 +346,9 @@ inline TextureType load_texture(const char *) {
   return TextureType{};
 }
 
+// Records draws rather than issuing them; uploads here return empty by design.
+inline bool texture_is_usable() { return false; }
+
 inline TextureType load_texture_from_rgba(const std::uint8_t *, int, int,
                                           int = TEXTURE_FILTER_BILINEAR) {
   log_error("@notimplemented load_texture_from_rgba");

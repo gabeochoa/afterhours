@@ -9,6 +9,7 @@
 #include <string_view>
 #include <unordered_map>
 
+#include "../byte_cache.h"
 #include "../developer.h"
 #include "base_component.h"
 
@@ -90,7 +91,12 @@ public:
 
   void set_prune_interval(uint32_t frames) { prune_interval_ = frames; }
   void set_max_age(uint32_t frames) { max_age_ = frames; }
-  void set_max_entries(size_t count) { max_entries_ = count; }
+  void set_max_entries(size_t count) {
+    max_entries_ = count;
+    while (!lru_list_.empty() && lookup.size() >= max_entries_) {
+      evict_lru();
+    }
+  }
 
   [[nodiscard]] Vector2Type measure(std::string_view text,
                                     std::string_view font_name, float font_size,
@@ -154,6 +160,19 @@ public:
   }
 
   [[nodiscard]] size_t size() const { return lookup.size(); }
+  static constexpr size_t ENTRY_COST = sizeof(Key) + sizeof(Vector2Type);
+  [[nodiscard]] size_t accounted_bytes() const {
+    return lookup.size() * ENTRY_COST;
+  }
+  [[nodiscard]] ByteCache<uint64_t, Vector2Type>::Stats byte_stats() const {
+    ByteCache<uint64_t, Vector2Type>::Stats s;
+    s.hits = cache_hits_;
+    s.misses = cache_misses_;
+    s.accounted_bytes = accounted_bytes();
+    s.entries = lookup.size();
+    s.budget_bytes = DEFAULT_MAX_ENTRIES * ENTRY_COST;
+    return s;
+  }
   [[nodiscard]] uint64_t hits() const { return cache_hits_; }
   [[nodiscard]] uint64_t misses() const { return cache_misses_; }
   [[nodiscard]] uint32_t generation() const { return current_generation_; }

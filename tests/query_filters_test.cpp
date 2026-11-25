@@ -429,6 +429,62 @@ TEST(where_field_chains_with_itself_and_with_where_component) {
 }
 
 // ============================================================================
+// gen_count
+// ============================================================================
+
+TEST(gen_count_matches_gen_for_ordinary_filtered_query) {
+    clear_all();
+    make_alpha(5, true, 0.f, "small");
+    make_alpha(50, true, 0.f, "big", true);
+    make_alpha(500, false, 0.f, "huge");
+    make_bare();
+
+    const size_t counted = EntityQuery<>()
+                               .whereHasComponent<Alpha>()
+                               .whereComponentAndLambda<Alpha>(
+                                   [](const Alpha &a) { return a.count > 10; })
+                               .gen_count();
+    const size_t materialized = EntityQuery<>()
+                                    .whereHasComponent<Alpha>()
+                                    .whereComponentAndLambda<Alpha>(
+                                        [](const Alpha &a) {
+                                            return a.count > 10;
+                                        })
+                                    .gen()
+                                    .size();
+    CHECK(counted == materialized);
+    CHECK(counted == 2);
+
+    clear_all();
+}
+
+TEST(gen_count_matches_gen_for_orderby_take_post_sort_filter) {
+    clear_all();
+    make_alpha(1, false, 40.f, "top");
+    make_alpha(2, false, 30.f, "second");
+    make_alpha(3, false, 20.f, "third");
+    make_alpha(4, false, 10.f, "fourth");
+
+    const size_t counted = EntityQuery<>()
+                               .whereHasComponent<Alpha>()
+                               .orderByMax(ratio_of)
+                               .take(3)
+                               .whereFieldHasValue(&Alpha::count, 2)
+                               .gen_count();
+    const size_t materialized = EntityQuery<>()
+                                    .whereHasComponent<Alpha>()
+                                    .orderByMax(ratio_of)
+                                    .take(3)
+                                    .whereFieldHasValue(&Alpha::count, 2)
+                                    .gen()
+                                    .size();
+    CHECK(counted == materialized);
+    CHECK(counted == 1);
+
+    clear_all();
+}
+
+// ============================================================================
 // Composition with ordering and take, including positional ordering
 // ============================================================================
 
