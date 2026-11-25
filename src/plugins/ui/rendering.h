@@ -50,6 +50,21 @@ static inline RectangleType snap_origin(RectangleType rect,
   return rect;
 }
 
+static inline RectangleType apply_text_offset(RectangleType rect,
+                                              TextAlignment alignment,
+                                              float dx, float dy) {
+  rect.y += dy;
+  if (alignment == TextAlignment::Right) {
+    rect.width = std::max(0.f, rect.width + dx);
+  } else if (alignment == TextAlignment::Center) {
+    rect.x += dx;
+  } else {
+    rect.x += dx;
+    rect.width = std::max(0.f, rect.width - dx);
+  }
+  return rect;
+}
+
 static inline float compute_effective_opacity(const Entity &entity);
 
 static inline const Theme &theme_for(const Entity &entity,
@@ -374,6 +389,18 @@ std::optional<FocusPaint> prepare_focus_paint(const UIContext<InputAction> &cont
     } else {
       widget = detail::apply_ancestor_transform(entity, widget);
       pivot = {widget.x + widget.width * .5f, widget.y + widget.height * .5f};
+    }
+    RectangleType base = cmp.rect();
+    if (entity.has<HasUIModifiers>())
+      base = entity.get<HasUIModifiers>().apply_modifier(base);
+    const auto world = detail::resolve_world_transform(entity, base);
+    if (world.ancestor_rotated) {
+      FocusRing adjusted = *ring;
+      adjusted.rect.x += world.rot_center.x - (widget.x + widget.width * .5f);
+      adjusted.rect.y += world.rot_center.y - (widget.y + widget.height * .5f);
+      return FocusPaint{adjusted, entity.id, i - 1, cmd.layer, world.rotation,
+                        world.rot_center,
+                        has_clip ? clip : std::optional<RectangleType>{}};
     }
     return FocusPaint{*ring, entity.id, i - 1, cmd.layer,
                       entity.has<HasUIModifiers>() ? entity.get<HasUIModifiers>().rotation : 0.f,
@@ -988,10 +1015,9 @@ resolved_text_origin(const Entity &entity,
                                     cmp.resolved_scaling_mode, uis);
   }
   const Vector2Type inset = resolve_text_inset(theme, hasLabel.text_inset);
-  RectangleType label_rect = cmp.rect();
-  label_rect.x += hasLabel.text_x_offset;
-  label_rect.width -= hasLabel.text_x_offset;
-  label_rect.y += hasLabel.text_y_offset;
+  RectangleType label_rect = detail::apply_text_offset(
+      cmp.rect(), hasLabel.alignment, hasLabel.text_x_offset,
+      hasLabel.text_y_offset);
   const TextPositionResult pos = position_text_ex(
       fm, hasLabel.label.c_str(), label_rect, hasLabel.alignment, inset,
       explicit_fs, hasLabel.letter_spacing, hasLabel.text_overflow,
@@ -1896,13 +1922,9 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         cmp.rect(), cmp.resolved_scaling_mode, context.theme.ui_scale);
     if (entity.has<HasUIModifiers>())
       draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
-    draw_rect = detail::apply_ancestor_transform(entity, draw_rect);
-
-    // Get rotation from modifiers (applied separately since rectangles rotate
-    // around center)
-    float rotation = entity.has<HasUIModifiers>()
-                         ? entity.get<HasUIModifiers>().rotation
-                         : 0.0f;
+    const auto world = detail::resolve_world_transform(entity, draw_rect);
+    draw_rect = world.rect;
+    float rotation = world.rotation;
 
     auto corner_settings = entity.has<HasRoundedCorners>()
                                ? entity.get<HasRoundedCorners>().get()
@@ -1916,10 +1938,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                        ? entity.get<HasRoundedCorners>().segments
                        : 8;
 
-    const Vector2Type rot_center = entity.has<HasUIModifiers>()
-        ? entity.get<HasUIModifiers>().rotation_center(draw_rect)
-        : Vector2Type{draw_rect.x + draw_rect.width / 2.0f,
-                      draw_rect.y + draw_rect.height / 2.0f};
+    const Vector2Type rot_center = world.rot_center;
     float centerX = rot_center.x;
     float centerY = rot_center.y;
     push_rotation(centerX, centerY, rotation);
@@ -2076,10 +2095,9 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       const Vector2Type immediate_inset =
           resolve_text_inset(detail::theme_for(entity, context.theme), hasLabel.text_inset);
 
-      RectangleType label_rect = text_rect;
-      label_rect.x += hasLabel.text_x_offset;
-      label_rect.width -= hasLabel.text_x_offset;
-      label_rect.y += hasLabel.text_y_offset;
+      RectangleType label_rect = detail::apply_text_offset(
+          text_rect, hasLabel.alignment, hasLabel.text_x_offset,
+          hasLabel.text_y_offset);
       // Same own-box clip as the batched path: a label is scissored to
       // its box (intersected with any ancestor clip, restored after),
       // so over-long text cannot spill over neighbours. Rotated labels
@@ -2540,13 +2558,11 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         cmp.rect(), cmp.resolved_scaling_mode, context.theme.ui_scale);
     if (entity.has<HasUIModifiers>())
       draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
-    draw_rect = detail::apply_ancestor_transform(entity, draw_rect);
-
-    // Get rotation from modifiers (applied separately since rectangles rotate
-    // around center)
-    float rotation = entity.has<HasUIModifiers>()
-                         ? entity.get<HasUIModifiers>().rotation
-                         : 0.0f;
+    const auto world = detail::resolve_world_transform(entity, draw_rect);
+    draw_rect = world.rect;
+    float rotation = world.rotation;
+    const float world_center_x = world.rot_center.x;
+    const float world_center_y = world.rot_center.y;
 
     auto corner_settings = entity.has<HasRoundedCorners>()
                                ? entity.get<HasRoundedCorners>().get()
@@ -2594,7 +2610,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       if (col.a > 0) {
         buffer.add_rounded_rectangle(
             detail::fill_rect_for(entity, draw_rect), col, roundness, segments,
-            corner_settings, layer, entity.id, rotation);
+            corner_settings, layer, entity.id, rotation, world_center_x,
+            world_center_y);
       }
     }
 
@@ -2762,10 +2779,9 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
               static_cast<int>(label_clip.width),
               static_cast<int>(label_clip.height), layer, entity.id);
         if (SHOW_TEXT_OVERFLOW_DEBUG && !result.text_fits) {
-          RectangleType dr = text_rect;
-          dr.x += hasLabel.text_x_offset;
-          dr.width -= hasLabel.text_x_offset;
-          dr.y += hasLabel.text_y_offset;
+          RectangleType dr = detail::apply_text_offset(
+              text_rect, hasLabel.alignment, hasLabel.text_x_offset,
+              hasLabel.text_y_offset);
           const Color overlay{255, 50, 50, 60}, border{255, 50, 50, 200};
           const float t = 2.f;
           buffer.add_rectangle(dr, overlay, layer, entity.id);
@@ -2799,18 +2815,14 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
         // Pass the container rect (text_rect) not the position rect
         // (result.rect) render_text will handle centering within the container
-        RectangleType label_rect = text_rect;
-        label_rect.x += hasLabel.text_x_offset;
-        label_rect.width -= hasLabel.text_x_offset;
-        label_rect.y += hasLabel.text_y_offset;
+        RectangleType label_rect = detail::apply_text_offset(
+            text_rect, hasLabel.alignment, hasLabel.text_x_offset,
+            hasLabel.text_y_offset);
         label_rect.x += label_inset.x;
         label_rect.y += label_inset.y;
         label_rect.width = std::max(0.f, label_rect.width - 2.f * label_inset.x);
         label_rect.height = std::max(0.f, label_rect.height - 2.f * label_inset.y);
-        const Vector2Type rot_center = entity.has<HasUIModifiers>()
-            ? entity.get<HasUIModifiers>().rotation_center(draw_rect)
-            : Vector2Type{draw_rect.x + draw_rect.width / 2.0f,
-                          draw_rect.y + draw_rect.height / 2.0f};
+        const Vector2Type rot_center{world_center_x, world_center_y};
         float centerX = rot_center.x;
         float centerY = rot_center.y;
 
@@ -3008,10 +3020,9 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         }
 
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
-        RectangleType visibility_bounds = text_rect;
-        visibility_bounds.x += hasLabel.text_x_offset;
-        visibility_bounds.width -= hasLabel.text_x_offset;
-        visibility_bounds.y += hasLabel.text_y_offset;
+        RectangleType visibility_bounds = detail::apply_text_offset(
+            text_rect, hasLabel.alignment, hasLabel.text_x_offset,
+            hasLabel.text_y_offset);
         detail::register_label_for_testing(entity, hasLabel.label, visibility_bounds,
                                            context.screen_width, context.screen_height);
 #endif
@@ -3038,7 +3049,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       // Honor with_opacity like the HasImage branch below (and the direct
       // render path); previously HasTexture ignored it in the buffered pass.
       const Color tex_col = detail::resolve_image_tint(entity, effective_opacity);
-      buffer.add_image(dest, src, texture.texture, tex_col, layer, entity.id);
+      buffer.add_image(dest, src, texture.texture, tex_col, layer, entity.id,
+                       -1, rotation, world_center_x, world_center_y);
     } else if (entity.has<ui::HasImage>()) {
       const ui::HasImage &img = entity.get<ui::HasImage>();
       texture_manager::Rectangle src =
@@ -3054,7 +3066,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
       RectangleType dest = {location.x, location.y, size.x, size.y};
       buffer.add_image(dest, src, img.texture, img_col, layer, entity.id,
-                       img.filter.value_or(-1));
+                       img.filter.value_or(-1), rotation, world_center_x,
+                       world_center_y);
     }
 
     // Custom draw (on top): enqueued after all of the widget's own primitives.

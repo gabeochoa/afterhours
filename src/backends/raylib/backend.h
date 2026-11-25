@@ -11,6 +11,7 @@
 
 #include "../../file_drop.h"
 #include "../../graphics_common.h"
+#include "../../window_events.h"
 #include "headless.h"
 #include "windowed.h"
 
@@ -72,6 +73,7 @@ inline void raylib_shutdown() {
       },
       storage());
   storage() = std::monostate{};
+  bump_context_epoch();
 }
 
 inline bool host_input_activity() {
@@ -88,7 +90,32 @@ inline bool host_input_activity() {
   return active;
 }
 
+inline void poll_window_events() {
+  using namespace window_events;
+  static float last_dpi = 0.f;
+  static bool was_occluded = false;
+  if (!raylib::IsWindowReady())
+    return;
+  const auto dpi = raylib::GetWindowScaleDPI();
+  const float scale = dpi.x;
+  const bool occ = raylib::IsWindowHidden() || raylib::IsWindowMinimized();
+  if (occ != was_occluded) {
+    push({occ ? Type::Occluded : Type::Revealed, raylib::GetScreenWidth(),
+          raylib::GetScreenHeight(), scale});
+    was_occluded = occ;
+  }
+  if (raylib::IsWindowResized())
+    push({Type::Resized, raylib::GetScreenWidth(), raylib::GetScreenHeight(),
+          scale});
+  if (last_dpi > 0.f && scale > 0.f && scale != last_dpi)
+    push({Type::ScaleChanged, raylib::GetScreenWidth(),
+          raylib::GetScreenHeight(), scale});
+  if (scale > 0.f)
+    last_dpi = scale;
+}
+
 inline void raylib_begin_frame() {
+  poll_window_events();
   std::visit(
       [](auto &backend) {
         using T = std::decay_t<decltype(backend)>;
@@ -244,7 +271,10 @@ struct RaylibPlatformAPI {
   static void init_window(int w, int h, const char *title) {
     raylib::InitWindow(w, h, title);
   }
-  static void close_window() { raylib::CloseWindow(); }
+  static void close_window() {
+    raylib::CloseWindow();
+    bump_context_epoch();
+  }
   static bool window_should_close() { return raylib::WindowShouldClose(); }
   static bool is_window_ready() { return raylib::IsWindowReady(); }
   static bool is_window_fullscreen() { return raylib::IsWindowFullscreen(); }
