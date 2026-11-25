@@ -1702,6 +1702,23 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
   }
 };
 
+inline void draw_radial_glow(Vector2Type center, float radius_x,
+                             float radius_y, Color color, int rings = 10) {
+  if (radius_x <= 0.f || radius_y <= 0.f || color.a == 0)
+    return;
+  rings = std::max(1, rings);
+  for (int i = rings; i >= 1; --i) {
+    const float frac = static_cast<float>(i) / static_cast<float>(rings);
+    const float fall = (1.f - frac) * (1.f - frac);
+    Color layer = color;
+    layer.a = static_cast<unsigned char>(std::min(
+        255.f, static_cast<float>(color.a) * (fall + 0.08f) * 2.f /
+                   static_cast<float>(rings)));
+    draw_ellipse(static_cast<int>(center.x), static_cast<int>(center.y),
+                 radius_x * frac, radius_y * frac, layer);
+  }
+}
+
 template <typename InputAction>
 struct RenderImm : System<UIContext<InputAction>, FontManager> {
   RenderImm() : System<UIContext<InputAction>, FontManager>() {
@@ -1760,6 +1777,41 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         } else {
           draw_rectangle(shadow_rect, layer_color);
         }
+      }
+    }
+  }
+
+  // Rotation is already applied by render_me's push_rotation.
+  void render_glow(const Entity &entity, RectangleType draw_rect,
+                   const std::bitset<4> &corner_settings,
+                   float effective_opacity, float roundness = 0.5f,
+                   int segments = 8) {
+    if (!entity.has<HasGlow>())
+      return;
+    const Glow &glow = entity.get<HasGlow>().glow;
+    if (glow.radius <= 0.f || glow.color.a == 0)
+      return;
+    Color base = glow.color;
+    if (effective_opacity < 1.0f)
+      base.a = static_cast<unsigned char>(base.a * effective_opacity);
+    const int layers =
+        std::max(4, std::min(static_cast<int>(glow.radius / 2.f), 10));
+    for (int i = layers; i >= 1; --i) {
+      const float t = static_cast<float>(i) / static_cast<float>(layers);
+      const float spread = glow.radius * t;
+      const float fall = (1.f - t) * (1.f - t);
+      RectangleType rect = {draw_rect.x - spread, draw_rect.y - spread,
+                            draw_rect.width + spread * 2.f,
+                            draw_rect.height + spread * 2.f};
+      Color layer = base;
+      layer.a = static_cast<unsigned char>(std::min(
+          255.f, static_cast<float>(base.a) * (fall + 0.08f) * 2.f /
+                     static_cast<float>(layers)));
+      if (corner_settings.any()) {
+        draw_rectangle_rounded(rect, roundness, segments, layer,
+                               corner_settings);
+      } else {
+        draw_rectangle(rect, layer);
       }
     }
   }
@@ -1927,6 +1979,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     // Draw shadow first (behind the element)
     render_shadow(entity, draw_rect, corner_settings, effective_opacity,
                   roundness, segments);
+    render_glow(entity, draw_rect, corner_settings, effective_opacity,
+                roundness, segments);
 
     // Custom draw (behind): drawn before the widget's own fill.
     if (entity.has<HasOnDraw>() && entity.get<HasOnDraw>().bg)
@@ -2406,6 +2460,43 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     }
   }
 
+  void collect_glow(RenderCommandBuffer &buffer, const Entity &entity,
+                    RectangleType draw_rect,
+                    const std::bitset<4> &corner_settings,
+                    float effective_opacity, int layer,
+                    float roundness = 0.5f, int segments = 8,
+                    float rotation = 0.f) {
+    if (!entity.has<HasGlow>())
+      return;
+    const Glow &glow = entity.get<HasGlow>().glow;
+    if (glow.radius <= 0.f || glow.color.a == 0)
+      return;
+    Color base = glow.color;
+    if (effective_opacity < 1.0f)
+      base.a = static_cast<unsigned char>(base.a * effective_opacity);
+    const int layers =
+        std::max(4, std::min(static_cast<int>(glow.radius / 2.f), 10));
+    for (int i = layers; i >= 1; --i) {
+      const float t = static_cast<float>(i) / static_cast<float>(layers);
+      const float spread = glow.radius * t;
+      const float fall = (1.f - t) * (1.f - t);
+      RectangleType rect = {draw_rect.x - spread, draw_rect.y - spread,
+                            draw_rect.width + spread * 2.f,
+                            draw_rect.height + spread * 2.f};
+      Color lc = base;
+      lc.a = static_cast<unsigned char>(std::min(
+          255.f, static_cast<float>(base.a) * (fall + 0.08f) * 2.f /
+                     static_cast<float>(layers)));
+      if (corner_settings.any()) {
+        buffer.add_rounded_rectangle(rect, lc, roundness, segments,
+                                     corner_settings, layer, entity.id,
+                                     rotation);
+      } else {
+        buffer.add_rectangle(rect, lc, layer, entity.id, rotation);
+      }
+    }
+  }
+
   void collect_nine_slice(RenderCommandBuffer &buffer, const Entity &entity,
                           RectangleType draw_rect, float effective_opacity,
                           int layer) {
@@ -2563,6 +2654,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     // Shadow first
     collect_shadow(buffer, entity, draw_rect, corner_settings,
                    effective_opacity, layer, roundness, segments);
+    collect_glow(buffer, entity, draw_rect, corner_settings,
+                 effective_opacity, layer, roundness, segments, rotation);
 
     // Custom draw (behind): enqueued before the fill so it renders under the
     // widget; the fn pointer is stable on the HasOnDraw component for the frame.

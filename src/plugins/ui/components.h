@@ -446,6 +446,17 @@ struct HasShadow : BaseComponent {
   explicit HasShadow(const Shadow &s) : shadow(s) {}
 };
 
+struct Glow {
+  float radius = 12.f;
+  Color color = Color{255, 255, 255, 80};
+};
+
+struct HasGlow : BaseComponent {
+  Glow glow;
+  HasGlow() = default;
+  explicit HasGlow(const Glow &g) : glow(g) {}
+};
+
 // Border line style
 enum struct BorderStyle { Solid, Dotted };
 

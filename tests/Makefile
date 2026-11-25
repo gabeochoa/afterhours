@@ -64,6 +64,7 @@ ALL_TESTS := \
 	draw_context_scale_test \
 	focus_return_test \
 	border_width_test \
+	ui_glow_test \
 	border_only_test \
 	checkbox_mark_test \
 	touch_target_test \
@@ -481,6 +482,7 @@ RAYLIB_TESTS := \
 	load_font_size_test \
 	font_unload_manager_test \
 	border_width_test \
+	ui_glow_test \
 	border_only_test \
 	text_visibility_test \
 	image_tint_test \
