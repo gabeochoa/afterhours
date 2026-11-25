@@ -172,17 +172,20 @@ static inline bool point_in_hit_rect(const Entity &entity,
                                      const UIComponent &component,
                                      const input::MousePosition &pos) {
   RectangleType rect = component.rect();
-  const HasUIModifiers *mods =
-      entity.has<HasUIModifiers>() ? &entity.get<HasUIModifiers>() : nullptr;
-  if (mods)
-    rect = mods->apply_modifier(rect);
-  rect = apply_ancestor_transform(entity, rect);
+  if (entity.has<HasUIModifiers>())
+    rect = entity.get<HasUIModifiers>().apply_modifier(rect);
+  const WorldTransform world = resolve_world_transform(entity, rect);
+  rect = world.rect;
   auto [has_clip, clip] = compute_intersected_clip_rect(entity);
   if (has_clip && !is_mouse_inside(pos, clip))
     return false;
-  if (mods)
-    return mods->contains_rotated(rect, pos.x, pos.y);
-  return is_mouse_inside(pos, rect);
+  if (world.rotation == 0.f)
+    return is_mouse_inside(pos, rect);
+  HasUIModifiers rotated;
+  rotated.rotation = world.rotation;
+  rotated.origin_x = 0.5f;
+  rotated.origin_y = 0.5f;
+  return rotated.contains_rotated(rect, pos.x, pos.y);
 }
 
 } // namespace detail
@@ -569,16 +572,35 @@ private:
   // changed size by that much, and following it holds the view still.
   static void apply_scroll_anchor(HasScrollView &scroll, UIComponent &cmp,
                                   float container_y) {
-    if (scroll.anchor_child != -1) {
-      OptEntity prev = UICollectionHolder::getEntityForID(scroll.anchor_child);
-      if (prev.valid() && prev.asE().has<UIComponent>()) {
-        const float now =
-            child_y_in_content(prev.asE().get<UIComponent>(), container_y);
-        const float moved = now - scroll.anchor_child_y;
+    auto child_top = [&](EntityID child_id) -> std::optional<float> {
+      OptEntity child_opt = UICollectionHolder::getEntityForID(child_id);
+      if (!child_opt.valid() || !child_opt.asE().has<UIComponent>())
+        return std::nullopt;
+      return child_y_in_content(child_opt.asE().get<UIComponent>(),
+                                container_y);
+    };
+
+    if (scroll.has_anchor_item_key) {
+      for (EntityID child_id : cmp.children) {
+        auto key = imm::ui_element_key(child_id);
+        if (!key || *key != scroll.anchor_item_key)
+          continue;
+        if (auto now = child_top(child_id)) {
+          const float moved = *now - scroll.anchor_child_y;
+          if (moved != 0.f) {
+            scroll.scroll_offset.y += moved;
+            scroll.scroll_target.y += moved;
+            scroll.last_eased_offset = scroll.scroll_offset;
+          }
+        }
+        break;
+      }
+    } else if (scroll.anchor_child != -1) {
+      if (auto now = child_top(scroll.anchor_child)) {
+        const float moved = *now - scroll.anchor_child_y;
         if (moved != 0.f) {
           scroll.scroll_offset.y += moved;
           scroll.scroll_target.y += moved;
-          // The easing treats a caller's edit as authoritative; this is one.
           scroll.last_eased_offset = scroll.scroll_offset;
         }
       }
@@ -587,6 +609,7 @@ private:
     // Re-pin for next frame, against the offset as it now stands: the topmost
     // child the viewport still shows.
     scroll.anchor_child = -1;
+    scroll.has_anchor_item_key = false;
     for (EntityID child_id : cmp.children) {
       OptEntity child_opt = UICollectionHolder::getEntityForID(child_id);
       if (!child_opt.valid() || !child_opt.asE().has<UIComponent>())
@@ -599,6 +622,10 @@ private:
       if (bottom > scroll.scroll_offset.y) {
         scroll.anchor_child = child_id;
         scroll.anchor_child_y = top;
+        if (auto key = imm::ui_element_key(child_id)) {
+          scroll.anchor_item_key = *key;
+          scroll.has_anchor_item_key = true;
+        }
         break;
       }
     }
@@ -1391,20 +1418,32 @@ struct HandleSelectableText : SystemWithUIContext<ui::HasSelectableText> {
     if (line_height <= 0.f)
       return;
 
+    // Mirrors detail::apply_text_offset in rendering.h, which this header
+    // cannot see: Right moves only the right edge, Center shifts the box.
+    RectangleType shifted = rect;
+    shifted.y += label.text_y_offset;
+    if (label.alignment == TextAlignment::Right)
+      shifted.width = std::max(0.f, shifted.width + label.text_x_offset);
+    else if (label.alignment == TextAlignment::Center)
+      shifted.x += label.text_x_offset;
+    else {
+      shifted.x += label.text_x_offset;
+      shifted.width = std::max(0.f, shifted.width - label.text_x_offset);
+    }
     const float wrap_width = label.text_overflow == TextOverflow::Wrap
-                                 ? std::max(0.f, rect.width - 2.f * inset.x)
+                                 ? std::max(0.f, shifted.width - 2.f * inset.x)
                                  : 1e9f;
     selectable_text::refresh_layout(selectable, label.label, wrap_width,
                                     font_size, line_height, measure);
 
     const Vector2Type origin{
-        rect.x + label.text_x_offset + inset.x,
-        rect.y + label.text_y_offset +
+        shifted.x + inset.x,
+        shifted.y +
             std::max(0.f, (rect.height - selectable.layout.total_height()) *
                               0.5f)};
     const Vector2Type local{context->mouse.pos.x - origin.x,
                             context->mouse.pos.y - origin.y};
-    const float avail = std::max(0.f, rect.width - 2.f * inset.x);
+    const float avail = std::max(0.f, shifted.width - 2.f * inset.x);
     const size_t pos = selectable_text::offset_at(
         selectable.layout, label.label, local, line_height, label.alignment,
         avail, measure);
@@ -2004,6 +2043,77 @@ template <typename InputAction> struct HandleDragGroupsPostLayout : System<> {
 
   virtual ~HandleDragGroupsPostLayout() {}
 
+  bool cancel_requested(UIContext<InputAction> &ctx) {
+    if constexpr (magic_enum::enum_contains<InputAction>("MenuBack"))
+      return ctx.pressed(InputAction::MenuBack);
+    return false;
+  }
+
+  void cancel_drag(DragGroupState *state) {
+    auto dragged_opt = find_drag_tagged(DragTag::DraggedItem);
+    if (dragged_opt && dragged_opt.asE().has<UIComponent>())
+      dragged_opt.asE().get<UIComponent>().should_hide = false;
+    clear_all_drag_tags(state);
+  }
+
+  void update_edge_scroll(UIContext<InputAction> &ctx, float dt) {
+    if (dt <= 0.f)
+      return;
+    auto group_opt = find_drag_tagged(DragTag::HoverGroup);
+    if (!group_opt)
+      group_opt = find_drag_tagged(DragTag::SourceGroup);
+    if (!group_opt || !group_opt.asE().has<UIComponent>())
+      return;
+    const bool horizontal =
+        group_opt.asE().get<UIComponent>().flex_direction == FlexDirection::Row;
+
+    EntityID view_id = -1;
+    EntityID cur = group_opt.asE().id;
+    for (int depth = 0; depth < 32 && cur != (EntityID)-1; depth++) {
+      auto ent = ui::UICollectionHolder::getEntityForID(cur);
+      if (!ent.has_value() || !ent.asE().has<UIComponent>())
+        break;
+      if (ent.asE().has<HasScrollView>()) {
+        view_id = ent.asE().id;
+        break;
+      }
+      cur = ent.asE().get<UIComponent>().parent;
+    }
+    if (view_id == (EntityID)-1)
+      return;
+    auto view_opt = ui::UICollectionHolder::getEntityForID(view_id);
+    if (!view_opt.has_value())
+      return;
+    Entity &view = view_opt.asE();
+
+    auto &scroll = view.get<HasScrollView>();
+    const RectangleType rect =
+        detail::apply_ancestor_transform(view, view.get<UIComponent>().rect());
+    const float pos = horizontal ? ctx.mouse.pos.x : ctx.mouse.pos.y;
+    const float near_edge = horizontal ? rect.x : rect.y;
+    const float extent = horizontal ? rect.width : rect.height;
+    if (extent <= 0.f)
+      return;
+    const float margin = DragGroupState::edge_scroll_margin_px;
+    float delta = 0.f;
+    if (pos < near_edge + margin)
+      delta = -DragGroupState::edge_scroll_speed_px_s * dt *
+              (1.f - std::max(0.f, pos - near_edge) / margin);
+    else if (pos > near_edge + extent - margin)
+      delta = DragGroupState::edge_scroll_speed_px_s * dt *
+              (1.f - std::max(0.f, near_edge + extent - pos) / margin);
+    if (delta == 0.f)
+      return;
+    if (horizontal) {
+      scroll.scroll_offset.x += delta;
+      scroll.scroll_target.x += delta;
+    } else {
+      scroll.scroll_offset.y += delta;
+      scroll.scroll_target.y += delta;
+    }
+    scroll.clamp_scroll();
+  }
+
   /// Remove all drag tags and clean up ephemeral entities.
   void clear_all_drag_tags(DragGroupState *state) {
     cleanup_drag_tagged(DragTag::Spacer);
@@ -2014,7 +2124,7 @@ template <typename InputAction> struct HandleDragGroupsPostLayout : System<> {
     state->reset_drag();
   }
 
-  virtual void once(float) override {
+  virtual void once(float dt) override {
     auto *state = EntityHelper::get_singleton_cmp<DragGroupState>();
     if (!state)
       return;
@@ -2022,6 +2132,14 @@ template <typename InputAction> struct HandleDragGroupsPostLayout : System<> {
     auto *ctx = EntityHelper::get_singleton_cmp<UIContext<InputAction>>();
     if (!ctx)
       return;
+
+    if ((state->dragging || state->armed) && cancel_requested(*ctx)) {
+      if (state->dragging)
+        cancel_drag(state);
+      else
+        state->reset_drag();
+      return;
+    }
 
     auto &ui_coll = UICollectionHolder::get().collection;
 
@@ -2192,6 +2310,8 @@ template <typename InputAction> struct HandleDragGroupsPostLayout : System<> {
       state->hover_index = insert_idx;
       break;
     }
+
+    update_edge_scroll(*ctx, dt);
 
     // --- Create or update floating overlay at cursor ---
     create_or_update_drag_overlay(*state, ctx->mouse.pos.x, ctx->mouse.pos.y);
