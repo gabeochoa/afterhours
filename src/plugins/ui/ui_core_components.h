@@ -491,6 +491,18 @@ struct FontManager final : BaseComponent {
                           static_cast<int>(codepoint));
   }
 
+  [[nodiscard]] std::vector<uint32_t>
+  packing_failures(const std::string &font_name) const {
+    std::vector<uint32_t> failed;
+    for (int cp : glyph_packing_failures(find_font(font_name)))
+      failed.push_back(static_cast<uint32_t>(cp));
+    return failed;
+  }
+
+  [[nodiscard]] bool has_packing_failure(const std::string &font_name) const {
+    return !packing_failures(font_name).empty();
+  }
+
   // The distinct codepoints in `text` that the face cannot draw, in order.
   [[nodiscard]] std::vector<uint32_t>
   missing_codepoints(const std::string &font_name,

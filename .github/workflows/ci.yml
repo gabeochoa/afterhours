@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: brew install raylib fmt
+
+      - name: Check boundaries
+        run: make -C tests check-boundaries
+
+      - name: Build all tests
+        run: make -C tests all -j4
+
+      - name: Run all built tests
+        shell: bash
+        run: |
+          fail=0
+          for bin in output/*_test; do
+            [ -x "$bin" ] || continue
+            echo "Running $bin"
+            "$bin" || fail=1
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "SOME TESTS FAILED"
+            exit 1
+          fi
+
+      - name: Run examples as tests
+        shell: bash
+        run: |
+          if [ -f examples/run_all_as_tests.sh ]; then
+            sh examples/run_all_as_tests.sh
+          else
+            make -C examples all
+          fi
+
+  backend-smoke:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [NONE, RAYLIB, SOKOL]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: brew install raylib fmt
+
+      - name: Compile backend smoke (${{ matrix.backend }})
+        shell: bash
+        run: |
+          mkdir -p /tmp/afh-include
+          ln -sfn "$GITHUB_WORKSPACE" /tmp/afh-include/afterhours
+          printf '#include <afterhours/ah.h>\nint main() { return 0; }\n' > /tmp/backend_smoke.cpp
+          clang++ -std=c++20 -Wall -Wextra \
+            -DAFTER_HOURS_USE_${{ matrix.backend }} \
+            -isystem /tmp/afh-include \
+            -isystem "$GITHUB_WORKSPACE/vendor" \
+            -isystem "$(brew --prefix)/include" \
+            -I"$(brew --prefix raylib)/include" \
+            -c /tmp/backend_smoke.cpp \
+            -o "/tmp/backend_smoke_${{ matrix.backend }}.o"

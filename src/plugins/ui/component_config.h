@@ -126,6 +126,8 @@ struct ComponentConfig {
   // Per-side space between this label and its own box, overriding
   // Theme::text_inset. Unset means the theme's value.
   std::optional<Vector2Type> text_inset;
+  float text_x_offset = 0.f;
+  float text_y_offset = 0.f;
   std::optional<CursorType> cursor_type; // Cursor to show on hover
   bool skip_when_tabbing = false;
   bool focus_scope = false;
@@ -606,6 +608,11 @@ struct ComponentConfig {
   }
   ComponentConfig &with_text_inset(float both) {
     return with_text_inset(both, both);
+  }
+  ComponentConfig &with_text_offset(float x, float y = 0.f) {
+    text_x_offset = x;
+    text_y_offset = y;
+    return *this;
   }
   ComponentConfig &with_cursor(CursorType cursor) {
     cursor_type = cursor;
@@ -1497,6 +1504,10 @@ if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.deb
       merged.letter_spacing = overrides.letter_spacing;
     if (overrides.text_inset.has_value())
       merged.text_inset = overrides.text_inset;
+    if (overrides.text_x_offset != 0.f || overrides.text_y_offset != 0.f) {
+      merged.text_x_offset = overrides.text_x_offset;
+      merged.text_y_offset = overrides.text_y_offset;
+    }
     if (overrides.text_stroke_config.has_value())
       merged.text_stroke_config = overrides.text_stroke_config;
     if (!overrides.styled_label.empty())

@@ -354,6 +354,8 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
       .set_text_inset(config.text_inset)
       .set_line_height(config.text_area_line_height)
       .set_spans(pseudo_localize_spans(config.styled_label, pseudo));
+  lbl.text_x_offset = config.text_x_offset;
+  lbl.text_y_offset = config.text_y_offset;
 
   // Set explicit text color if specified via with_text_color()
   if (config.text_color_usage == Theme::Usage::Custom &&
