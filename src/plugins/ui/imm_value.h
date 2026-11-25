@@ -387,6 +387,9 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
       });
 
   owned_value = sliderState.value;
+  detail::apply_accessibility(
+      entity, config, AccessibleRole::Slider, original_label,
+      fmt::format("{}%", std::lround(sliderState.value * 100)));
   entity.template addComponentIfMissing<FocusClusterRoot>();
   // Consumed on read, not cleared at the top of the build: the drag system runs
   // after it, so clearing first threw away the change it had just recorded and
@@ -621,6 +624,9 @@ ElementResult progress_bar(
             .with_render_layer(config.render_layer + 2));
   }
 
+  detail::apply_accessibility(
+      entity, config, AccessibleRole::ProgressBar, original_label,
+      fmt::format("{}%", static_cast<int>(normalized * 100)));
   return ElementResult{false, entity, normalized};
 }
 
@@ -706,6 +712,67 @@ ElementResult circular_progress(HasUIContext auto &ctx, EntityParent ep_pair,
   entity.removeComponentIfExists<HasBorder>();
 
   return ElementResult{false, entity, normalized};
+}
+
+struct DelayedBusy {
+  float delay = 0.25f;
+  float min_visible = 0.0f;
+  float sweep_period = 1.0f;
+
+  void start() {
+    elapsed_time = 0.f;
+    drain = 0.f;
+    shown = false;
+    finished = false;
+    started = true;
+  }
+
+  void update(float dt) {
+    if (!started) return;
+    if (!std::isfinite(dt) || dt < 0.f) dt = 0.f;
+    if (finished) {
+      drain = std::max(0.f, drain - dt);
+      return;
+    }
+    elapsed_time += dt;
+    if (elapsed_time >= delay) shown = true;
+  }
+
+  void finish() {
+    if (!started || finished) return;
+    finished = true;
+    if (shown) drain = std::max(0.f, delay + min_visible - elapsed_time);
+  }
+
+  [[nodiscard]] bool visible() const {
+    return started && shown && (!finished || drain > 0.f);
+  }
+
+  [[nodiscard]] float indeterminate() const {
+    const float period = sweep_period > 0.f ? sweep_period : 1.f;
+    return std::fmod(elapsed_time / period, 1.f);
+  }
+
+  [[nodiscard]] float elapsed() const { return elapsed_time; }
+
+private:
+  float elapsed_time = 0.f;
+  float drain = 0.f;
+  bool shown = false;
+  bool finished = false;
+  bool started = false;
+};
+
+inline ElementResult
+delayed_busy(HasUIContext auto &ctx, EntityParent ep_pair,
+             DelayedBusy &busy, float value,
+             ComponentConfig config = ComponentConfig()) {
+  auto [entity, parent] = deref(ep_pair);
+  if (!busy.visible()) return ElementResult{false, entity};
+  if (value >= 0.f)
+    return progress_bar(ctx, ep_pair, value, std::move(config));
+  return circular_progress(ctx, ep_pair, busy.indeterminate(),
+                           std::move(config));
 }
 
 
@@ -862,6 +929,9 @@ ElementResult stepper(HasUIContext auto &ctx, EntityParent ep_pair,
     stepperState.changed_since = true;
   }
 
+  detail::apply_accessibility(
+      entity, config, AccessibleRole::Stepper, config.label,
+      std::string(options[stepperState.index % options.size()]));
   // Write state back to caller
   option_index = stepperState.index;
   const bool changed = std::exchange(stepperState.changed_since, false);
