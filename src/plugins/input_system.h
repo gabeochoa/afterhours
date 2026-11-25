@@ -48,6 +48,44 @@ struct input : developer::Plugin {
     };
 
     using MouseButton = int;
+
+    static constexpr int MAX_MOUSE_BUTTONS = 8;
+
+    struct MouseButtonEdgeState {
+        std::array<bool, 8> current{};
+        std::array<bool, 8> previous{};
+
+        bool pressed(const MouseButton button) const {
+            if (button < 0 ||
+                static_cast<std::size_t>(button) >= current.size())
+                return false;
+            const auto index = static_cast<std::size_t>(button);
+            return current[index] && !previous[index];
+        }
+    };
+
+    static MouseButtonEdgeState &mouse_button_edge_state() {
+        static MouseButtonEdgeState state;
+        return state;
+    }
+
+    static void update_mouse_button_edges() {
+        MouseButtonEdgeState &state = mouse_button_edge_state();
+        state.previous = state.current;
+#if defined(AFTER_HOURS_USE_RAYLIB) || defined(AFTER_HOURS_SOKOL)
+        for (int button = 0; button < MAX_MOUSE_BUTTONS; ++button) {
+            state.current[static_cast<std::size_t>(button)] =
+                is_mouse_button_down(button);
+        }
+#else
+        state.current.fill(false);
+#endif
+    }
+
+    static bool mouse_button_pressed_from_edges(const MouseButton button) {
+        return mouse_button_edge_state().pressed(button);
+    }
+
 #ifdef AFTER_HOURS_USE_RAYLIB
     using MousePosition = raylib::Vector2;
     using KeyCode = int;
@@ -115,26 +153,15 @@ struct input : developer::Plugin {
     }
     static bool is_mouse_button_pressed(const MouseButton button) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        // In test mode the injector already answers every reader in the
+        // frame; outside it the backend is raylib::IsMouseButtonPressed,
+        // which is broken on macOS (glfwSwapBuffers pumps Cocoa events
+        // before PollInputEvents copies current to previous), so the
+        // frame-sampled edges stand in for it.
         return testing::test_input::is_mouse_button_pressed(
-            button, [](int b) -> bool {
-                // Manual edge detection: raylib IsMouseButtonPressed is broken
-                // on macOS because glfwSwapBuffers pumps the Cocoa event queue,
-                // setting currentButtonState before PollInputEvents copies
-                // current→previous. Use IsMouseButtonDown + edge tracking
-                // instead.
-                static bool prev[8] = {};
-                bool curr = raylib::IsMouseButtonDown(b);
-                bool pressed = curr && !prev[b];
-                prev[b] = curr;
-                return pressed;
-            });
+            button, [](int b) { return mouse_button_pressed_from_edges(b); });
 #else
-        // Manual edge detection (same macOS fix, no E2E layer)
-        static bool prev[8] = {};
-        bool curr = raylib::IsMouseButtonDown(button);
-        bool pressed = curr && !prev[button];
-        prev[button] = curr;
-        return pressed;
+        return mouse_button_pressed_from_edges(button);
 #endif
     }
     static bool is_mouse_button_released(const MouseButton button) {
@@ -797,9 +824,8 @@ struct input : developer::Plugin {
         log_error("@notimplemented is_mouse_button_down");
         return false;
     }
-    static bool is_mouse_button_pressed(const MouseButton) {
-        log_error("@notimplemented is_mouse_button_pressed");
-        return false;
+    static bool is_mouse_button_pressed(const MouseButton button) {
+        return mouse_button_pressed_from_edges(button);
     }
     static bool is_mouse_button_released(const MouseButton) {
         log_error("@notimplemented is_mouse_button_released");
@@ -1438,6 +1464,7 @@ struct input : developer::Plugin {
                                    ProvidesMaxGamepadID &mxGamepadID,
                                    ProvidesInputMapping &input_mapper,
                                    const float dt) override {
+            update_mouse_button_edges();
             mxGamepadID.max_gamepad_available =
                 std::max(0, fetch_max_gampad_id());
             collector.inputs.clear();
@@ -1621,6 +1648,7 @@ struct LayeredInputSystem
                                input::ProvidesMaxGamepadID &maxGamepad,
                                ProvidesLayeredInputMapping<LayerEnum> &mapper,
                                float dt) override {
+        input::update_mouse_button_edges();
         maxGamepad.max_gamepad_available = std::max(0, fetch_max_gamepad_id());
         collector.inputs.clear();
         collector.inputs_pressed.clear();
