@@ -1629,6 +1629,7 @@ if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.deb
       custom_color = parent.custom_color;
     }
     if (parent.custom_text_color.has_value()) {
+      text_color_usage = parent.text_color_usage;
       custom_text_color = parent.custom_text_color;
       auto_text_color = parent.auto_text_color;
     }

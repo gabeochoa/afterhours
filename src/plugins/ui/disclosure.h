@@ -50,7 +50,12 @@ ElementResult disclosure(HasUIContext auto &ctx, EntityParent ep_pair,
                                           pixels(disclosure_config.header_height)})
                  .with_flex_direction(FlexDirection::Row)
                  .with_align_items(AlignItems::Center)
-                 .with_padding(Padding::all(pixels(2)))
+                 .with_padding(Padding{.top = pixels(2),
+                                       .left = pixels(12),
+                                       .bottom = pixels(2),
+                                       .right = pixels(12)})
+                 .with_gap(pixels(8))
+                 .without_border()
                  .with_label(""));
   bool changed = false;
   if (header && !config.disabled) {
@@ -85,6 +90,8 @@ ElementResult disclosure(HasUIContext auto &ctx, EntityParent ep_pair,
           .with_size(ComponentSize{expand(), percent(1.f)})
           .with_transparent_bg()
           .with_ignore_pointer_events()
+          .without_border()
+          .disable_rounded_corners()
           .with_label(label)
           .with_alignment(TextAlignment::Left)
           .with_skip_tabbing(true));
@@ -94,7 +101,10 @@ ElementResult disclosure(HasUIContext auto &ctx, EntityParent ep_pair,
         div(ctx, mk(entity, 1),
             ComponentConfig::inherit_from(config, "disclosure_body")
                 .with_size(ComponentSize{percent(1.f), children()})
-                .with_flex_direction(FlexDirection::Column));
+                .with_flex_direction(FlexDirection::Column)
+                .with_transparent_bg()
+                .without_border()
+                .disable_rounded_corners());
     body(body_container.ent());
   }
 
