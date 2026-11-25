@@ -8,6 +8,7 @@
 #include <string_view>
 #include <unordered_map>
 
+#include "../byte_cache.h"
 #include "../developer.h"
 #include "base_component.h"
 
@@ -33,18 +34,13 @@ public:
   static constexpr size_t DEFAULT_MAX_ENTRIES = 4096;
 
 private:
-  struct LRUEntry {
-    uint64_t key;
-    Vector2Type size;
-    uint32_t last_used_generation = 0;
-  };
-
-  using LRUList = std::list<LRUEntry>;
-  using LRUIter = LRUList::iterator;
+  static constexpr size_t ENTRY_COST = sizeof(uint64_t) + sizeof(Vector2Type);
 
   MeasureTextFn measure_fn_;
-  LRUList lru_list_;
-  std::unordered_map<uint64_t, LRUIter> lookup_;
+  ByteCache<uint64_t, Vector2Type> cache{
+      DEFAULT_MAX_ENTRIES * ENTRY_COST,
+      [](const Vector2Type &) { return ENTRY_COST; }};
+  std::unordered_map<uint64_t, uint32_t> last_used_generation;
 
   uint32_t current_generation_ = 0;
   uint32_t prune_interval_ = DEFAULT_PRUNE_INTERVAL;
@@ -67,7 +63,17 @@ public:
 
   void set_prune_interval(uint32_t frames) { prune_interval_ = frames; }
   void set_max_age(uint32_t frames) { max_age_ = frames; }
-  void set_max_entries(size_t count) { max_entries_ = count; }
+  void set_max_entries(size_t count) {
+    max_entries_ = count;
+    cache.set_budget((count == 0 ? 1 : count) * ENTRY_COST);
+    if (last_used_generation.size() > cache.size()) {
+      std::unordered_map<uint64_t, uint32_t> kept;
+      for (const auto &[key, gen] : last_used_generation)
+        if (cache.contains(key))
+          kept.emplace(key, gen);
+      last_used_generation = std::move(kept);
+    }
+  }
 
   [[nodiscard]] Vector2Type measure(std::string_view text,
                                     std::string_view font_name, float font_size,
@@ -77,23 +83,16 @@ public:
     }
 
     uint64_t key = compute_hash(text, font_name, font_size, spacing);
-    auto it = lookup_.find(key);
-    if (it != lookup_.end()) {
-      it->second->last_used_generation = current_generation_;
-      lru_list_.splice(lru_list_.begin(), lru_list_, it->second);
+    if (const Vector2Type *cached = cache.get(key)) {
+      last_used_generation[key] = current_generation_;
       cache_hits_++;
-      return it->second->size;
+      return *cached;
     }
 
     cache_misses_++;
     Vector2Type size = measure_fn_(text, font_name, font_size, spacing);
-
-    while (lookup_.size() >= max_entries_) {
-      evict_lru();
-    }
-
-    lru_list_.push_front({key, size, current_generation_});
-    lookup_[key] = lru_list_.begin();
+    if (cache.put(key, size))
+      last_used_generation[key] = current_generation_;
     return size;
   }
 
@@ -119,13 +118,19 @@ public:
   void prune() { prune_stale_entries(); }
 
   void clear() {
-    lru_list_.clear();
-    lookup_.clear();
+    cache.clear();
+    last_used_generation.clear();
     cache_hits_ = 0;
     cache_misses_ = 0;
   }
 
-  [[nodiscard]] size_t size() const { return lookup_.size(); }
+  [[nodiscard]] size_t size() const { return cache.size(); }
+  [[nodiscard]] size_t accounted_bytes() const {
+    return cache.accounted_bytes();
+  }
+  [[nodiscard]] ByteCache<uint64_t, Vector2Type>::Stats byte_stats() const {
+    return cache.stats();
+  }
   [[nodiscard]] uint64_t hits() const { return cache_hits_; }
   [[nodiscard]] uint64_t misses() const { return cache_misses_; }
   [[nodiscard]] uint32_t generation() const { return current_generation_; }
@@ -175,25 +180,18 @@ public:
   }
 
 private:
-  void evict_lru() {
-    if (lru_list_.empty())
-      return;
-    auto &victim = lru_list_.back();
-    lookup_.erase(victim.key);
-    lru_list_.pop_back();
-  }
-
   void prune_stale_entries() {
     if (current_generation_ < max_age_)
       return;
 
     uint32_t threshold = current_generation_ - max_age_;
-    auto it = lru_list_.end();
-    while (it != lru_list_.begin()) {
-      --it;
-      if (it->last_used_generation < threshold) {
-        lookup_.erase(it->key);
-        it = lru_list_.erase(it);
+    for (auto it = last_used_generation.begin();
+         it != last_used_generation.end();) {
+      if (it->second < threshold) {
+        cache.erase(it->first);
+        it = last_used_generation.erase(it);
+      } else {
+        ++it;
       }
     }
   }
