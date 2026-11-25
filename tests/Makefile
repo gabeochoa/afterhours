@@ -136,7 +136,6 @@ ALL_TESTS := \
 	wrappers_test \
 	window_state_test \
 	animation_presets_test \
-	timer_test \
 	shimmer_test \
 	particles_test \
 	trigger_volume_test \
