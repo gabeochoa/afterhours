@@ -753,7 +753,9 @@ struct MetalPlatformAPI {
     fonsSetFont(ctx, metal_detail::g_active_font);
     float dpi = metal_detail::dpi_scale();
     fonsSetSize(ctx, static_cast<float>(font_size) * dpi);
-    return static_cast<int>(fonsTextBounds(ctx, 0, 0, text, nullptr, nullptr) / dpi);
+    fonsSetSpacing(ctx, 0.f);
+    return static_cast<int>(
+        std::ceil(fonsTextBounds(ctx, 0, 0, text, nullptr, nullptr) / dpi));
   }
 
   // ── Screenshots ──
