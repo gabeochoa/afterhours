@@ -80,7 +80,11 @@ struct UpdateTooltips : System<UIContext<InputAction>> {
         if (!oe.valid())
           break;
         Entity &e = oe.asE();
-        if (e.has<HasTooltip>() && e.has<UIComponent>()) {
+        if (e.has<HasTooltip>() && e.has<UIComponent>() &&
+            !(e.has<HasLabel>() &&
+              !e.get<HasLabel>().label.empty() &&
+              e.get<HasTooltip>().text == e.get<HasLabel>().label &&
+              !e.get<HasLabel>().truncated)) {
           owner = id;
           anchor = e.get<UIComponent>().rect();
           text = e.get<HasTooltip>().text;
@@ -154,9 +158,10 @@ struct RenderTooltip : System<UIContext<InputAction>> {
     const auto &defaults = imm::UIStylingDefaults::get();
     const auto font = fonts->get_font(defaults.resolved_font_name());
     const auto mode = context.scaling_mode.value_or(defaults.scaling_mode);
-    const float font_size = resolve_to_pixels(
+    const float font_size = resolve_font_size(
         state->font_size.value_or(defaults.default_font_size),
-        context.screen_height, mode, context.theme.ui_scale);
+        context.screen_height, mode, context.theme.ui_scale,
+        context.theme.text_scale);
     if (font_size <= 0.f)
       return;
 
