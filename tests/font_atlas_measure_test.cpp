@@ -59,7 +59,7 @@ static void parity() {
           CHECK(ctx->fonts[0]->nglyphs == count);
           const float expected = fonsTextBounds(ctx, 0, 0, text.c_str(), nullptr, nullptr);
           CHECK(actual == expected);
-          CHECK(afterhours::measure_text(afterhours::Font{0}, text.c_str(), size, 1).x == expected / dpi);
+          CHECK(afterhours::measure_text(afterhours::Font{0}, text.c_str(), size, 1.f + spacing / dpi).x == expected / dpi);
         }
       }
     }

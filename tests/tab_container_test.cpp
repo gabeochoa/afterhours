@@ -177,4 +177,107 @@ TEST(tab_container_clamps_a_stale_active_tab_when_tabs_shrink) {
   CHECK(result.as<int>() == 0);
 }
 
+static Entity *find_ent(ImmTestHarness &h, const std::string &name) {
+  for (const auto &e : h.coll.get_entities())
+    if (e && e->has<UIComponentDebug>() &&
+        e->get<UIComponentDebug>().name() == name)
+      return e.get();
+  return nullptr;
+}
+
+TEST(tab_container_custom_active_overrides_top_edge_and_selects) {
+  ImmTestHarness h;
+  std::vector<std::string> tabs = {"One", "Two", "Three"};
+  size_t active = 0;
+  auto emit = [&] {
+    return tab_container(
+        h.context(), mk(h.root(), 0), tabs, active,
+        ComponentConfig{}
+            .with_size(ComponentSize{pixels(600), pixels(44)})
+            .with_debug_name("tabs")
+            .with_rounded_corners(RoundedCorners().bottom_round()),
+        ComponentConfig{}
+            .with_border_top(h.context().theme.accent, pixels(1.0f))
+            .with_rounded_corners(RoundedCorners().top_round()));
+  };
+  h.begin_frame();
+  emit();
+  h.layout_only();
+
+  UIComponent *t0 = h.find("tab_0");
+  UIComponent *t1 = h.find("tab_1");
+  Entity *e0 = find_ent(h, "tab_0");
+  Entity *e1 = find_ent(h, "tab_1");
+  CHECK(t0 && t1 && e0 && e1);
+  if (!t0 || !t1 || !e0 || !e1)
+    return;
+  auto &b0 = e0->template get<HasBorder>();
+  CHECK(b0.border.top.has_border());
+  CHECK(b0.border.top.thickness.value == 1.0f);
+  CHECK(!b0.border.bottom.has_border());
+  CHECK(e0->template get<HasRoundedCorners>().get() ==
+        RoundedCorners().top_round().get());
+  CHECK(e1->template get<HasRoundedCorners>().get() ==
+        RoundedCorners().bottom_round().get());
+  auto &b1 = e1->template get<HasBorder>();
+  CHECK(!b1.border.top.has_border());
+  CHECK(b1.border.bottom.has_border());
+  CHECK(b1.border.bottom.thickness.value == 1.0f);
+  CHECK_APPROX(t0->rect().y, t1->rect().y);
+  CHECK(t1->rect().x > t0->rect().x);
+
+  const Rectangle r = t1->rect();
+  auto &ctx = h.context();
+  ctx.mouse.pos = input::MousePosition{r.x + r.width * 0.5f,
+                                       r.y + r.height * 0.5f};
+  ctx.mouse.left_down = true;
+  ctx.mouse.just_pressed = true;
+  ctx.mouse.press_moved = false;
+  ctx.set_hot(ctx.ROOT);
+  ctx.set_active(ctx.ROOT);
+  ResolveHitTarget<ui_test::TestInputAction> resolver;
+  resolver.context = &ctx;
+  resolver.resolve();
+  HandleClicks<ui_test::TestInputAction> sys;
+  sys.context = &ctx;
+  for (const auto &e : h.coll.get_entities()) {
+    if (!e || !e->has<UIComponent>() || !e->has<HasClickListener>())
+      continue;
+    sys.for_each_with(*e, e->get<UIComponent>(), e->get<HasClickListener>(),
+                      0.f);
+  }
+  ctx.mouse.just_pressed = false;
+  ctx.mouse.left_down = false;
+  h.begin_frame();
+  emit();
+  h.layout_only();
+  CHECK(active == 1);
+}
+
+TEST(tab_container_default_keeps_bottom_underline) {
+  ImmTestHarness h;
+  std::vector<std::string> tabs = {"One", "Two", "Three"};
+  size_t active = 0;
+  tab_container(h.context(), mk(h.root(), 0), tabs, active,
+                ComponentConfig{}
+                    .with_size(ComponentSize{pixels(600), pixels(44)})
+                    .with_debug_name("tabs"));
+  h.layout_only();
+
+  UIComponent *t0 = h.find("tab_0");
+  UIComponent *t1 = h.find("tab_1");
+  Entity *e0 = find_ent(h, "tab_0");
+  Entity *e1 = find_ent(h, "tab_1");
+  CHECK(t0 && t1 && e0 && e1);
+  if (!t0 || !t1 || !e0 || !e1)
+    return;
+  auto &b0 = e0->template get<HasBorder>();
+  CHECK(b0.border.bottom.has_border());
+  CHECK(b0.border.bottom.thickness.value == 4.0f);
+  CHECK(!b0.border.top.has_border());
+  auto &b1 = e1->template get<HasBorder>();
+  CHECK(b1.border.bottom.has_border());
+  CHECK(b1.border.bottom.thickness.value == 1.0f);
+}
+
 int main() { return ui_test::run_registered_tests("tab_container tests"); }

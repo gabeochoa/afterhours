@@ -67,4 +67,93 @@ TEST(the_runner_callback_fails_the_script) {
   CHECK(!run_script_with([](const std::string &) {}));
 }
 
+TEST(screenshot_fresh_waits_for_a_render_then_captures_current_state) {
+  auto &registry = VisibleTextRegistry::instance();
+  std::string source = "old";
+  std::string texture = "old";
+  const auto render = [&] {
+    registry.clear();
+    texture = source;
+  };
+  render();
+  std::string captured;
+  int captures = 0;
+  HandleScreenshotCommand handler([&](const std::string &name) {
+    captured = texture + ":" + name;
+    captures++;
+    return true;
+  });
+  EntityCollection coll;
+  Entity &e = coll.createEntity();
+  PendingE2ECommand cmd;
+  cmd.name = "screenshot_fresh";
+  cmd.args = {"menu"};
+  cmd.seen_render = static_cast<long long>(registry.generation());
+  source = "new";
+  handler.for_each_with(e, cmd, 0.f);
+  CHECK(cmd.is_retry() && !cmd.is_consumed());
+  CHECK(captures == 0);
+  render();
+  cmd.reset_retry();
+  handler.for_each_with(e, cmd, 0.f);
+  CHECK(cmd.is_consumed() && cmd.succeeded());
+  CHECK(captures == 1);
+  CHECK(captured == "new:menu");
+  registry.clear();
+}
+
+TEST(screenshot_fresh_without_a_callback_fails) {
+  EntityCollection coll;
+  Entity &e = coll.createEntity();
+  PendingE2ECommand cmd;
+  cmd.name = "screenshot_fresh";
+  cmd.args = {"menu"};
+  HandleScreenshotCommand handler(
+      std::function<bool(const std::string &name)>{});
+  handler.for_each_with(e, cmd, 0.f);
+  CHECK(cmd.is_consumed() && !cmd.succeeded());
+  CHECK(cmd.error_message ==
+        "screenshot_fresh: no screenshot callback registered");
+}
+
+TEST(runner_screenshot_fresh_captures_after_the_next_render) {
+  auto &registry = VisibleTextRegistry::instance();
+  std::string source = "old";
+  std::string texture = "old";
+  const auto render = [&] {
+    registry.clear();
+    texture = source;
+  };
+  render();
+  const auto path = std::filesystem::temp_directory_path() /
+      ("afterhours-fresh-" + std::to_string(
+          std::chrono::steady_clock::now().time_since_epoch().count()) +
+       ".e2e");
+  std::ofstream(path) << "screenshot_fresh freshy\n";
+  ui_test::ImmTestHarness h;
+  E2ERunner runner;
+  std::string captured;
+  int captures = 0;
+  runner.set_screenshot_callback([&](const std::string &name) {
+    captured = texture + ":" + name;
+    captures++;
+    return true;
+  });
+  runner.load_script(path.string());
+  runner.tick(0.1f);
+  CHECK(runner.needs_render());
+  CHECK(!runner.is_idle_waiting());
+  CHECK(captures == 0);
+  source = "new";
+  render();
+  for (int frame = 0; frame < 20 && !runner.is_finished(); ++frame)
+    runner.tick(0.1f);
+  CHECK(captures == 1);
+  CHECK(captured == "new:freshy");
+  CHECK(!runner.needs_render());
+  CHECK(!runner.has_failed());
+  std::filesystem::remove(path);
+  registry.clear();
+}
+
 int main() { return ui_test::run_registered_tests("E2E screenshot"); }
