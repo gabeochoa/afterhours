@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -48,6 +49,13 @@ struct Effect {
   graphics::ShaderType shader{};
   bool loaded = false;
   std::unordered_map<std::string, int> locations;
+  struct PreviousValue {
+    int type = 0;
+    float v[4] = {};
+    bool valid = false;
+  };
+  std::unordered_map<std::string, PreviousValue> last_values;
+  int upload_count = 0;
 
   static Effect load(const std::string &name, const std::string &file = "") {
     return load(name, file, "");
@@ -98,6 +106,9 @@ struct Effect {
     shader = other.shader;
     loaded = other.loaded;
     locations = std::move(other.locations);
+    last_values = std::move(other.last_values);
+    upload_count = other.upload_count;
+    other.upload_count = 0;
     other.loaded = false;
     r.push_back(this);
     return *this;
@@ -107,6 +118,7 @@ struct Effect {
     if (loaded)
       graphics::unload_shader(shader);
     locations.clear();
+    last_values.clear();
     shader = !fs_source.empty() || !vs_source.empty()
                  ? graphics::load_shader_from_memory(vs_source.empty() ? nullptr : vs_source.c_str(),
                                                      fs_source.c_str())
@@ -127,14 +139,26 @@ struct Effect {
     return loc;
   }
 
+  void upload(const char *uniform, int type, const float *data, int n) {
+    PreviousValue &last = last_values[uniform];
+    if (last.valid && last.type == type &&
+        std::equal(data, data + n, last.v, [](float a, float b) { return a == b; }))
+      return;
+    graphics::set_shader_value(shader, location(uniform), data, type);
+    upload_count++;
+    std::copy(data, data + n, last.v);
+    last.type = type;
+    last.valid = true;
+  }
+
   void set(const char *uniform, float v) {
     if (loaded)
-      graphics::set_shader_value(shader, location(uniform), &v, graphics::SHADER_UNIFORM_FLOAT);
+      upload(uniform, graphics::SHADER_UNIFORM_FLOAT, &v, 1);
   }
   void set(const char *uniform, Vector2Type v) {
     const float arr[2] = {v.x, v.y};
     if (loaded)
-      graphics::set_shader_value(shader, location(uniform), arr, graphics::SHADER_UNIFORM_VEC2);
+      upload(uniform, graphics::SHADER_UNIFORM_VEC2, arr, 2);
   }
   void set(const char *uniform, Vector3Type v) {
     const float arr[3] = {v.x, v.y, v.z};
@@ -157,7 +181,7 @@ struct Effect {
   void set(const char *uniform, ColorType c) {
     const float arr[4] = {c.r / 255.f, c.g / 255.f, c.b / 255.f, c.a / 255.f};
     if (loaded)
-      graphics::set_shader_value(shader, location(uniform), arr, graphics::SHADER_UNIFORM_VEC4);
+      upload(uniform, graphics::SHADER_UNIFORM_VEC4, arr, 4);
   }
 
   struct Scope {
@@ -206,6 +230,11 @@ struct BlurPass {
     b = load_render_texture(w, h);
     graphics::set_render_texture_filter(a, graphics::TEXTURE_FILTER_BILINEAR);
     graphics::set_render_texture_filter(b, graphics::TEXTURE_FILTER_BILINEAR);
+#ifndef AFTER_HOURS_SOKOL
+    auto ta = texture_of(a), tb = texture_of(b);
+    set_texture_wrap(ta, TEXTURE_WRAP_CLAMP);
+    set_texture_wrap(tb, TEXTURE_WRAP_CLAMP);
+#endif
     ready = true;
   }
 
@@ -311,6 +340,79 @@ struct BlurPass {
     draw_texture_pro(texture_of(a), {0.f, 0.f, half.width, -half.height}, rect, {0.f, 0.f}, 0.f, {255, 255, 255, 255});
   }
 };
+
+inline constexpr const char *SCENE_LIGHTS_GLSL = R"(
+uniform vec3 ahSunDirection;
+uniform vec3 ahSunColor;
+uniform vec3 ahAmbientColor;
+uniform vec3 ahFogColor;
+uniform float ahFogNear;
+uniform float ahFogFar;
+uniform vec3 ahCameraPos;
+uniform vec3 ahPointPos[4];
+uniform vec3 ahPointColor[4];
+uniform float ahPointRange[4];
+uniform float ahPointCount;
+vec3 ah_apply_scene_lights(vec3 albedo, vec3 world_pos, vec3 world_normal) {
+  vec3 n = normalize(world_normal);
+  vec3 lit = albedo * (ahAmbientColor + ahSunColor * max(dot(n, -normalize(ahSunDirection)), 0.0));
+  for (int i = 0; i < 4; i++) {
+    if (float(i) >= ahPointCount) break;
+    vec3 to_light = ahPointPos[i] - world_pos;
+    float d = length(to_light);
+    float falloff = clamp(1.0 - d / max(ahPointRange[i], 0.001), 0.0, 1.0);
+    lit += albedo * ahPointColor[i] * falloff * max(dot(n, to_light / max(d, 0.001)), 0.0);
+  }
+  if (ahFogFar <= ahFogNear) return lit;
+  float f = clamp((distance(world_pos, ahCameraPos) - ahFogNear) / (ahFogFar - ahFogNear), 0.0, 1.0);
+  return mix(lit, ahFogColor, f);
+}
+)";
+
+struct SceneLights {
+  struct Point {
+    Vector3Type position{};
+    ColorType color{255, 255, 255, 255};
+    float range = 10.f;
+  };
+  Vector3Type sun_direction{-0.4f, -1.f, -0.3f};
+  ColorType sun{255, 245, 230, 255};
+  ColorType ambient{110, 120, 140, 255};
+  ColorType fog{135, 190, 230, 255};
+  float fog_near = 0.f;
+  float fog_far = 0.f;
+  Vector3Type camera_pos{};
+  Point points[4]{};
+  int point_count = 0;
+
+  void apply_to(Effect &e) const {
+    auto rgb = [](ColorType c) { return Vector3Type{c.r / 255.f, c.g / 255.f, c.b / 255.f}; };
+    e.set("ahSunDirection", sun_direction);
+    e.set("ahSunColor", rgb(sun));
+    e.set("ahAmbientColor", rgb(ambient));
+    e.set("ahFogColor", rgb(fog));
+    e.set("ahFogNear", fog_near);
+    e.set("ahFogFar", fog_far);
+    e.set("ahCameraPos", camera_pos);
+    e.set("ahPointCount", static_cast<float>(std::clamp(point_count, 0, 4)));
+    for (int i = 0; i < 4; i++) {
+      const std::string base = "ahPoint";
+      e.set((base + "Pos[" + std::to_string(i) + "]").c_str(), points[i].position);
+      e.set((base + "Color[" + std::to_string(i) + "]").c_str(), rgb(points[i].color));
+      e.set((base + "Range[" + std::to_string(i) + "]").c_str(), points[i].range);
+    }
+  }
+};
+
+inline int apply_scene_lights(const SceneLights &lights) {
+  int count = 0;
+  for (Effect *e : Effect::registry())
+    if (e && e->ok()) {
+      lights.apply_to(*e);
+      count++;
+    }
+  return count;
+}
 
 inline int reload_all() {
   int count = 0;

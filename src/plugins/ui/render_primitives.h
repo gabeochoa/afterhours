@@ -13,6 +13,8 @@
 #include <optional>
 
 #include "../../memory/arena.h"
+#include "../../render_counters.h"
+#include "../profiling.h"
 #include "components.h"
 #include "border_rendering.h"
 #include "text_stroke.h"
@@ -59,6 +61,29 @@ struct RenderPrimitive {
   // it so RenderPrimitive stays trivially destructible for the arena.
   using CustomDrawFn = std::function<void(RectangleType)>;
 
+  struct DrawContext {
+    RectangleType rect;
+    float scale = 1.f;
+  };
+  using CustomDrawContextFn = std::function<void(const DrawContext &)>;
+
+  struct DrawCallback {
+    CustomDrawContextFn fn;
+    DrawCallback() = default;
+    DrawCallback(std::nullptr_t) : fn(nullptr) {}
+    template <typename F>
+      requires std::invocable<F &, const DrawContext &>
+    DrawCallback(F f) : fn(std::move(f)) {}
+    template <typename F>
+      requires(!std::invocable<F &, const DrawContext &> &&
+               std::invocable<F &, RectangleType>)
+    DrawCallback(F f)
+        : fn([f = std::move(f)](const DrawContext &d) mutable { f(d.rect); }) {}
+    explicit operator bool() const { return static_cast<bool>(fn); }
+    void operator()(const DrawContext &d) const { fn(d); }
+    void operator()(RectangleType r) const { fn(DrawContext{r, 1.f}); }
+  };
+
   RenderPrimitiveType type;
   int layer = 0;
   EntityID entity_id = -1; // For debugging
@@ -78,6 +103,8 @@ struct RenderPrimitive {
       int segments;
       std::bitset<4> corners;
       float rotation; // Rotation in degrees (clockwise, around center)
+      float rot_center_x;
+      float rot_center_y;
     } rectangle;
 
     struct {
@@ -86,8 +113,11 @@ struct RenderPrimitive {
       float roundness;
       int segments;
       std::bitset<4> corners;
+      BorderEdge edge;
       float thickness; // Line thickness for outline (0 = default thin line)
       float rotation;
+      float rot_center_x;
+      float rot_center_y;
     } outline;
 
     struct {
@@ -135,6 +165,10 @@ struct RenderPrimitive {
       RectangleType source_rect;
       TextureType texture;
       Color tint;
+      int filter = -1; // Per-draw filter override; -1 = texture's own
+      float rotation;
+      float rot_center_x;
+      float rot_center_y;
     } image;
 
     struct {
@@ -181,9 +215,9 @@ struct RenderPrimitive {
 
     struct {
       RectangleType rect;
-      // Stored as a pointer so RenderPrimitive stays
-      // trivially destructible for the arena 
+      const CustomDrawContextFn *fn_ctx;
       const CustomDrawFn *fn;
+      float scale;
     } custom;
 
     // Default constructor for union
@@ -210,7 +244,9 @@ public:
   // Factory methods for cleaner construction
   static RenderPrimitive rectangle(const RectangleType &rect, Color fill,
                                    int layer, EntityID entity_id = -1,
-                                   float rotation = 0.0f) {
+                                   float rotation = 0.0f,
+                                   float rot_center_x = 0.f,
+                                   float rot_center_y = 0.f) {
     RenderPrimitive cmd(RenderPrimitiveType::Rectangle, layer, entity_id);
     cmd.data.rectangle.rect = rect;
     cmd.data.rectangle.fill_color = fill;
@@ -218,13 +254,16 @@ public:
     cmd.data.rectangle.segments = 0;
     cmd.data.rectangle.corners.reset();
     cmd.data.rectangle.rotation = rotation;
+    cmd.data.rectangle.rot_center_x = rot_center_x;
+    cmd.data.rectangle.rot_center_y = rot_center_y;
     return cmd;
   }
 
   static RenderPrimitive
   rounded_rectangle(const RectangleType &rect, Color fill, float roundness,
                     int segments, const std::bitset<4> &corners, int layer,
-                    EntityID entity_id = -1, float rotation = 0.0f) {
+                    EntityID entity_id = -1, float rotation = 0.0f,
+                    float rot_center_x = 0.f, float rot_center_y = 0.f) {
     RenderPrimitive cmd(RenderPrimitiveType::RoundedRectangle, layer,
                         entity_id);
     cmd.data.rectangle.rect = rect;
@@ -233,13 +272,18 @@ public:
     cmd.data.rectangle.segments = segments;
     cmd.data.rectangle.corners = corners;
     cmd.data.rectangle.rotation = rotation;
+    cmd.data.rectangle.rot_center_x = rot_center_x;
+    cmd.data.rectangle.rot_center_y = rot_center_y;
     return cmd;
   }
 
   static RenderPrimitive rectangle_outline(const RectangleType &rect,
                                            Color color, int layer,
                                            EntityID entity_id = -1,
-                                           float thickness = 0.0f) {
+                                           float thickness = 0.0f,
+                                           float rotation = 0.f,
+                                           float rot_center_x = 0.f,
+                                           float rot_center_y = 0.f) {
     RenderPrimitive cmd(RenderPrimitiveType::RectangleOutline, layer,
                         entity_id);
     cmd.data.outline.rect = rect;
@@ -248,7 +292,9 @@ public:
     cmd.data.outline.segments = 0;
     cmd.data.outline.corners.reset();
     cmd.data.outline.thickness = thickness;
-    cmd.data.outline.rotation = 0.f;
+    cmd.data.outline.rotation = rotation;
+    cmd.data.outline.rot_center_x = rot_center_x;
+    cmd.data.outline.rot_center_y = rot_center_y;
     return cmd;
   }
 
@@ -257,7 +303,8 @@ public:
                             float roundness, int segments,
                             const std::bitset<4> &corners, int layer,
                             EntityID entity_id = -1, float thickness = 0.0f,
-                            float rotation = 0.f) {
+                            float rotation = 0.f, float rot_center_x = 0.f,
+                            float rot_center_y = 0.f) {
     RenderPrimitive cmd(RenderPrimitiveType::RoundedRectangleOutline, layer,
                         entity_id);
     cmd.data.outline.rect = rect;
@@ -267,18 +314,26 @@ public:
     cmd.data.outline.corners = corners;
     cmd.data.outline.thickness = thickness;
     cmd.data.outline.rotation = rotation;
+    cmd.data.outline.rot_center_x = rot_center_x;
+    cmd.data.outline.rot_center_y = rot_center_y;
     return cmd;
   }
 
   static RenderPrimitive image(const RectangleType &dest_rect,
                                const RectangleType &source_rect,
                                TextureType texture, Color tint, int layer,
-                               EntityID entity_id = -1) {
+                               EntityID entity_id = -1, int filter = -1,
+                               float rotation = 0.f, float rot_center_x = 0.f,
+                               float rot_center_y = 0.f) {
     RenderPrimitive cmd(RenderPrimitiveType::Image, layer, entity_id);
     cmd.data.image.dest_rect = dest_rect;
     cmd.data.image.source_rect = source_rect;
     cmd.data.image.texture = texture;
     cmd.data.image.tint = tint;
+    cmd.data.image.filter = filter;
+    cmd.data.image.rotation = rotation;
+    cmd.data.image.rot_center_x = rot_center_x;
+    cmd.data.image.rot_center_y = rot_center_y;
     return cmd;
   }
 
@@ -369,7 +424,20 @@ public:
                                 EntityID entity_id = -1) {
     RenderPrimitive cmd(RenderPrimitiveType::Custom, layer, entity_id);
     cmd.data.custom.rect = rect;
+    cmd.data.custom.fn_ctx = nullptr;
     cmd.data.custom.fn = fn;
+    cmd.data.custom.scale = 1.f;
+    return cmd;
+  }
+
+  static RenderPrimitive custom(const RectangleType &rect,
+                                const CustomDrawContextFn *fn, float scale,
+                                int layer, EntityID entity_id = -1) {
+    RenderPrimitive cmd(RenderPrimitiveType::Custom, layer, entity_id);
+    cmd.data.custom.rect = rect;
+    cmd.data.custom.fn_ctx = fn;
+    cmd.data.custom.fn = nullptr;
+    cmd.data.custom.scale = scale;
     return cmd;
   }
 };
@@ -385,8 +453,8 @@ static_assert(std::is_trivially_destructible_v<RenderPrimitive>,
 // (gradients, feeds, brackets) inline, without a debug-name rect lookup or
 // separate BG/FG render systems. Set via ComponentConfig::with_on_draw_bg/fg.
 struct HasOnDraw : BaseComponent {
-  RenderPrimitive::CustomDrawFn bg;
-  RenderPrimitive::CustomDrawFn fg;
+  RenderPrimitive::DrawCallback bg;
+  RenderPrimitive::DrawCallback fg;
   // Drawn after the widget's whole subtree, unlike fg (own primitives only).
   RenderPrimitive::CustomDrawFn over;
 };
@@ -417,33 +485,41 @@ public:
 
   // Add a filled rectangle
   void add_rectangle(const RectangleType &rect, Color fill, int layer,
-                     EntityID entity_id = -1, float rotation = 0.0f) {
-    commands_.push_back(
-        RenderPrimitive::rectangle(rect, fill, layer, entity_id, rotation));
+                     EntityID entity_id = -1, float rotation = 0.0f,
+                     float rot_center_x = 0.f, float rot_center_y = 0.f) {
+    commands_.push_back(RenderPrimitive::rectangle(
+        rect, fill, layer, entity_id, rotation, rot_center_x, rot_center_y));
   }
 
   // Add a rounded rectangle
   void add_rounded_rectangle(const RectangleType &rect, Color fill,
                              float roundness, int segments,
                              const std::bitset<4> &corners, int layer,
-                             EntityID entity_id = -1, float rotation = 0.0f) {
+                             EntityID entity_id = -1, float rotation = 0.0f,
+                             float rot_center_x = 0.f,
+                             float rot_center_y = 0.f) {
     commands_.push_back(RenderPrimitive::rounded_rectangle(
-        rect, fill, roundness, segments, corners, layer, entity_id, rotation));
+        rect, fill, roundness, segments, corners, layer, entity_id, rotation,
+        rot_center_x, rot_center_y));
   }
 
   void add_border(RectangleType rect, Color color, float roundness, int segments,
-                  std::bitset<4> corners, float thickness, int layer, EntityID id) {
+                  std::bitset<4> corners, float thickness, int layer, EntityID id, BorderEdge edge = BorderEdge::All) {
     auto command = RenderPrimitive::rounded_rectangle_outline(
         rect, color, roundness, segments, corners, layer, id, thickness);
     command.type = RenderPrimitiveType::Border;
+    command.data.outline.edge = edge;
     commands_.push_back(command);
   }
 
   // Add rectangle outline
   void add_rectangle_outline(const RectangleType &rect, Color color, int layer,
-                             EntityID entity_id = -1, float thickness = 0.0f) {
+                             EntityID entity_id = -1, float thickness = 0.0f,
+                             float rotation = 0.f, float rot_center_x = 0.f,
+                             float rot_center_y = 0.f) {
     commands_.push_back(RenderPrimitive::rectangle_outline(
-        rect, color, layer, entity_id, thickness));
+        rect, color, layer, entity_id, thickness, rotation, rot_center_x,
+        rot_center_y));
   }
 
   // Add rounded rectangle outline
@@ -451,10 +527,12 @@ public:
                                      float roundness, int segments,
                                      const std::bitset<4> &corners, int layer,
                                      EntityID entity_id = -1,
-                                     float thickness = 0.0f, float rotation = 0.f) {
+                                     float thickness = 0.0f, float rotation = 0.f,
+                                     float rot_center_x = 0.f,
+                                     float rot_center_y = 0.f) {
     commands_.push_back(RenderPrimitive::rounded_rectangle_outline(
         rect, color, roundness, segments, corners, layer, entity_id,
-        thickness, rotation));
+        thickness, rotation, rot_center_x, rot_center_y));
   }
 
   // Add text with optional stroke and shadow
@@ -562,9 +640,13 @@ public:
   // Add image
   void add_image(const RectangleType &dest_rect,
                  const RectangleType &source_rect, TextureType texture,
-                 Color tint, int layer, EntityID entity_id = -1) {
+                 Color tint, int layer, EntityID entity_id = -1,
+                 int filter = -1, float rotation = 0.f,
+                 float rot_center_x = 0.f, float rot_center_y = 0.f) {
     commands_.push_back(RenderPrimitive::image(dest_rect, source_rect, texture,
-                                               tint, layer, entity_id));
+                                               tint, layer, entity_id, filter,
+                                               rotation, rot_center_x,
+                                               rot_center_y));
   }
 
   // Add a custom draw callback. `fn` must outlive the render pass (it lives on
@@ -573,6 +655,13 @@ public:
                   const RenderPrimitive::CustomDrawFn *fn, int layer,
                   EntityID entity_id = -1) {
     commands_.push_back(RenderPrimitive::custom(rect, fn, layer, entity_id));
+  }
+
+  void add_custom(const RectangleType &rect,
+                  const RenderPrimitive::CustomDrawContextFn *fn, float scale,
+                  int layer, EntityID entity_id = -1) {
+    commands_.push_back(
+        RenderPrimitive::custom(rect, fn, scale, layer, entity_id));
   }
 
   // Add scissor start
@@ -665,15 +754,22 @@ public:
     size_t image_commands = 0;
     size_t scissor_operations = 0;
     size_t blend_operations = 0;
+    size_t shader_operations = 0;
+    // Draw submissions issued, texture binds implied by them, and
+    // texture/RT creates drained from render_counters since the last render.
+    size_t draws = 0;
+    size_t binds = 0;
+    size_t creates = 0;
   };
 
   void render(const RenderCommandBuffer &buffer, FontManager &fonts) {
-    stats_ = {}; // Reset stats
+    statistics = {}; // Reset stats
     const auto &commands = buffer.commands();
-    stats_.total_commands = commands.size();
+    statistics.total_commands = commands.size();
 
     std::optional<std::array<int, 4>> active_clip;
     blend::Mode active_blend = blend::current();
+    std::optional<graphics::ShaderType> active_shader;
     size_t i = 0;
     while (i < commands.size()) {
       const auto &cmd = commands[i];
@@ -683,20 +779,22 @@ public:
       case RenderPrimitiveType::Border: {
         const auto &border = cmd.data.outline;
         draw_uniform_border(border.rect, border.roundness, border.segments,
-                            border.corners, border.thickness, border.color);
+                            border.corners, border.thickness, border.color, border.edge);
+        note_draw();
         ++i;
         break;
       }
       case RenderPrimitiveType::Line:
         draw_line_ex(cmd.data.line.start, cmd.data.line.end,
                      cmd.data.line.thickness, cmd.data.line.color);
+        note_draw();
         ++i;
         break;
 
       case RenderPrimitiveType::Rectangle: {
         size_t batch_end = find_batch_end(commands, i);
         render_rectangle_batch(commands, i, batch_end);
-        stats_.rectangle_batches++;
+        statistics.rectangle_batches++;
         i = batch_end;
         break;
       }
@@ -704,7 +802,7 @@ public:
       case RenderPrimitiveType::RoundedRectangle: {
         size_t batch_end = find_batch_end(commands, i);
         render_rounded_rectangle_batch(commands, i, batch_end);
-        stats_.rectangle_batches++;
+        statistics.rectangle_batches++;
         i = batch_end;
         break;
       }
@@ -725,30 +823,35 @@ public:
 
       case RenderPrimitiveType::Text:
         render_text(cmd, fonts);
-        stats_.text_commands++;
+        statistics.text_commands++;
         i++;
         break;
 
       case RenderPrimitiveType::TextUnits:
         render_text_units(cmd, fonts);
-        stats_.text_commands++;
+        statistics.text_commands++;
         i++;
         break;
 
       case RenderPrimitiveType::Image:
         render_image(cmd);
-        stats_.image_commands++;
+        statistics.image_commands++;
         i++;
         break;
 
-      case RenderPrimitiveType::ScissorStart:
-        active_clip = {cmd.data.scissor.x, cmd.data.scissor.y,
-                       cmd.data.scissor.width, cmd.data.scissor.height};
-        begin_scissor_mode(cmd.data.scissor.x, cmd.data.scissor.y,
-                           cmd.data.scissor.width, cmd.data.scissor.height);
-        stats_.scissor_operations++;
+      case RenderPrimitiveType::ScissorStart: {
+        std::array<int, 4> clip{cmd.data.scissor.x, cmd.data.scissor.y,
+                                cmd.data.scissor.width, cmd.data.scissor.height};
+        if (active_clip && *active_clip == clip) {
+          i++;
+          break;
+        }
+        active_clip = clip;
+        begin_scissor_mode(clip[0], clip[1], clip[2], clip[3]);
+        statistics.scissor_operations++;
         i++;
         break;
+      }
 
       case RenderPrimitiveType::ScissorEnd:
         if (active_clip && i + 1 < commands.size() &&
@@ -759,20 +862,45 @@ public:
             break;
           }
         }
+        if (!active_clip) {
+          i++;
+          break;
+        }
         active_clip.reset();
         end_scissor_mode();
-        stats_.scissor_operations++;
+        statistics.scissor_operations++;
         i++;
         break;
 
-      case RenderPrimitiveType::ShaderStart:
-        if (cmd.data.shader.shader && cmd.data.shader.shader->id != 0)
-          ::afterhours::begin_shader_mode(*cmd.data.shader.shader);
+      case RenderPrimitiveType::ShaderStart: {
+        auto *shader = cmd.data.shader.shader;
+        if (!shader || shader->id == 0 ||
+            (active_shader && active_shader->id == shader->id)) {
+          i++;
+          break;
+        }
+        active_shader = *shader;
+        ::afterhours::begin_shader_mode(*shader);
+        statistics.shader_operations++;
         i++;
         break;
+      }
 
       case RenderPrimitiveType::ShaderEnd:
+        if (active_shader && i + 1 < commands.size() &&
+            commands[i + 1].type == RenderPrimitiveType::ShaderStart &&
+            commands[i + 1].data.shader.shader &&
+            commands[i + 1].data.shader.shader->id == active_shader->id) {
+          i += 2;
+          break;
+        }
+        if (!active_shader) {
+          i++;
+          break;
+        }
+        active_shader.reset();
         ::afterhours::end_shader_mode();
+        statistics.shader_operations++;
         i++;
         break;
 
@@ -781,7 +909,7 @@ public:
         if (cmd.data.blend.mode != active_blend) {
           set_blend_mode(cmd.data.blend.mode);
           active_blend = cmd.data.blend.mode;
-          stats_.blend_operations++;
+          statistics.blend_operations++;
         }
         i++;
         break;
@@ -796,29 +924,38 @@ public:
         if (active_blend != blend::Mode::Alpha) {
           set_blend_mode(blend::Mode::Alpha);
           active_blend = blend::Mode::Alpha;
-          stats_.blend_operations++;
+          statistics.blend_operations++;
         }
         i++;
         break;
 
       case RenderPrimitiveType::Ring:
         render_ring(cmd);
+        note_draw();
         i++;
         break;
 
       case RenderPrimitiveType::RingSegment:
         render_ring_segment(cmd);
+        note_draw();
         i++;
         break;
 
       case RenderPrimitiveType::NineSlice:
         render_nine_slice(cmd);
+        note_draw(true);
         i++;
         break;
 
       case RenderPrimitiveType::Custom:
-        if (cmd.data.custom.fn && *cmd.data.custom.fn)
+        if (cmd.data.custom.fn_ctx && *cmd.data.custom.fn_ctx) {
+          (*cmd.data.custom.fn_ctx)(RenderPrimitive::DrawContext{
+              cmd.data.custom.rect, cmd.data.custom.scale});
+          note_draw();
+        } else if (cmd.data.custom.fn && *cmd.data.custom.fn) {
           (*cmd.data.custom.fn)(cmd.data.custom.rect);
+          note_draw();
+        }
         i++;
         break;
 
@@ -827,12 +964,35 @@ public:
         break;
       }
     }
+#if AFTERHOURS_ENABLE_PROFILING
+    statistics.creates =
+        static_cast<size_t>(render_counters::take_creates());
+    auto &collector = profiling::default_collector();
+    AFTERHOURS_PROFILE_COUNTER(collector, "render.draws", "count",
+                               static_cast<double>(statistics.draws));
+    AFTERHOURS_PROFILE_COUNTER(collector, "render.binds", "count",
+                               static_cast<double>(statistics.binds));
+    AFTERHOURS_PROFILE_COUNTER(collector, "render.creates", "count",
+                               static_cast<double>(statistics.creates));
+#endif
   }
 
-  [[nodiscard]] const Stats &stats() const { return stats_; }
+  [[nodiscard]] const Stats &stats() const { return statistics; }
 
 private:
-  Stats stats_;
+  Stats statistics;
+
+  // A bind is the texture a draw samples; text draws bind the font texture.
+  // Compiled out when profiling is off (same pattern as
+  // render_counters::note_create), so disabled builds pay nothing per draw.
+  void note_draw(bool binds_texture = false) {
+#if AFTERHOURS_ENABLE_PROFILING
+    ++statistics.draws;
+    if (binds_texture) ++statistics.binds;
+#else
+    (void)binds_texture;
+#endif
+  }
 
   // Find the end of a batch of commands with same type and layer
   static size_t find_batch_end(const ArenaVector<RenderPrimitive> &cmds,
@@ -853,8 +1013,23 @@ private:
     for (size_t i = start; i < end; ++i) {
       capture::Scope attribute(cmds[i].entity_id, cmds[i].layer);
       const auto &rect = cmds[i].data.rectangle;
-      draw_rectangle_rounded_rotated(rect.rect, 0.0f, 0, rect.fill_color,
-                                     std::bitset<4>().reset(), rect.rotation);
+      const bool has_center = rect.rot_center_x != 0.f || rect.rot_center_y != 0.f;
+      const float cx = has_center ? rect.rot_center_x
+                                  : rect.rect.x + rect.rect.width * .5f;
+      const float cy = has_center ? rect.rot_center_y
+                                  : rect.rect.y + rect.rect.height * .5f;
+      if (rect.rotation != 0.f && has_center &&
+          (cx != rect.rect.x + rect.rect.width * .5f ||
+           cy != rect.rect.y + rect.rect.height * .5f)) {
+        push_rotation(cx, cy, rect.rotation);
+        draw_rectangle_rounded(rect.rect, 0.0f, 0, rect.fill_color,
+                               std::bitset<4>().reset());
+        pop_rotation();
+      } else {
+        draw_rectangle_rounded_rotated(rect.rect, 0.0f, 0, rect.fill_color,
+                                       std::bitset<4>().reset(), rect.rotation);
+      }
+      note_draw();
     }
   }
 
@@ -863,9 +1038,24 @@ private:
     for (size_t i = start; i < end; ++i) {
       capture::Scope attribute(cmds[i].entity_id, cmds[i].layer);
       const auto &rect = cmds[i].data.rectangle;
-      draw_rectangle_rounded_rotated(rect.rect, rect.roundness, rect.segments,
-                                     rect.fill_color, rect.corners,
-                                     rect.rotation);
+      const bool has_center = rect.rot_center_x != 0.f || rect.rot_center_y != 0.f;
+      const float cx = has_center ? rect.rot_center_x
+                                  : rect.rect.x + rect.rect.width * .5f;
+      const float cy = has_center ? rect.rot_center_y
+                                  : rect.rect.y + rect.rect.height * .5f;
+      if (rect.rotation != 0.f && has_center &&
+          (cx != rect.rect.x + rect.rect.width * .5f ||
+           cy != rect.rect.y + rect.rect.height * .5f)) {
+        push_rotation(cx, cy, rect.rotation);
+        draw_rectangle_rounded(rect.rect, rect.roundness, rect.segments,
+                               rect.fill_color, rect.corners);
+        pop_rotation();
+      } else {
+        draw_rectangle_rounded_rotated(rect.rect, rect.roundness, rect.segments,
+                                       rect.fill_color, rect.corners,
+                                       rect.rotation);
+      }
+      note_draw();
     }
   }
 
@@ -874,6 +1064,15 @@ private:
     for (size_t i = start; i < end; ++i) {
       capture::Scope attribute(cmds[i].entity_id, cmds[i].layer);
       const auto &outline = cmds[i].data.outline;
+      const bool rotated = outline.rotation != 0.f;
+      if (rotated)
+        push_rotation(outline.rot_center_x != 0.f || outline.rot_center_y != 0.f
+                          ? outline.rot_center_x
+                          : outline.rect.x + outline.rect.width * .5f,
+                      outline.rot_center_x != 0.f || outline.rot_center_y != 0.f
+                          ? outline.rot_center_y
+                          : outline.rect.y + outline.rect.height * .5f,
+                      outline.rotation);
       if (outline.thickness > 1.0f) {
         // Draw multiple outlines for thickness effect
         for (float t = 0; t < outline.thickness; t += 1.0f) {
@@ -881,10 +1080,14 @@ private:
                                      outline.rect.width + t * 2.0f,
                                      outline.rect.height + t * 2.0f};
           draw_rectangle_outline(thickRect, outline.color);
+          note_draw();
         }
       } else {
         draw_rectangle_outline(outline.rect, outline.color);
+        note_draw();
       }
+      if (rotated)
+        pop_rotation();
     }
   }
 
@@ -893,8 +1096,13 @@ private:
     for (size_t i = start; i < end; ++i) {
       capture::Scope attribute(cmds[i].entity_id, cmds[i].layer);
       const auto &outline = cmds[i].data.outline;
-      push_rotation(outline.rect.x + outline.rect.width * .5f,
-                    outline.rect.y + outline.rect.height * .5f, outline.rotation);
+      push_rotation(outline.rot_center_x != 0.f || outline.rot_center_y != 0.f
+                        ? outline.rot_center_x
+                        : outline.rect.x + outline.rect.width * .5f,
+                    outline.rot_center_x != 0.f || outline.rot_center_y != 0.f
+                        ? outline.rot_center_y
+                        : outline.rect.y + outline.rect.height * .5f,
+                    outline.rotation);
       if (outline.thickness > 1.0f) {
         // roundness is a FRACTION of the shorter side, so reusing it on the
         // grown rect grows the radius too and the rings bow apart at the
@@ -915,11 +1123,13 @@ private:
                   : std::clamp(2.f * (r0 + t) / shorter, 0.f, 1.f);
           draw_rectangle_rounded_lines(thickRect, rn, outline.segments,
                                        outline.color, outline.corners);
+          note_draw();
         }
       } else {
         draw_rectangle_rounded_lines(outline.rect, outline.roundness,
                                      outline.segments, outline.color,
                                      outline.corners);
+        note_draw();
       }
       pop_rotation();
     }
@@ -970,17 +1180,20 @@ private:
                                startPos.y + cmd.data.text.shadow_offset_y};
       draw_text_ex(font, cmd.data.text.text, shadowPos, fontSize, spacing,
                    cmd.data.text.shadow_color, rotation, rot_cx, rot_cy);
+      note_draw(true);
     }
 
     if (cmd.data.text.has_stroke) {
       text_stroke::draw(font, cmd.data.text.text, startPos, fontSize, spacing,
                          cmd.data.text.stroke_thickness, cmd.data.text.stroke_color,
                          rotation, rot_cx, rot_cy);
+      note_draw(true);
     }
 
     // Draw main text
     draw_text_ex(font, cmd.data.text.text, startPos, fontSize, spacing,
                  cmd.data.text.color, rotation, rot_cx, rot_cy);
+    note_draw(true);
   }
 
   void render_text_units(const RenderPrimitive &cmd, FontManager &fonts) {
@@ -1000,23 +1213,44 @@ private:
       const float rotation = tu.rotation + u.rotation;
       const float center_x = u.rotation != 0.f ? pos.x + size.x / 2.f : tu.rot_center_x;
       const float center_y = u.rotation != 0.f ? pos.y + size.y / 2.f : tu.rot_center_y;
-      if (tu.has_shadow)
+      if (tu.has_shadow) {
         draw_text_ex(font, u.text, {pos.x + tu.shadow_offset_x, pos.y + tu.shadow_offset_y},
                      u.font_size, spacing, tu.shadow_color, rotation, center_x, center_y);
-      if (tu.has_stroke)
+        note_draw(true);
+      }
+      if (tu.has_stroke) {
         text_stroke::draw(font, u.text, pos, u.font_size, spacing, tu.stroke_thickness,
                           tu.stroke_color, rotation, center_x, center_y);
+        note_draw(true);
+      }
       draw_text_ex(font, u.text, pos, u.font_size, spacing, u.color, rotation,
                    center_x, center_y);
+      note_draw(true);
     }
   }
 
   void render_image(const RenderPrimitive &cmd) {
+    const bool rotated = cmd.data.image.rotation != 0.f;
+    if (rotated)
+      push_rotation(cmd.data.image.rot_center_x != 0.f ||
+                            cmd.data.image.rot_center_y != 0.f
+                        ? cmd.data.image.rot_center_x
+                        : cmd.data.image.dest_rect.x +
+                              cmd.data.image.dest_rect.width * .5f,
+                    cmd.data.image.rot_center_x != 0.f ||
+                            cmd.data.image.rot_center_y != 0.f
+                        ? cmd.data.image.rot_center_y
+                        : cmd.data.image.dest_rect.y +
+                              cmd.data.image.dest_rect.height * .5f,
+                    cmd.data.image.rotation);
     texture_manager::draw_texture_pro(
         cmd.data.image.texture, cmd.data.image.source_rect,
         cmd.data.image.dest_rect,
         {cmd.data.image.dest_rect.width, cmd.data.image.dest_rect.height}, 0.f,
-        cmd.data.image.tint);
+        cmd.data.image.tint, cmd.data.image.filter);
+    if (rotated)
+      pop_rotation();
+    note_draw(true);
   }
 
   void render_ring(const RenderPrimitive &cmd) {
