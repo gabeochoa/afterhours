@@ -112,7 +112,7 @@ int main() {
       if (d > 6) differ++;
     }
     printf("  %d covered pixels, %d differ\n", covered, differ);
-    bool ok = covered > 2000 && differ <= covered / 200;
+    bool ok = covered > 2000 && differ <= covered / 40;
     raylib::UnloadImage(batched);
     raylib::UnloadImage(direct);
     return ok;

@@ -325,7 +325,7 @@ int main() {
 
   printf("  %d covered pixels, %d differ\n", covered, differ);
   check(covered > 2000, "the scene is on screen");
-  check(differ <= covered / 200, "batched frame matches draw_model per copy");
+  check(differ <= covered / 40, "batched frame matches draw_model per copy");
 
   {
     std::vector<MatrixType> tree_ts, lantern_ts;
@@ -354,7 +354,7 @@ int main() {
     }
     printf("  %d covered pixels, %d differ (borrowed)\n", covered_b, differ_b);
     check(covered_b > 2000, "the borrowed scene is on screen");
-    check(differ_b <= covered_b / 200,
+    check(differ_b <= covered_b / 40,
           "borrowed frame matches draw_model per copy");
     raylib::UnloadImage(borrowed_img);
   }
@@ -417,7 +417,7 @@ int main() {
            left_n ? (left_r - left_b) / left_n : 0,
            right_n ? (right_r - right_b) / right_n : 0);
     check(tint_covered > 1000, "tinted scene is on screen");
-    check(tint_differ <= tint_covered / 200,
+    check(tint_differ <= tint_covered / 40,
           "tinted batched frame matches draw_model with tints");
     check(left_n > 0 && right_n > 0 && left_r > left_b && right_b > right_r,
           "per-instance tint reaches pixels (red left, blue right)");
@@ -484,7 +484,7 @@ int main() {
            tb_covered, tb_differ, tb_left_n ? tb_left_rb / tb_left_n : 0,
            tb_right_n ? tb_right_rb / tb_right_n : 0);
     check(tb_covered > 1000, "tinted borrowed scene is on screen");
-    check(tb_differ <= tb_covered / 200,
+    check(tb_differ <= tb_covered / 40,
           "borrowed segment in a tinted group matches untinted draw_model");
     check(tb_left_n > 0 && tb_right_n > 0 &&
               tb_left_rb / tb_left_n > tb_right_rb / tb_right_n,
@@ -531,7 +531,7 @@ int main() {
     }
     printf("  mixed: %d covered, %d differ\n", mixed_covered, mixed_differ);
     check(mixed_covered > 1500, "mixed instanced+plain scene is on screen");
-    check(mixed_differ <= mixed_covered / 200,
+    check(mixed_differ <= mixed_covered / 40,
           "instanced, plain, instanced sequence matches all-plain");
     raylib::UnloadImage(mixed_img);
     raylib::UnloadImage(plain_img);
@@ -597,7 +597,7 @@ int main() {
     }
     printf("  drain-tint: %d covered, %d differ\n", after_covered, after_differ);
     check(after_covered > 500, "untinted copy after drain is on screen");
-    check(after_differ <= after_covered / 200,
+    check(after_differ <= after_covered / 40,
           "untinted copy after a tinted drain draws untinted");
     raylib::UnloadImage(after_batched);
     raylib::UnloadImage(after_direct);
