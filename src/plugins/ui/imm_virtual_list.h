@@ -34,10 +34,10 @@ namespace detail {
 // app has differing heights, so hanabi hand-rolled this window three times
 // before it lived here.
 struct RowMetrics {
-  float uniform = 0.f;      // used when prefix is empty
-  std::vector<float> prefix; // prefix[i] = height of rows [0, i)
+  float uniform = 0.f;       // used when prefix is empty
+  std::vector<double> prefix; // prefix[i] = height of rows [0, i)
   // Set instead of prefix when the retained index owns the sums.
-  const std::vector<float> *borrowed = nullptr;
+  const std::vector<double> *borrowed = nullptr;
   HasVirtualListIndex *index = nullptr;
   size_t count = 0;
   float scale = 1.f;
@@ -56,15 +56,18 @@ struct RowMetrics {
   [[nodiscard]] float height_of(size_t i) const {
     if (is_uniform())
       return uniform * scale;
-    const std::vector<float> &p = borrowed ? *borrowed : prefix;
-    return (p[i + 1] - p[i]) * scale;
+    const std::vector<double> &p = borrowed ? *borrowed : prefix;
+    return static_cast<float>((p[i + 1] - p[i]) * scale);
   }
+  // Extent math in double until the final float coordinate, so cumulative
+  // sums do not drift at large row counts.
   [[nodiscard]] float offset_of(size_t i) const {
     if (is_uniform())
-      return (uniform * static_cast<float>(i)) * scale +
-             static_cast<float>(i) * gap;
-    const std::vector<float> &p = borrowed ? *borrowed : prefix;
-    return p[i] * scale + static_cast<float>(i) * gap;
+      return static_cast<float>(static_cast<double>(uniform) *
+                                    static_cast<double>(i) * scale +
+                                static_cast<double>(i) * gap);
+    const std::vector<double> &p = borrowed ? *borrowed : prefix;
+    return static_cast<float>(p[i] * scale + static_cast<double>(i) * gap);
   }
   [[nodiscard]] float total() const { return count ? offset_of(count) - gap : 0.f; }
   // Largest index whose offset is <= y, clamped to the list.
@@ -73,7 +76,8 @@ struct RowMetrics {
       return 0;
     if (y >= total()) return static_cast<long>(count);
     if (is_uniform())
-      return static_cast<long>(y / (uniform * scale + gap));
+      return static_cast<long>(static_cast<double>(y) /
+                               (static_cast<double>(uniform) * scale + gap));
     size_t lo = 0, hi = count;
     while (lo < hi) {
       const size_t mid = lo + (hi - lo) / 2;
@@ -233,10 +237,15 @@ ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
     // read anyway, so favour the end being moved toward.
     const float max_span = std::max(view_h * 3.f, 1.f);
     if (hi - lo > max_span) {
+      const float cur_lo = sv.scroll_offset.y - top_padding;
+      const float cur_hi = cur_lo + view_h;
+      lo = cur_lo;
+      hi = cur_hi;
+      const float room = std::max(0.f, max_span - view_h);
       if (sv.scroll_target.y >= sv.scroll_offset.y)
-        lo = hi - max_span;
+        hi = cur_hi + room;
       else
-        hi = lo + max_span;
+        lo = cur_lo - room;
     }
   }
 
@@ -326,8 +335,14 @@ ElementResult virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
                            size_t count, float row_height,
                            RenderRow &&render_row,
                            ComponentConfig config = ComponentConfig()) {
-  return virtual_list_impl(ctx, ep_pair,
-                           detail::RowMetrics::uniform_rows(count, row_height),
+  auto [entity, parent] = deref(ep_pair);
+  auto &index = entity.template addComponentIfMissing<HasVirtualListIndex>();
+  index.uniform_height = row_height > 0.f ? row_height : 1.f;
+  index.pending_prepend = 0;
+  index.row_count = count;
+  auto rows = detail::RowMetrics::uniform_rows(count, row_height);
+  rows.index = &index;
+  return virtual_list_impl(ctx, ep_pair, rows,
                            std::forward<RenderRow>(render_row), config);
 }
 
@@ -350,6 +365,10 @@ ElementResult virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
 {
   auto [entity, parent] = deref(ep_pair);
   auto &index = entity.template addComponentIfMissing<HasVirtualListIndex>();
+  if (index.uniform_height > 0.f)
+    index.invalidate(0, count);
+  index.uniform_height = 0.f;
+  index.row_count = count;
   detail::refresh_virtual_index(index, count,
                                 std::forward<HeightFn>(height_of));
   detail::RowMetrics rows;
@@ -375,8 +394,10 @@ inline void prepend_virtual_rows(Entity &list, size_t count) {
   if (count == 0 || !list.template has<HasVirtualListIndex>())
     return;
   auto &idx = list.template get<HasVirtualListIndex>();
+  if (idx.uniform_height > 0.f)
+    return;
   idx.heights.insert(idx.heights.begin(), count, 0.f);
-  idx.prefix.insert(idx.prefix.begin(), count, 0.f);
+  idx.prefix.insert(idx.prefix.begin(), count, 0.0);
   // Shift the pending range by the insertion, saturating at the union
   // identity so an empty range stays empty.
   const size_t cap = HasVirtualListIndex::kDirtyEmpty - count;
@@ -388,29 +409,55 @@ inline void prepend_virtual_rows(Entity &list, size_t count) {
 }
 
 /// Where row `index` starts inside the content, in pixels, as of the last
-/// build of a measured virtual_list. 0 when the list has no retained index.
+/// build of a virtual_list (uniform or measured). 0 when the list has no
+/// retained index, or `index` is past the last build's count.
 [[nodiscard]] inline float virtual_row_offset(const Entity &list,
                                               size_t index) {
   if (!list.template has<HasVirtualListIndex>())
     return 0.f;
   const auto &idx = list.template get<HasVirtualListIndex>();
+  if (idx.uniform_height > 0.f) {
+    if (index >= idx.row_count)
+      return 0.f;
+    return (idx.uniform_height * static_cast<float>(index)) * idx.last_scale +
+           static_cast<float>(index) * idx.last_gap;
+  }
   if (index >= idx.prefix.size())
     return 0.f;
-  return idx.prefix[index] * idx.last_scale +
-         static_cast<float>(index) * idx.last_gap;
+  return static_cast<float>(idx.prefix[index] * idx.last_scale +
+                            static_cast<double>(index) * idx.last_gap);
 }
 
-/// Total height of a measured virtual_list's rows, in pixels, as of its
-/// last build.
+/// Total height of a virtual_list's rows, in pixels, as of its last build.
 [[nodiscard]] inline float virtual_rows_total(const Entity &list) {
   if (!list.template has<HasVirtualListIndex>())
     return 0.f;
   const auto &idx = list.template get<HasVirtualListIndex>();
+  if (idx.uniform_height > 0.f) {
+    const size_t count = idx.row_count;
+    return count
+        ? (idx.uniform_height * static_cast<float>(count)) * idx.last_scale +
+              static_cast<float>(count - 1) * idx.last_gap
+        : 0.f;
+  }
   if (idx.prefix.empty())
     return 0.f;
   const size_t count = idx.prefix.size() - 1;
-  return idx.prefix[count] * idx.last_scale +
-         static_cast<float>(count ? count - 1 : 0) * idx.last_gap;
+  return static_cast<float>(
+      idx.prefix[count] * idx.last_scale +
+      static_cast<double>(count ? count - 1 : 0) * idx.last_gap);
+}
+
+inline void scroll_to_item(Entity &list, size_t index) {
+  if (!list.template has<HasVirtualListIndex>() ||
+      !list.template has<HasScrollView>())
+    return;
+  const auto &idx = list.template get<HasVirtualListIndex>();
+  if (idx.row_count == 0)
+    return;
+  const size_t target = std::min(index, idx.row_count - 1);
+  auto &scroll = list.template get<HasScrollView>();
+  scroll.scroll_to({scroll.scroll_offset.x, virtual_row_offset(list, target)});
 }
 
 
