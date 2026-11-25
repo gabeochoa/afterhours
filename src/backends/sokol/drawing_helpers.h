@@ -9,6 +9,8 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <optional>
+#include <span>
 #include <stdexcept>
 #include <vector>
 
@@ -1919,6 +1921,20 @@ inline TextureType load_texture_from_rgba(const std::uint8_t *rgba, int w,
     std::abort();
   }
   return metal_texture_detail::load_texture_from_pixels(rgba, w, h, filter);
+}
+
+inline bool update_texture_rgba(TextureType, std::span<const uint8_t>,
+                                std::optional<RectangleType> = std::nullopt) {
+  log_error("@notimplemented update_texture_rgba on the sokol backend "
+            "(sokol textures are immutable)");
+  return false;
+}
+
+inline std::optional<RGBACapture>
+read_texture_rgba(TextureType, std::optional<RectangleType> = std::nullopt,
+                  bool = false) {
+  log_error("@notimplemented read_texture_rgba on the sokol backend");
+  return std::nullopt;
 }
 
 inline void unload_texture(TextureType &texture) {

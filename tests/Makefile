@@ -401,6 +401,7 @@ lighting_zones_test \
 	image_raylib_test \
 	texture_usable_test \
 	texture_usable_raylib_test \
+	texture_rgba_io_test \
 	per_draw_filter_test \
 	stepper_test \
 	bg_inset_test \
@@ -503,6 +504,7 @@ RAYLIB_TESTS := \
 	input_enum_actions_test \
 	input_axis_edge_test \
 	render_capture_test \
+	texture_rgba_io_test \
 	presented_frame_test \
 	triangle_winding_test \
 	bug_note_test \
