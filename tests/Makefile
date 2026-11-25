@@ -61,6 +61,9 @@ OUT := $(realpath ..)/output
 $(shell mkdir -p $(OUT))
 
 ALL_TESTS := \
+	subtree_rotation_test \
+	window_events_test \
+	text_input_no_host_enum_test \
 	scroll_logical_anchor_test \
 	flex_shrink_test \
 	reorder_drag_test \
@@ -416,6 +419,7 @@ lighting_zones_test \
 	load_font_size_test \
 	glyph_packing_test \
 	edit_keys_test \
+	raw_text_edit_test \
 	tab_container_test \
 	tab_toggle_geometry_test \
 	small_components_test \
@@ -471,6 +475,7 @@ ALL_TESTS += staging_texture_leak_test
 endif
 
 RAYLIB_TESTS := \
+	text_input_no_host_enum_test \
 	auto_text_color_test \
 	e2e_app_test \
 	skeletal_test \
@@ -481,10 +486,12 @@ RAYLIB_TESTS := \
 	window_state_test \
 	click_count_test \
 	edit_keys_test \
+	raw_text_edit_test \
 	default_font_test \
 	font_display_size_test \
 	load_font_size_test \
 	glyph_packing_test \
+	subtree_rotation_test \
 	font_unload_manager_test \
 	border_width_test \
 	border_only_test \
@@ -616,7 +623,9 @@ $(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test $(OUT)/input_ax
 # Linux too).
 $(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test $(OUT)/input_axis_edge_test: LDFLAGS_T = $(subst -lraylib,,$(subst $(RAYLIB_LIB)/libraylib.a,,$(LDFLAGS_RAYLIB)))
 
+$(OUT)/text_input_no_host_enum_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/middle_click_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
+$(OUT)/raw_text_edit_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/wheel_input_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test $(OUT)/graphics_key_injection_test $(OUT)/input_activity_snapshot_test $(OUT)/e2e_gamepad_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/wheel_input_test $(OUT)/wheel_delta_kind_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
