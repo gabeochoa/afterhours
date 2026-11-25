@@ -52,6 +52,7 @@ struct AutoLayout {
   std::vector<UIComponent *> cmp_cache_;
   bool enable_grid_snapping = false;
   float ui_scale = 1.0f;
+  float text_scale = 1.0f;
   // Theme::text_inset.x, already scaled. Sizing a box to its own text has to
   // charge the same inset the renderer will reserve inside it, or a Dim::Text
   // box comes out narrower than the text it is about to be handed.
@@ -213,6 +214,85 @@ struct AutoLayout {
     return *this;
   }
 
+  using BaselineFn = std::function<float(const std::string &, float)>;
+  BaselineFn external_baseline = nullptr;
+  auto &set_baseline_fn(const BaselineFn &fn) {
+    external_baseline = fn;
+    return *this;
+  }
+
+  static bool wants_baseline(const UIComponent &parent,
+                             const UIComponent &child) {
+    return child.self_align == SelfAlign::Baseline ||
+           (child.self_align == SelfAlign::Auto &&
+            parent.align_items == AlignItems::Baseline);
+  }
+
+  std::optional<float> baseline_offset(UIComponent &child) {
+    if (child.id < 0 || static_cast<size_t>(child.id) >= mapping.size() ||
+        !mapping[static_cast<size_t>(child.id)])
+      return std::nullopt;
+    const Entity &ent = *mapping[static_cast<size_t>(child.id)];
+    if (ent.is_missing<HasLabel>() || ent.get<HasLabel>().label.empty())
+      return std::nullopt;
+    const HasLabel &label = ent.get<HasLabel>();
+    std::string font_name = child.font_name;
+    if (font_name != UIComponent::UNSET_FONT)
+      if (auto *fm = EntityHelper::get_singleton_cmp<FontManager>())
+        font_name = fm->resolve_weighted(font_name, child.font_weight);
+    const float font_size = resolve_font_size(
+        child.font_size, fetch_screen_value_(Axis::Y),
+        child.resolved_scaling_mode, ui_scale, text_scale);
+    if (font_size <= 0.f)
+      return std::nullopt;
+    const float spacing = 1.f + label.letter_spacing;
+    const std::string first_line =
+        label.label.substr(0, label.label.find('\n'));
+    Vector2Type measured;
+    if (external_measure_text)
+      measured = external_measure_text(font_name, first_line, font_size, spacing);
+    else if (auto *tc = EntityHelper::get_singleton_cmp<ui::TextMeasureCache>())
+      measured = tc->measure(first_line, font_name, font_size, spacing);
+    else if (auto *fm2 = EntityHelper::get_singleton_cmp<FontManager>())
+      measured = measure_text(fm2->get_font(font_name), first_line.c_str(),
+                              font_size, spacing);
+    else
+      measured = Vector2Type{0.f, font_size};
+    float ascent = 0.8f * font_size;
+    if (external_baseline)
+      ascent = external_baseline(font_name, font_size);
+    else if (auto *fm3 = EntityHelper::get_singleton_cmp<FontManager>())
+      ascent = text_ascent(fm3->get_font(font_name), font_size);
+    float line_box = child.computed[Axis::Y];
+    if (label.line_height.has_value()) {
+      const float lh = resolve_font_size(*label.line_height,
+                                         fetch_screen_value_(Axis::Y),
+                                         child.resolved_scaling_mode, ui_scale,
+                                         text_scale);
+      if (lh > 0.f)
+        line_box = lh;
+    } else if (label.label.find('\n') != std::string::npos) {
+      line_box = measured.y;
+    }
+    const float inset = inset_for(ent);
+    return inset + fmaxf(0.f, (line_box - 2.f * inset - measured.y) * 0.5f) +
+           ascent + label.text_y_offset;
+  }
+
+  std::optional<float> row_baseline_target(UIComponent &widget) {
+    float target = 0.f;
+    bool any = false;
+    for (EntityID child_id : widget.children) {
+      UIComponent &child = cmp(child_id);
+      if (child.absolute || child.should_hide || !wants_baseline(widget, child))
+        continue;
+      any = true;
+      target = fmaxf(target, child.computed_margin[Axis::top] +
+                                 baseline_offset(child).value_or(0.f));
+    }
+    return any ? std::optional<float>(target) : std::nullopt;
+  }
+
   // Per-side inset for this entity: its own override if it set one, else the
   // theme's. The override is stored unscaled, so it scales here the way
   // text_inset_x already was.
@@ -242,8 +322,9 @@ struct AutoLayout {
     const std::string &content = label.label;
     // Resolve font_size to pixels using screen height
     float screen_height = fetch_screen_value_(Axis::Y);
-    float font_size = resolve_to_pixels(widget.font_size, screen_height,
-                                        widget.resolved_scaling_mode, ui_scale);
+    float font_size = resolve_font_size(widget.font_size, screen_height,
+                                        widget.resolved_scaling_mode, ui_scale,
+                                        text_scale);
     float spacing = 1.f + label.letter_spacing;
 
     const auto measure_one = [&](const std::string &s) -> Vector2Type {
@@ -304,8 +385,9 @@ struct AutoLayout {
     // A pinned line height replaces the measured one, so the box is the
     // number of rows the renderer will stack at that height.
     if (label.line_height.has_value()) {
-      const float lh = resolve_to_pixels(*label.line_height, screen_height,
-                                         widget.resolved_scaling_mode, ui_scale);
+      const float lh = resolve_font_size(*label.line_height, screen_height,
+                                         widget.resolved_scaling_mode, ui_scale,
+                                         text_scale);
       if (lh > 0.f)
         result.y = lh * static_cast<float>(std::max(1, line_count));
     }
@@ -346,12 +428,31 @@ struct AutoLayout {
     return widget.computed[axis];
   }
 
+  float scrollbar_gutter_px(UIComponent &widget, Axis axis) {
+    if (widget.id < 0 || static_cast<size_t>(widget.id) >= mapping.size() ||
+        mapping[static_cast<size_t>(widget.id)] == nullptr)
+      return 0.f;
+    Entity &ent = *mapping[static_cast<size_t>(widget.id)];
+    if (!ent.has<HasScrollView>())
+      return 0.f;
+    const HasScrollView &sv = ent.get<HasScrollView>();
+    if (!sv.scrollbar_gutter)
+      return 0.f;
+    const bool trailing =
+        ((axis == Axis::right || axis == Axis::X) && sv.vertical_enabled) ||
+        ((axis == Axis::bottom || axis == Axis::Y) && sv.horizontal_enabled);
+    if (!trailing)
+      return 0.f;
+    return resolve_to_pixels(sv.scrollbar_thickness,
+                             fetch_screen_value_(Axis::Y),
+                             widget.resolved_scaling_mode, ui_scale);
+  }
   float compute_padding_for_standalone_expectation(UIComponent &widget,
                                                    Axis axis) {
     const float no_change = widget.computed_padd[axis];
     const float screenValue = fetch_screen_value_(axis);
 
-    const auto compute_ = [&](const Size &exp) {
+    const auto compute = [&](const Size &exp) {
       switch (exp.dim) {
       case Dim::Pixels:
         return resolve_pixels(exp.value, widget);
@@ -375,14 +476,16 @@ struct AutoLayout {
     const auto &padd = widget.desired_padding;
     switch (axis) {
     case Axis::X:
-      return compute_(padd[Axis::left]) + compute_(padd[Axis::right]);
+      return compute(padd[Axis::left]) + compute(padd[Axis::right]) +
+             scrollbar_gutter_px(widget, axis);
     case Axis::Y:
-      return compute_(padd[Axis::top]) + compute_(padd[Axis::bottom]);
+      return compute(padd[Axis::top]) + compute(padd[Axis::bottom]) +
+             scrollbar_gutter_px(widget, axis);
     case Axis::top:
     case Axis::left:
     case Axis::right:
     case Axis::bottom:
-      return compute_(padd[axis]);
+      return compute(padd[axis]) + scrollbar_gutter_px(widget, axis);
     }
     return no_change;
   }
@@ -392,7 +495,7 @@ struct AutoLayout {
     const float no_change = widget.computed_margin[axis];
     const float screenValue = fetch_screen_value_(axis);
 
-    const auto compute_ = [&](const Size &exp) {
+    const auto compute = [&](const Size &exp) {
       switch (exp.dim) {
       case Dim::Pixels:
         return resolve_pixels(exp.value, widget);
@@ -415,14 +518,14 @@ struct AutoLayout {
     const auto &margin = widget.desired_margin;
     switch (axis) {
     case Axis::X:
-      return compute_(margin[Axis::left]) + compute_(margin[Axis::right]);
+      return compute(margin[Axis::left]) + compute(margin[Axis::right]);
     case Axis::Y:
-      return compute_(margin[Axis::top]) + compute_(margin[Axis::bottom]);
+      return compute(margin[Axis::top]) + compute(margin[Axis::bottom]);
     case Axis::top:
     case Axis::left:
     case Axis::right:
     case Axis::bottom:
-      return compute_(margin[axis]);
+      return compute(margin[axis]);
     }
     return no_change;
   }
@@ -477,7 +580,8 @@ struct AutoLayout {
       return no_change;
     }
 
-    const auto compute_ = [&](const Size &exp, float parent_value) {
+    const auto compute = [&](const Size &exp, float parent_value,
+                              float gutter) {
       switch (exp.dim) {
       // Unsupported kinds fall through into Percent.
       case Dim::Children:
@@ -487,7 +591,7 @@ struct AutoLayout {
       case Dim::Expand:
         log_error("Padding by expand not supported");
       case Dim::Percent:
-        return exp.value * parent_value;
+        return exp.value * parent_value + gutter;
       case Dim::ScreenPercent:
       case Dim::None:
       case Dim::Pixels:
@@ -499,17 +603,21 @@ struct AutoLayout {
     const auto &padd = widget.desired_padding;
     switch (axis) {
     case Axis::X:
-      return compute_(padd[Axis::left], parent.computed[Axis::X]) +
-             compute_(padd[Axis::right], parent.computed[Axis::X]);
+      return compute(padd[Axis::left], parent.computed[Axis::X], 0.f) +
+             compute(padd[Axis::right], parent.computed[Axis::X],
+                      scrollbar_gutter_px(widget, Axis::right));
     case Axis::Y:
-      return compute_(padd[Axis::top], parent.computed[Axis::Y]) +
-             compute_(padd[Axis::bottom], parent.computed[Axis::Y]);
+      return compute(padd[Axis::top], parent.computed[Axis::Y], 0.f) +
+             compute(padd[Axis::bottom], parent.computed[Axis::Y],
+                      scrollbar_gutter_px(widget, Axis::bottom));
     case Axis::left:
     case Axis::right:
-      return compute_(padd[axis], parent.computed[Axis::X]);
+      return compute(padd[axis], parent.computed[Axis::X],
+                      scrollbar_gutter_px(widget, axis));
     case Axis::top:
     case Axis::bottom:
-      return compute_(padd[axis], parent.computed[Axis::Y]);
+      return compute(padd[axis], parent.computed[Axis::Y],
+                      scrollbar_gutter_px(widget, axis));
     }
     return no_change;
   }
@@ -533,24 +641,24 @@ struct AutoLayout {
       return no_change;
     }
 
-    const auto compute_ = [&](const Size &exp, float parent_value) {
+    const auto compute = [&](const Size &exp, float parent_value) {
       return exp.dim == Dim::Percent ? exp.value * parent_value : no_change;
     };
 
     const auto &margin = widget.desired_margin;
     switch (axis) {
     case Axis::X:
-      return compute_(margin[Axis::left], parent.computed[Axis::X]) +
-             compute_(margin[Axis::right], parent.computed[Axis::X]);
+      return compute(margin[Axis::left], parent.computed[Axis::X]) +
+             compute(margin[Axis::right], parent.computed[Axis::X]);
     case Axis::Y:
-      return compute_(margin[Axis::top], parent.computed[Axis::Y]) +
-             compute_(margin[Axis::bottom], parent.computed[Axis::Y]);
+      return compute(margin[Axis::top], parent.computed[Axis::Y]) +
+             compute(margin[Axis::bottom], parent.computed[Axis::Y]);
     case Axis::left:
     case Axis::right:
-      return compute_(margin[axis], parent.computed[Axis::X]);
+      return compute(margin[axis], parent.computed[Axis::X]);
     case Axis::top:
     case Axis::bottom:
-      return compute_(margin[axis], parent.computed[Axis::Y]);
+      return compute(margin[axis], parent.computed[Axis::Y]);
     }
     return no_change;
   }
@@ -729,6 +837,25 @@ struct AutoLayout {
     return end;
   }
   float _max_child_size(UIComponent &widget, Axis axis) {
+    if (axis == Axis::Y &&
+        static_cast<bool>(widget.flex_direction & FlexDirection::Row)) {
+      if (auto target = row_baseline_target(widget)) {
+        float need = 0.f;
+        for (EntityID child_id : widget.children) {
+          UIComponent &child = cmp(child_id);
+          if (child.absolute || child.should_hide)
+            continue;
+          float bottom = child.computed[axis] + child.computed_margin[axis];
+          if (wants_baseline(widget, child)) {
+            const float b = baseline_offset(child).value_or(0.f);
+            bottom = *target - b + child.computed[axis] +
+                     child.computed_margin[Axis::bottom];
+          }
+          need = fmaxf(need, bottom);
+        }
+        return need;
+      }
+    }
     float max_child_size = 0.f;
     for (EntityID child_id : widget.children) {
       UIComponent &child = cmp(child_id);
@@ -1268,8 +1395,38 @@ struct AutoLayout {
       }
     };
 
+    const auto shrink_floor = [this](UIComponent *child, Axis axis) {
+      float floor = 0.f;
+      const float mn = resolve_constraint(*child, child->min_size[axis], axis);
+      if (mn > 0.f)
+        floor = mn;
+      bool has_flow_child = false;
+      for (EntityID cid : child->children) {
+        UIComponent &gc = cmp(cid);
+        if (!gc.absolute && !gc.should_hide)
+          has_flow_child = true;
+      }
+      if (has_flow_child) {
+        const bool child_main =
+            (child->flex_direction == FlexDirection::Row && axis == Axis::X) ||
+            (child->flex_direction == FlexDirection::Column &&
+             axis == Axis::Y);
+        const float content =
+            child_main ? _sum_children_axis_for_child_exp(*child, axis)
+                       : _max_child_size(*child, axis);
+        floor = fmaxf(floor, content + child->computed_padd[axis]);
+      } else {
+        Entity &ent = to_ent(child->id);
+        if (ent.has<HasLabel>() && !soft_text_floor(*child, axis))
+          floor = fmaxf(floor, get_text_size_for_axis(*child, axis) +
+                                   child->computed_padd[axis]);
+      }
+      return floor;
+    };
+
     const auto fix_violating_children =
-        [num_children, &layout_children](Axis axis, float error) {
+        [num_children, &layout_children, &shrink_floor](Axis axis,
+                                                        float error) {
           VALIDATE(num_children != 0, "Should never have zero children");
 
           size_t num_strict_children = 0;
@@ -1312,7 +1469,8 @@ struct AutoLayout {
           // cap left 0.9^11 of it behind (432 -> 333.19 instead of 288).
           float total_shrink_weight = 0.f;
           for (UIComponent *child : layout_children) {
-            total_shrink_weight += 1.f - child->desired[axis].strictness;
+            if (child->computed[axis] > shrink_floor(child, axis))
+              total_shrink_weight += 1.f - child->desired[axis].strictness;
           }
           if (total_shrink_weight <= 0.f) {
             return;
@@ -1325,7 +1483,8 @@ struct AutoLayout {
             float portion_of_error =
                 error * ((1.f - exp.strictness) / total_shrink_weight);
             float cur_size = child->computed[axis];
-            child->computed[axis] = fmaxf(0, cur_size - portion_of_error);
+            child->computed[axis] =
+                fmaxf(shrink_floor(child, axis), cur_size - portion_of_error);
             // NOTE: do NOT decay child->desired strictness here. desired is
             // persistent user intent and is not reset between passes, so
             // writing it back corrupts strictness every frame. The loop still
@@ -1655,6 +1814,9 @@ struct AutoLayout {
       }
     }
 
+    const float row_baseline =
+        is_row ? row_baseline_target(widget).value_or(0.f) : 0.f;
+
     // Position children
     float offx = is_row ? start_offset : 0.f;
     float offy = is_column ? start_offset : 0.f;
@@ -1799,7 +1961,10 @@ struct AutoLayout {
       // is what CSS does and what the caller asked for. Gating on > 0 dropped
       // back to FlexStart instead, so the overflow went entirely out one side
       // and the widget sat off-centre by half its excess.
-      if (cross_remaining != 0.f) {
+      if (is_row && wants_baseline(widget, child)) {
+        cross_offset = row_baseline - child.computed_margin[Axis::top] -
+                       baseline_offset(child).value_or(0.f);
+      } else if (cross_remaining != 0.f) {
         // Use child's self_align if set, otherwise fall back to parent's
         // align_items
         if (child.self_align != SelfAlign::Auto) {
@@ -1815,6 +1980,8 @@ struct AutoLayout {
           case SelfAlign::Center:
             cross_offset = cross_remaining / 2.f;
             break;
+          case SelfAlign::Baseline:
+            break;
           }
         } else {
           // Use parent's align_items
@@ -1829,6 +1996,8 @@ struct AutoLayout {
             break;
           case AlignItems::Stretch:
             // Stretch is handled in size calculation, not positioning
+            break;
+          case AlignItems::Baseline:
             break;
           }
         }
@@ -1978,10 +2147,12 @@ struct AutoLayout {
                          const window_manager::Resolution resolution,
                          const std::vector<Entity *> &map,
                          bool enable_grid_snapping = false,
-                         float ui_scale = 1.0f, float text_inset_x = 0.f) {
+                         float ui_scale = 1.0f, float text_inset_x = 0.f,
+                         float text_scale = 1.0f) {
     AutoLayout al(resolution, map);
     al.set_grid_snapping(enable_grid_snapping);
     al.ui_scale = ui_scale;
+    al.text_scale = text_scale;
     al.text_inset_x = text_inset_x;
     al.build_cmp_cache();
     al.prune_stale_children(widget);
@@ -2002,10 +2173,12 @@ struct AutoLayout {
                                  const window_manager::Resolution resolution,
                                  const std::vector<Entity *> &map,
                                  bool enable_grid_snapping = false,
-                                 float ui_scale = 1.0f, float text_inset_x = 0.f) {
+                                 float ui_scale = 1.0f, float text_inset_x = 0.f,
+                                 float text_scale = 1.0f) {
     AutoLayout al(resolution, map);
     al.set_grid_snapping(enable_grid_snapping);
     al.ui_scale = ui_scale;
+    al.text_scale = text_scale;
     al.text_inset_x = text_inset_x;
     al.build_cmp_cache();
     al.prune_stale_children(widget);
