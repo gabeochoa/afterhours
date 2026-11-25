@@ -7,6 +7,10 @@ Started partway through the project's life, so it does not go all the way back.
 ## Unreleased
 
 - **Reusable `imm::keycap()` and `imm::prompt_bar()` widgets** (`src/plugins/ui/prompt_bar.h`, via `imm::PromptItem`). Centered auto-sized keycap badges and a horizontal `[keycap] label` prompt row with optional clickable `on_press` items (indexed `ElementResult`), replacing hand-rolled bottom prompt bars. Covered by `prompt_bar_test`.
+- **Glyph atlas-packing failure reporting.** Raylib font loads log unpacked glyphs once and expose them via `FontManager::packing_failures`. Covered by `glyph_packing_test`.
+- **Flex shrink content floor.** Shrink distribution stops at content size so fixed controls are not crushed below their content. Covered by `flex_shrink_test`.
+- **Drag-group reorder Escape cancel and edge autoscroll.** Covered by `reorder_drag_test`.
+- **`ComponentConfig::with_text_offset(x, y)` and fixed `text_x_offset` on right/center-aligned labels.** Right-aligned text now moves with the offset (negative pulls it inward from the right edge) instead of being a silent no-op, and centered text shifts without shrinking its wrap width; left-aligned behaviour is unchanged. Covered by `text_origin_test`.
 - **Scale-aware `on_draw_bg` / `on_draw_fg` callbacks (`RenderPrimitive::DrawContext{rect, scale}`).** Additive overload passing the resolved `ui_scale` for Adaptive widgets (1.0 for Proportional), keeping existing `RectangleType`-only callbacks unchanged. Covered by `draw_context_scale_test`.
 - **Word selection policy (`ui::text_selection::WordPolicy`: `Prose`, `Identifier`, `Path`).** Unifies word-boundary helpers in `text_selection.h` and defaults to `Prose`. Covered by `word_policy_test`.
 - **Global text scale (`Theme::text_scale`).** Multiplies every resolved font size via `ui::resolve_font_size` (layout, baseline alignment, immediate & batched renderers, text inputs, tooltips, and validation) without scaling widget boxes. Covered by `text_scale_test`.
@@ -26,6 +30,8 @@ Started partway through the project's life, so it does not go all the way back.
 
 ### Behaviour
 
+- **Bundled default font reloads across GL context shutdown.** `bundled_default_font()` is invalidated via `graphics::context_epoch()` on raylib shutdown/close, and `font_display_scale()` only applies DPI scale with `FLAG_WINDOW_HIGHDPI`. Covered by `default_font_test` and `font_display_size_test`.
+- **E2E mouse-down polls mark injected presses read.** Raylib `input::is_mouse_button_down` and `test_input::is_mouse_button_down` now delegate through `input_injector`, so polling button-down no longer leaves an injected press unread. Covered by `e2e_unread_press_test`.
 - **E2E bus-aware volume commands.** With `AFTER_HOURS_ENABLE_E2E_TESTING`, `register_audio_commands` now also handles `set_volume <bus|master> <0..1>` (clamped) and `expect_volume <bus|master> <min> [max]`; bus names resolve through `sound_system::known_buses()` and an unknown bus is a command failure, never a crash. Without the macro the handlers and `known_buses()`/`has_bus()` compile out entirely. Covered by `e2e_audio_volume_test` (enabled) and `e2e_audio_volume_disabled_test` (compile-out).
 
 - **The default UI font is Roboto Regular, not raylib's pixel font.** On the raylib backend, `get_default_font()` (and `get_unset_font()`, and the UI plugin's DEFAULT/SYMBOL/UNSET fonts) now returns the bundled `src/assets/fonts/Roboto-Regular.ttf` (Apache-2.0), loaded lazily on first use. `set_default_font()` / `clear_default_font()` keep their meaning (an explicit override always wins; clearing restores the bundled face). If the file cannot be found or rasterized — e.g. a consumer that copies only the headers — the fallback is still `raylib::GetFontDefault()`. Text metrics change wherever the default face measures real text; sokol and none/psx backends are unchanged. Covered by `default_font_test` (updated expectations).
