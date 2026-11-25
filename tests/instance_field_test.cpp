@@ -32,7 +32,7 @@ int main() {
       in &= t.pos.x >= 0 && t.pos.x < 100 && t.pos.z >= 0 && t.pos.z < 100 &&
             near(t.pos.y, 2.f) && t.scale.x >= 0.5f && t.scale.x < 1.5f;
     check(in, "scatter stays in bounds at ground y with scale range");
-    RngStream r1(9), r2(9);
+    RNGStream r1(9), r2(9);
     check(scatter_field({0,0,0},{10,0,10},10,r1) == scatter_field({0,0,0},{10,0,10},10,r2),
           "stream overload is deterministic too");
     check(scatter_field({0,0,0},{1,0,1},0,1u).empty(), "zero count scatters nothing");

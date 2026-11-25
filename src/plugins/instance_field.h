@@ -22,7 +22,7 @@ struct InstanceTransform {
 
 inline std::vector<InstanceTransform> scatter_field(Vector3Type min,
                                                     Vector3Type max, int count,
-                                                    RngStream &rng,
+                                                    RNGStream &rng,
                                                     float scale_min = 1.f,
                                                     float scale_max = 1.f) {
   std::vector<InstanceTransform> out;
@@ -41,7 +41,7 @@ inline std::vector<InstanceTransform> scatter_field(Vector3Type min,
 inline std::vector<InstanceTransform>
 scatter_field(Vector3Type min, Vector3Type max, int count, uint32_t seed,
               float scale_min = 1.f, float scale_max = 1.f) {
-  RngStream rng(seed);
+  RNGStream rng(seed);
   return scatter_field(min, max, count, rng, scale_min, scale_max);
 }
 
