@@ -6,6 +6,7 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+- **Flex shrink content floor.** Shrink distribution stops at content size so fixed controls are not crushed below their content. Covered by `flex_shrink_test`.
 - **Drag-group reorder Escape cancel and edge autoscroll.** Covered by `reorder_drag_test`.
 - **`ComponentConfig::with_text_offset(x, y)` and fixed `text_x_offset` on right/center-aligned labels.** Right-aligned text now moves with the offset (negative pulls it inward from the right edge) instead of being a silent no-op, and centered text shifts without shrinking its wrap width; left-aligned behaviour is unchanged. Covered by `text_origin_test`.
 - **Scale-aware `on_draw_bg` / `on_draw_fg` callbacks (`RenderPrimitive::DrawContext{rect, scale}`).** Additive overload passing the resolved `ui_scale` for Adaptive widgets (1.0 for Proportional), keeping existing `RectangleType`-only callbacks unchanged. Covered by `draw_context_scale_test`.
