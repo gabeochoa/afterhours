@@ -5,6 +5,7 @@
 #include <functional>
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include "../../developer.h"
 #include "../../warn_once.h"
@@ -98,6 +99,7 @@ inline float text_ascent(const Font, const float size) {
 
 inline float get_first_glyph_bearing(const Font, const char *) { return 0.0f; }
 inline bool is_font_loaded(const Font &) { return false; }
+inline std::vector<int> glyph_packing_failures(const Font &) { return {}; }
 inline bool font_has_glyph(const Font, int) { return false; }
 
 } // namespace afterhours
