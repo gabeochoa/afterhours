@@ -14,6 +14,7 @@
 #include <magic_enum/magic_enum.hpp>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "../../drawing_helpers.h"
@@ -619,6 +620,9 @@ struct HasScrollView : BaseComponent {
   // Pixels of rows a virtualized list chose not to build, added into
   // content_size so the scrollbar still spans the whole list.
   Vector2Type unbuilt_content_size = {0, 0};
+  size_t virtual_first = 0, virtual_last = 0;
+  size_t virtual_visible_first = 0, virtual_visible_last = 0;
+  size_t virtual_count = 0;
 
   // Hold the viewport on whatever child is at the top of it when content is
   // added or removed above, the way a browser does. Off by default: it costs a
@@ -794,6 +798,8 @@ struct HasVirtualListIndex : BaseComponent {
   size_t pending_prepend = 0;
   float last_scale = 1.f;
   float last_gap = 0.f;
+  std::unordered_map<size_t, EntityID> key_slots;
+  EntityID next_key_slot = 0;
 
   void invalidate(size_t first, size_t last) {
     dirty_from = std::min(dirty_from, first);

@@ -6,6 +6,7 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+- **`virtual_list_keyed` and `virtual_list_range`.** Keyed rows keep entity identity across inserts/removes above, and `virtual_list_range` exposes the built/visible window plus `near_end`. Covered by `virtual_list_test`.
 - **Logical scroll anchors follow item keys.** `anchor_scroll` now re-pins by the keyed item (`mk_keyed` key) instead of the recycled child entity, so a prepend above the viewport holds the view on the same item. Covered by `scroll_logical_anchor_test`.
 - **Glyph atlas-packing failure reporting.** Raylib font loads log unpacked glyphs once and expose them via `FontManager::packing_failures`. Covered by `glyph_packing_test`.
 - **Flex shrink content floor.** Shrink distribution stops at content size so fixed controls are not crushed below their content. Covered by `flex_shrink_test`.
