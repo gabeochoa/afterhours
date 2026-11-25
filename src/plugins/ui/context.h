@@ -814,14 +814,32 @@ template <typename InputAction> struct ThemeScopeT {
 
 namespace detail {
 
-// Maps a rect from an entity's layout space to where its ancestors put it:
-// each ancestor's scroll, then its scale about its origin, then its translate,
-// nearest ancestor first. The one source of truth for render and hit-test, so
-// a child of a scaled or translated parent is clickable where it is drawn.
-static inline RectangleType apply_ancestor_transform(const Entity &entity,
-                                                     RectangleType rect) {
+struct WorldTransform {
+  RectangleType rect{};
+  float rotation = 0.f;
+  Vector2Type rot_center{0.f, 0.f};
+  bool ancestor_rotated = false;
+};
+
+static inline Vector2Type rect_center_of(RectangleType r) {
+  return {r.x + r.width * 0.5f, r.y + r.height * 0.5f};
+}
+
+static inline Vector2Type rotate_point_around(Vector2Type p, Vector2Type pivot,
+                                              float deg) {
+  if (deg == 0.f)
+    return p;
+  const float rad = deg * 3.14159265358979323846f / 180.f;
+  const float c = std::cos(rad), s = std::sin(rad);
+  const float dx = p.x - pivot.x, dy = p.y - pivot.y;
+  return {pivot.x + dx * c - dy * s, pivot.y + dx * s + dy * c};
+}
+
+static inline void apply_ancestor_steps(const Entity &entity, RectangleType &rect,
+                                        float *total_rotation,
+                                        bool *ancestor_rotated) {
   if (!entity.has<UIComponent>())
-    return rect;
+    return;
   EntityID pid = entity.get<UIComponent>().parent;
   int guard = 0;
   while (pid >= 0 && guard < 64) {
@@ -851,11 +869,64 @@ static inline RectangleType apply_ancestor_transform(const Entity &entity,
       }
       rect.x += mods.translate_x;
       rect.y += mods.translate_y;
+      if (mods.rotation != 0.f) {
+        RectangleType parent_rect = parent.get<UIComponent>().rect();
+        parent_rect = mods.apply_modifier(parent_rect);
+        const Vector2Type pivot = mods.rotation_center(parent_rect);
+        const Vector2Type c = rect_center_of(rect);
+        const Vector2Type nc = rotate_point_around(c, pivot, mods.rotation);
+        rect.x += nc.x - c.x;
+        rect.y += nc.y - c.y;
+        if (total_rotation)
+          *total_rotation += mods.rotation;
+        if (ancestor_rotated)
+          *ancestor_rotated = true;
+      }
     }
     pid = parent.get<UIComponent>().parent;
     ++guard;
   }
+}
+
+// Maps a rect from an entity's layout space to where its ancestors put it:
+// each ancestor's scroll, then its scale about its origin, then its translate,
+// then its rotation (rect centre rotated about the ancestor pivot), nearest
+// ancestor first. The one source of truth for render and hit-test, so
+// a child of a scaled or translated parent is clickable where it is drawn.
+static inline RectangleType apply_ancestor_transform(const Entity &entity,
+                                                     RectangleType rect) {
+  apply_ancestor_steps(entity, rect, nullptr, nullptr);
   return rect;
+}
+
+// Composes own rotation plus every ancestor rotation into one exact
+// (rect, rotation, rot_center): rotating rect about rot_center by rotation
+// matches applying each rotation about its own pivot in turn, because
+// Rot(P, a) on a rect equals shifting its centre to Rot(P, a)(centre) and
+// then rotating about that new centre. Input rect must already have the
+// entity's own scale/translate applied (apply_modifier), not its rotation.
+static inline WorldTransform resolve_world_transform(const Entity &entity,
+                                                     RectangleType rect) {
+  WorldTransform out;
+  float total = 0.f;
+  if (entity.has<HasUIModifiers>()) {
+    const HasUIModifiers &mods = entity.get<HasUIModifiers>();
+    if (mods.rotation != 0.f) {
+      const Vector2Type pivot = mods.rotation_center(rect);
+      const Vector2Type c = rect_center_of(rect);
+      const Vector2Type nc = rotate_point_around(c, pivot, mods.rotation);
+      rect.x += nc.x - c.x;
+      rect.y += nc.y - c.y;
+      total = mods.rotation;
+    }
+  }
+  bool ancestor_rotated = false;
+  apply_ancestor_steps(entity, rect, &total, &ancestor_rotated);
+  out.rect = rect;
+  out.rotation = total;
+  out.rot_center = rect_center_of(rect);
+  out.ancestor_rotated = ancestor_rotated;
+  return out;
 }
 
 } // namespace detail
