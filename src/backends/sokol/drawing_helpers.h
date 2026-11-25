@@ -16,6 +16,7 @@
 #include "../../capture.h"
 #include "../../render_capture.h"
 #include "../../graphics.h"
+#include "../../render_counters.h"
 #include "../../plugins/color.h"
 #include "../../plugins/texture_manager.h"
 #include "font_helper.h"
@@ -34,7 +35,8 @@ inline void draw_circle_v(Vector2Type center, float radius, Color color);
 
 inline void draw_text_ex(const afterhours::Font font, const char *content,
                          const Vector2Type position, const float font_size,
-                         const float, const Color color, const float = 0.0f,
+                         const float spacing, const Color color,
+                         const float = 0.0f,
                          const float = 0.0f, const float = 0.0f) {
   capture::record("text", RectangleType{position.x, position.y, 0.f, font_size},
                   color, content ? content : "");
@@ -56,6 +58,7 @@ inline void draw_text_ex(const afterhours::Font font, const char *content,
   // space that is 1/dpi_scale, so the resulting quads land at the correct
   // logical pixel position.
   float dpi = graphics::metal_detail::dpi_scale();
+  fonsSetSpacing(ctx, (spacing - 1.f) * dpi);
   if (dpi > 1.01f) {
     float inv = 1.0f / dpi;
     fonsSetSize(ctx, font_size * dpi);
@@ -84,6 +87,7 @@ inline void draw_text(const char *content, const float x, const float y,
                                       content, shown);
 
   float dpi = graphics::metal_detail::dpi_scale();
+  fonsSetSpacing(ctx, 0.f);
   if (dpi > 1.01f) {
     float inv = 1.0f / dpi;
     fonsSetSize(ctx, font_size * dpi);
@@ -1217,6 +1221,11 @@ inline graphics::RenderTextureType load_render_texture_with_samples(int w,
   rt.resolve_img_id = resolve.id;
   rt.resolve_view_id = resolve_view.id;
   rt.sampler_id = smp.id;
+  // One create per successful render target, as on raylib: the sokol
+  // images/views/sampler above are the creation. The sgl context is made
+  // lazily in begin_texture_mode and shared/cached per format, so it is
+  // not counted separately.
+  render_counters::note_create();
   return rt;
 }
 
@@ -1877,6 +1886,7 @@ inline TextureType load_texture_from_pixels(const unsigned char *rgba, int w,
   tex.img_id = img.id;
   tex.view_id = view.id;
   tex.sampler_id = smp.id;
+  render_counters::note_create();
   return tex;
 }
 

@@ -125,6 +125,52 @@ int main() {
   }
 
   {
+    std::vector<MatrixType> caller{
+        model_transform({-3, 0, 0}, 0.f, {1, 1, 1}),
+        model_transform({1, 0, -1}, 90.f, {0.8f, 0.8f, 0.8f}),
+        model_transform({0, 0, 2}, 45.f, {1.1f, 1.1f, 1.1f})};
+    InstanceBatcher borrowed;
+    borrowed.borrow(tree, caller);
+    check(borrowed.copies() == 3 && borrowed.group_count() == 1,
+          "borrowed copies count without being copied in");
+    const MatrixType *seen_ptr = nullptr;
+    size_t seen_n = 0;
+    raylib::RenderTexture2D scratch = raylib::LoadRenderTexture(8, 8);
+    raylib::BeginTextureMode(scratch);
+    borrowed.flush(shader, [&](const ModelType &, uint32_t,
+                             std::span<const MatrixType> ts) {
+      seen_ptr = ts.data();
+      seen_n = ts.size();
+      check(ts.size() == 3 && max_abs_diff(ts[0], caller[0]) < 1e-6f &&
+                max_abs_diff(ts[2], caller[2]) < 1e-6f,
+            "borrowed span carries the caller's transforms");
+    });
+    raylib::EndTextureMode();
+    raylib::UnloadRenderTexture(scratch);
+    check(seen_ptr == caller.data() && seen_n == 3,
+          "borrowed flush hands back the caller's own span, uncopied");
+    check(borrowed.copies() == 0, "a borrowed flush empties the group");
+
+    InstanceBatcher mixed;
+    mixed.add(tree, {0, 0, 0}, 0.f, {1, 1, 1});
+    mixed.borrow(tree, caller);
+    mixed.borrow(lantern, std::span<const MatrixType>(caller.data(), 2), 1);
+    check(mixed.copies() == 6 && mixed.group_count() == 2,
+          "mixed owned and borrowed copies count together");
+    std::string segments;
+    raylib::RenderTexture2D scratch2 = raylib::LoadRenderTexture(8, 8);
+    raylib::BeginTextureMode(scratch2);
+    mixed.flush(shader, [&](const ModelType &m, uint32_t key,
+                          std::span<const MatrixType> ts) {
+      segments += std::string(&m == &tree ? "tree" : "lantern") + ":" +
+                  std::to_string(key) + "x" + std::to_string(ts.size()) +
+                  (ts.data() == caller.data() ? "B" : "O") + " ";
+    });
+    raylib::EndTextureMode();
+    raylib::UnloadRenderTexture(scratch2);
+    check(segments == "tree:0x1O tree:0x3B lantern:1x2B ",
+          "mixed group flushes owned then borrowed segments: " + segments);
+    check(mixed.copies() == 0, "a mixed flush empties the groups");
     auto fill = [&](InstanceBatcher &b) {
       for (const Copy &c : scene)
         b.add(*c.model, c.pos, c.yaw, {c.scale, c.scale, c.scale});
@@ -172,6 +218,63 @@ int main() {
     check(drained.copies() == 1 && drained.group_count() == 1,
           "batcher is reusable after drain");
     drained.clear();
+
+    // drain must emit borrowed-only groups too: borrowed spans are stored
+    // separately from owned transforms, so skipping empty-transform groups
+    // would strand them and copies() would never reach 0.
+    {
+      InstanceBatcher drain_borrowed;
+      drain_borrowed.borrow(tree, caller);
+      check(drain_borrowed.copies() == 3 && drain_borrowed.group_count() == 1,
+            "borrowed-only group counts before drain");
+      std::string drain_segments;
+      const MatrixType *drain_ptr = nullptr;
+      drain_borrowed.drain([&](const ModelType &m, uint32_t key,
+                               std::span<const MatrixType> ts) {
+        drain_segments += std::string(&m == &tree ? "tree" : "lantern") +
+                          ":" + std::to_string(key) + "x" +
+                          std::to_string(ts.size()) +
+                          (ts.data() == caller.data() ? "B " : "O ");
+        drain_ptr = ts.data();
+      });
+      check(drain_segments == "tree:0x3B ",
+            "drain emits a borrowed-only group as-is: " + drain_segments);
+      check(drain_ptr == caller.data(),
+            "drain hands back the caller's own span, uncopied");
+      check(drain_borrowed.copies() == 0 && drain_borrowed.group_count() == 0,
+            "copies reach 0 after draining a borrowed-only group");
+      check(caller.size() == 3,
+            "drain never frees or consumes the caller's buffer");
+    }
+
+    // Mixed owned+borrowed in the same group drain as owned first, then
+    // each borrowed span, and tint state resets like clear() (#310).
+    {
+      InstanceBatcher drain_mixed;
+      drain_mixed.add(tree, {-1, 0, 0}, 0.f, {1, 1, 1}, 0,
+                      Color{255, 0, 0, 255});
+      drain_mixed.borrow(tree, caller);
+      check(drain_mixed.copies() == 4 && drain_mixed.group_count() == 1,
+            "mixed owned+borrowed same group counts before drain");
+      std::string drain_segments;
+      drain_mixed.drain([&](const ModelType &m, uint32_t key,
+                            std::span<const MatrixType> ts) {
+        drain_segments += std::string(&m == &tree ? "tree" : "lantern") +
+                          ":" + std::to_string(key) + "x" +
+                          std::to_string(ts.size()) +
+                          (ts.data() == caller.data() ? "B " : "O ");
+      });
+      check(drain_segments == "tree:0x1O tree:0x3B ",
+            "drain emits mixed group owned then borrowed: " +
+                drain_segments);
+      check(drain_mixed.copies() == 0 && drain_mixed.group_count() == 0,
+            "copies reach 0 after draining a mixed group");
+      drain_mixed.add(tree, {0, 0, 0}, 0.f, {1, 1, 1});
+      check(drain_mixed.copies() == 1,
+            "batcher is reusable after draining a mixed group");
+      drain_mixed.clear();
+      check(drain_mixed.copies() == 0, "clear empties a refilled group");
+    }
   }
 
   // Same frame two ways: batched, and one draw_model per copy.
@@ -216,6 +319,38 @@ int main() {
   printf("  %d covered pixels, %d differ\n", covered, differ);
   check(covered > 2000, "the scene is on screen");
   check(differ <= covered / 200, "batched frame matches draw_model per copy");
+
+  {
+    std::vector<MatrixType> tree_ts, lantern_ts;
+    for (const Copy &c : scene)
+      (c.model == &tree ? tree_ts : lantern_ts)
+          .push_back(model_transform(c.pos, c.yaw, {c.scale, c.scale, c.scale}));
+    InstanceBatcher bb;
+    bb.borrow(tree, tree_ts);
+    bb.borrow(lantern, lantern_ts);
+    raylib::BeginTextureMode(rt);
+    raylib::ClearBackground({0, 0, 0, 0});
+    raylib::BeginMode3D(cam);
+    bb.flush(shader);
+    raylib::EndMode3D();
+    raylib::EndTextureMode();
+    check(bb.copies() == 0, "borrowed flush empties before the pixel check");
+    raylib::Image borrowed_img = raylib::LoadImageFromTexture(rt.texture);
+    raylib::ImageFormat(&borrowed_img, raylib::PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+    auto *pc = static_cast<raylib::Color *>(borrowed_img.data);
+    int covered_b = 0, differ_b = 0;
+    for (int i = 0; i < 256 * 256; i++) {
+      if (pc[i].a > 0 || pb[i].a > 0) covered_b++;
+      int d = std::abs(pc[i].r - pb[i].r) + std::abs(pc[i].g - pb[i].g) +
+              std::abs(pc[i].b - pb[i].b) + std::abs(pc[i].a - pb[i].a);
+      if (d > 6) differ_b++;
+    }
+    printf("  %d covered pixels, %d differ (borrowed)\n", covered_b, differ_b);
+    check(covered_b > 2000, "the borrowed scene is on screen");
+    check(differ_b <= covered_b / 200,
+          "borrowed frame matches draw_model per copy");
+    raylib::UnloadImage(borrowed_img);
+  }
 
   raylib::UnloadImage(batched);
   raylib::UnloadImage(direct);
@@ -281,6 +416,74 @@ int main() {
           "per-instance tint reaches pixels (red left, blue right)");
     raylib::UnloadImage(tint_batched);
     raylib::UnloadImage(tint_direct);
+  }
+
+  // Borrowed segment in a tinted group: it has no tint data, so it must
+  // draw through the tinted path with white tints — matching an untinted
+  // draw_model on the right, not the owned copy's red on the left.
+  {
+    std::vector<MatrixType> borrowed_ts{
+        model_transform({2, 0, 0}, 0.f, {1, 1, 1})};
+    InstanceBatcher tinted_borrow;
+    tinted_borrow.add(tree, {-2, 0, 0}, 0.f, {1, 1, 1}, 0,
+                      Color{255, 0, 0, 255});
+    tinted_borrow.borrow(tree, borrowed_ts);
+    check(tinted_borrow.copies() == 2 && tinted_borrow.group_count() == 1,
+          "tinted owned + borrowed copies share one group");
+    auto render_tinted_borrow = [&](bool batched_mode) {
+      raylib::BeginTextureMode(rt);
+      raylib::ClearBackground({0, 0, 0, 0});
+      raylib::BeginMode3D(cam);
+      if (batched_mode) {
+        tinted_borrow.flush(shader);
+      } else {
+        draw_model(tree, {-2, 0, 0}, 0.f, {1, 1, 1}, Color{255, 0, 0, 255});
+        draw_model(tree, {2, 0, 0}, 0.f, {1, 1, 1});
+      }
+      raylib::EndMode3D();
+      raylib::EndTextureMode();
+      raylib::Image img = raylib::LoadImageFromTexture(rt.texture);
+      raylib::ImageFormat(&img, raylib::PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+      return img;
+    };
+    raylib::Image tb_batched = render_tinted_borrow(true);
+    check(tinted_borrow.copies() == 0,
+          "tinted borrowed flush empties the group");
+    raylib::Image tb_direct = render_tinted_borrow(false);
+    auto *ptb = static_cast<raylib::Color *>(tb_batched.data);
+    auto *ptd = static_cast<raylib::Color *>(tb_direct.data);
+    int tb_covered = 0, tb_differ = 0;
+    long tb_left_rb = 0, tb_right_rb = 0, tb_left_n = 0, tb_right_n = 0;
+    for (int y = 0; y < 256; y++) {
+      for (int x = 0; x < 256; x++) {
+        int i = y * 256 + x;
+        if (ptb[i].a > 0 || ptd[i].a > 0) tb_covered++;
+        int d = std::abs(ptb[i].r - ptd[i].r) + std::abs(ptb[i].g - ptd[i].g) +
+                std::abs(ptb[i].b - ptd[i].b) + std::abs(ptb[i].a - ptd[i].a);
+        if (d > 6) tb_differ++;
+        if (ptb[i].a > 0) {
+          if (x < 128) {
+            tb_left_rb += ptb[i].r - ptb[i].b;
+            tb_left_n++;
+          } else {
+            tb_right_rb += ptb[i].r - ptb[i].b;
+            tb_right_n++;
+          }
+        }
+      }
+    }
+    printf("  tinted-borrow: %d covered, %d differ, left R-B %ld, right "
+           "R-B %ld\n",
+           tb_covered, tb_differ, tb_left_n ? tb_left_rb / tb_left_n : 0,
+           tb_right_n ? tb_right_rb / tb_right_n : 0);
+    check(tb_covered > 1000, "tinted borrowed scene is on screen");
+    check(tb_differ <= tb_covered / 200,
+          "borrowed segment in a tinted group matches untinted draw_model");
+    check(tb_left_n > 0 && tb_right_n > 0 &&
+              tb_left_rb / tb_left_n > tb_right_rb / tb_right_n,
+          "owned copy is redder than the white-tinted borrowed copy");
+    raylib::UnloadImage(tb_batched);
+    raylib::UnloadImage(tb_direct);
   }
 
   {

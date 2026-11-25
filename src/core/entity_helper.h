@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -51,6 +52,44 @@ struct EntityHelper {
     get_thread_default_collection_ptr() = collection;
   }
 
+  // RAII binding for the thread-local default collection.
+  struct ScopedCollection {
+    explicit ScopedCollection(EntityCollection &collection)
+        : previous(capture_previous()) {
+      set_default_collection(&collection);
+    }
+    static ScopedCollection use_default() {
+      return ScopedCollection(DefaultTag{});
+    }
+    ~ScopedCollection() {
+      if (previous.has_value()) {
+        set_default_collection(&previous->get());
+      } else {
+        set_default_collection(nullptr);
+      }
+    }
+    ScopedCollection(const ScopedCollection &) = delete;
+    ScopedCollection &operator=(const ScopedCollection &) = delete;
+    ScopedCollection(ScopedCollection &&) = delete;
+    ScopedCollection &operator=(ScopedCollection &&) = delete;
+
+   private:
+    struct DefaultTag {};
+    explicit ScopedCollection(DefaultTag) : previous(capture_previous()) {
+      set_default_collection(nullptr);
+    }
+    static std::optional<std::reference_wrapper<EntityCollection>>
+    capture_previous() {
+      auto current = get_thread_default_collection_ptr();
+      if (current == nullptr) {
+        return std::nullopt;
+      }
+      return std::ref(*current);
+    }
+
+    std::optional<std::reference_wrapper<EntityCollection>> previous;
+  };
+
   // Get the default collection for the current thread
   // Returns the thread-local collection if registered, otherwise the
   // singleton's default
@@ -73,6 +112,7 @@ struct EntityHelper {
   static Entities &get_entities_for_mod() {
     return get_default_collection().get_entities_for_mod();
   }
+
   static const Entities &get_entities() {
     return get_default_collection().get_entities();
   }
@@ -197,6 +237,14 @@ struct EntityHelper {
 
   static void delete_all_entities(const bool include_permanent) {
     get_default_collection().delete_all_entities(include_permanent);
+  }
+
+  static void reset_for_new_session() {
+    get_default_collection().reset_for_new_session();
+  }
+
+  static std::uint64_t session_generation() {
+    return get_default_collection().session_generation();
   }
 
   static void forEachEntity(const std::function<ForEachFlow(Entity &)> &cb) {

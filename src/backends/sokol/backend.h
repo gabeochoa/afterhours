@@ -11,9 +11,11 @@
 
 #ifdef AFTER_HOURS_SOKOL
 
+#include "../../file_drop.h"
 #include "../../graphics_common.h"
 #include "../../logging.h"
 #include "../../warn_once.h"
+#include "../../window_events.h"
 
 // The implementation must be compiled in exactly one .cpp/.mm file
 // with SOKOL_IMPL defined before including these headers.
@@ -278,6 +280,7 @@ struct InputState {
   float mouse_dy = 0.f;
   float scroll_x = 0.f;
   float scroll_y = 0.f;
+  bool scroll_precise = false;
 
   // Character input queue (UTF-32 codepoints from CHAR events)
   static constexpr int CHAR_QUEUE_SIZE = 32;
@@ -312,6 +315,7 @@ inline void input_begin_frame() {
   s.mouse_dy = 0.f;
   s.scroll_x = 0.f;
   s.scroll_y = 0.f;
+  s.scroll_precise = false;
   s.key_queue_len = 0;
   s.key_queue_read = 0;
 }
@@ -440,9 +444,44 @@ inline void sokol_event_cb(const sapp_event *ev) {
     case SAPP_EVENTTYPE_MOUSE_MOVE:
     case SAPP_EVENTTYPE_MOUSE_SCROLL:
     case SAPP_EVENTTYPE_RESIZED:
+    case SAPP_EVENTTYPE_FILES_DROPPED:
+    case SAPP_EVENTTYPE_ICONIFIED:
     case SAPP_EVENTTYPE_FOCUSED:
     case SAPP_EVENTTYPE_RESTORED:
+    case SAPP_EVENTTYPE_SUSPENDED:
+    case SAPP_EVENTTYPE_RESUMED:
       frame_loop::request_frame();
+      break;
+    default:
+      break;
+    }
+  }
+
+  {
+    using namespace window_events;
+    const float scale = ev->window_width > 0
+                            ? static_cast<float>(ev->framebuffer_width) /
+                                  static_cast<float>(ev->window_width)
+                            : 0.f;
+    switch (ev->type) {
+    case SAPP_EVENTTYPE_RESIZED: {
+      const float prev = last_scale();
+      push({Type::Resized, ev->window_width, ev->window_height, scale});
+      if (prev > 0.f && scale > 0.f && scale != prev)
+        push({Type::ScaleChanged, ev->window_width, ev->window_height, scale});
+      break;
+    }
+    case SAPP_EVENTTYPE_ICONIFIED:
+      push({Type::Occluded, ev->window_width, ev->window_height, scale});
+      break;
+    case SAPP_EVENTTYPE_RESTORED:
+      push({Type::Revealed, ev->window_width, ev->window_height, scale});
+      break;
+    case SAPP_EVENTTYPE_SUSPENDED:
+      push({Type::Suspended, ev->window_width, ev->window_height, scale});
+      break;
+    case SAPP_EVENTTYPE_RESUMED:
+      push({Type::Resumed, ev->window_width, ev->window_height, scale});
       break;
     default:
       break;
@@ -505,6 +544,7 @@ inline void sokol_event_cb(const sapp_event *ev) {
   case SAPP_EVENTTYPE_MOUSE_SCROLL:
     s.scroll_x += ev->scroll_x;
     s.scroll_y += ev->scroll_y;
+    s.scroll_precise = ev->scroll_precise;
     break;
   case SAPP_EVENTTYPE_FOCUSED:
     g_window_focused = true;
@@ -512,6 +552,13 @@ inline void sokol_event_cb(const sapp_event *ev) {
   case SAPP_EVENTTYPE_UNFOCUSED:
     g_window_focused = false;
     break;
+  case SAPP_EVENTTYPE_FILES_DROPPED: {
+    std::vector<std::string> paths;
+    const int n = sapp_get_num_dropped_files();
+    for (int i = 0; i < n; i++)
+      paths.emplace_back(sapp_get_dropped_file_path(i));
+    file_drop::push_dropped_files(std::move(paths));
+  }
   default:
     break;
   }
@@ -538,6 +585,7 @@ struct MetalPlatformAPI {
   static constexpr int SHADER_UNIFORM_VEC2 = 1;
   static constexpr int SHADER_UNIFORM_FLOAT = 0;
   static constexpr int SHADER_UNIFORM_VEC4 = 3;
+  static constexpr int SHADER_UNIFORM_VEC3 = 2;
 
   // ── Window lifecycle (legacy API -- prefer run()) ──
   static void init_window(int, int, const char *) {
@@ -988,6 +1036,10 @@ struct MetalPlatformAPI {
     return {s.scroll_x, s.scroll_y};
   }
 
+  static bool get_mouse_wheel_precise() {
+    return metal_detail::input_state().scroll_precise;
+  }
+
   // ── Application control ──
   static void request_quit() {
     if (metal_detail::g_headless)
@@ -1053,6 +1105,11 @@ struct MetalPlatformAPI {
     desc.sample_count = 1;
     desc.enable_clipboard = true;
     desc.clipboard_size = 16 * 1024;  // 16 KB clipboard buffer
+    file_drop::set_enabled(cfg.enable_file_drop);
+    desc.enable_dragndrop = cfg.enable_file_drop;
+    if (cfg.enable_file_drop)
+      desc.max_dropped_files = 8;
+    desc.macos.forward_cmd_chords = cfg.macos_forward_cmd_chords;
 
     // Map flags
     if (cfg.flags & FLAG_WINDOW_RESIZABLE) {
@@ -1067,6 +1124,7 @@ struct MetalPlatformAPI {
   }
 
   static void run_headless(const RunConfig &cfg) {
+    file_drop::clear();
     Config headless;
     headless.display = DisplayMode::Headless;
     headless.width = cfg.width;
