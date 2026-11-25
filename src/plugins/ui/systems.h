@@ -1391,20 +1391,32 @@ struct HandleSelectableText : SystemWithUIContext<ui::HasSelectableText> {
     if (line_height <= 0.f)
       return;
 
+    // Mirrors detail::apply_text_offset in rendering.h, which this header
+    // cannot see: Right moves only the right edge, Center shifts the box.
+    RectangleType shifted = rect;
+    shifted.y += label.text_y_offset;
+    if (label.alignment == TextAlignment::Right)
+      shifted.width = std::max(0.f, shifted.width + label.text_x_offset);
+    else if (label.alignment == TextAlignment::Center)
+      shifted.x += label.text_x_offset;
+    else {
+      shifted.x += label.text_x_offset;
+      shifted.width = std::max(0.f, shifted.width - label.text_x_offset);
+    }
     const float wrap_width = label.text_overflow == TextOverflow::Wrap
-                                 ? std::max(0.f, rect.width - 2.f * inset.x)
+                                 ? std::max(0.f, shifted.width - 2.f * inset.x)
                                  : 1e9f;
     selectable_text::refresh_layout(selectable, label.label, wrap_width,
                                     font_size, line_height, measure);
 
     const Vector2Type origin{
-        rect.x + label.text_x_offset + inset.x,
-        rect.y + label.text_y_offset +
+        shifted.x + inset.x,
+        shifted.y +
             std::max(0.f, (rect.height - selectable.layout.total_height()) *
                               0.5f)};
     const Vector2Type local{context->mouse.pos.x - origin.x,
                             context->mouse.pos.y - origin.y};
-    const float avail = std::max(0.f, rect.width - 2.f * inset.x);
+    const float avail = std::max(0.f, shifted.width - 2.f * inset.x);
     const size_t pos = selectable_text::offset_at(
         selectable.layout, label.label, local, line_height, label.alignment,
         avail, measure);
