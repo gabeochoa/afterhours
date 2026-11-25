@@ -610,12 +610,7 @@ struct HandleDragToCommand : System<PendingE2ECommand> {
                 // Frame 0: press at start position
                 float x1 = cmd.coord_arg(0, sw);
                 float y1 = cmd.coord_arg(1, sh);
-                test_input::set_mouse_position(x1, y1);
-                auto &m = input_injector::detail::mouse;
-                m.left_down = true;
-                m.just_pressed = true;
-                m.press_frames = 0;  // no auto-release
-                m.active = true;
+                press_mouse_at(x1, y1);
                 phase = 1;
                 cmd.retry();  // Mark as in-progress so unknown handler skips it
                 break;
@@ -866,6 +861,30 @@ struct HandleScreenshotCommand : System<PendingE2ECommand> {
         if (cmd.is_consumed()) return;
         if (cmd.is("screenshot")) {
             take_screenshot(screenshot_fn_, cmd);
+        } else if (cmd.is("screenshot_fresh")) {
+            if (!cmd.has_args(1) || cmd.args[0].empty()) {
+                cmd.fail("screenshot_fresh requires a name");
+                return;
+            }
+            const ScreenshotFn &fn = presented_screenshot_fn_
+                                         ? presented_screenshot_fn_
+                                         : screenshot_fn_;
+            if (!fn) {
+                cmd.fail("screenshot_fresh: no screenshot callback registered");
+                return;
+            }
+            const long long gen = static_cast<long long>(
+                VisibleTextRegistry::instance().generation());
+            if (cmd.seen_render < 0) {
+                cmd.seen_render = gen;
+                cmd.retry();
+                return;
+            }
+            if (cmd.seen_render == gen) {
+                cmd.retry();
+                return;
+            }
+            take_screenshot(fn, cmd);
         } else if (cmd.is("screenshot_presented")) {
             if (!presented_screenshot_fn_)
                 cmd.fail("screenshot_presented: no presented-frame "

@@ -1,0 +1,118 @@
+#pragma once
+
+#include <functional>
+#include <string>
+
+#include "../../polyline.h"
+#include "component_init.h"
+#include "element_result.h"
+#include "entity_management.h"
+#include "imm_components.h"
+
+namespace afterhours {
+
+namespace ui {
+
+namespace imm {
+
+struct HasDisclosureState : BaseComponent {
+  bool expanded = false;
+  bool changed_since = false;
+  HasDisclosureState(bool expand = false) : expanded(expand) {}
+};
+
+struct DisclosureConfig {
+  bool default_expanded = false;
+  float header_height = 44.f;
+  float chevron_size = 14.f;
+};
+
+template <typename BodyFn>
+ElementResult disclosure(HasUIContext auto &ctx, EntityParent ep_pair,
+                         const std::string &label, BodyFn &&body,
+                         DisclosureConfig disclosure_config = {},
+                         ComponentConfig config = ComponentConfig()) {
+  auto [entity, parent] = deref(ep_pair);
+
+  if (config.size.is_default) {
+    config.with_size(ComponentSize{percent(1.f), children()});
+  }
+  config.with_flex_direction(FlexDirection::Column);
+  init_component(ctx, ep_pair, config, ComponentType::Div, false, "disclosure");
+
+  auto &state = init_state<HasDisclosureState>(
+      entity, [](HasDisclosureState &) {}, disclosure_config.default_expanded);
+
+  auto header =
+      button(ctx, mk(entity, 0),
+             ComponentConfig::inherit_from(config, "disclosure_header")
+                 .with_size(ComponentSize{percent(1.f),
+                                          pixels(disclosure_config.header_height)})
+                 .with_flex_direction(FlexDirection::Row)
+                 .with_align_items(AlignItems::Center)
+                 .with_padding(Padding{.top = pixels(2),
+                                       .left = pixels(12),
+                                       .bottom = pixels(2),
+                                       .right = pixels(12)})
+                 .with_gap(pixels(8))
+                 .without_border()
+                 .with_label(""));
+  bool changed = false;
+  if (header && !config.disabled) {
+    state.expanded = !state.expanded;
+    state.changed_since = true;
+    changed = true;
+  }
+
+  const bool expanded = state.expanded;
+  const Color chevron_color =
+      config.custom_text_color.value_or(ctx.theme.font);
+
+  div(ctx, mk(header.ent(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(disclosure_config.chevron_size),
+                                   pixels(disclosure_config.chevron_size)})
+          .with_transparent_bg()
+          .with_ignore_pointer_events()
+          .with_skip_tabbing(true)
+          .with_debug_name("disclosure_chevron")
+          .with_on_draw_fg([expanded, chevron_color](RectangleType r) {
+            const float inset = 3.f;
+            polyline::draw_chevron_in_rect(
+                RectangleType{r.x + inset, r.y + inset, r.width - 2.f * inset,
+                              r.height - 2.f * inset},
+                expanded ? polyline::ChevronDirection::Down
+                         : polyline::ChevronDirection::Right,
+                2.f, chevron_color);
+          }));
+  div(ctx, mk(header.ent(), 1),
+      ComponentConfig::inherit_from(config, "disclosure_label")
+          .with_size(ComponentSize{expand(), percent(1.f)})
+          .with_transparent_bg()
+          .with_ignore_pointer_events()
+          .without_border()
+          .disable_rounded_corners()
+          .with_label(label)
+          .with_alignment(TextAlignment::Left)
+          .with_skip_tabbing(true));
+
+  if (state.expanded) {
+    auto body_container =
+        div(ctx, mk(entity, 1),
+            ComponentConfig::inherit_from(config, "disclosure_body")
+                .with_size(ComponentSize{percent(1.f), children()})
+                .with_flex_direction(FlexDirection::Column)
+                .with_transparent_bg()
+                .without_border()
+                .disable_rounded_corners());
+    body(body_container.ent());
+  }
+
+  return ElementResult{changed, entity};
+}
+
+}
+
+}
+
+}

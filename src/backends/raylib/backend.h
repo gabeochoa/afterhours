@@ -9,7 +9,9 @@
 
 #ifdef AFTER_HOURS_USE_RAYLIB
 
+#include "../../file_drop.h"
 #include "../../graphics_common.h"
+#include "../../window_events.h"
 #include "headless.h"
 #include "windowed.h"
 
@@ -71,6 +73,7 @@ inline void raylib_shutdown() {
       },
       storage());
   storage() = std::monostate{};
+  bump_context_epoch();
 }
 
 inline bool host_input_activity() {
@@ -87,7 +90,32 @@ inline bool host_input_activity() {
   return active;
 }
 
+inline void poll_window_events() {
+  using namespace window_events;
+  static float last_dpi = 0.f;
+  static bool was_occluded = false;
+  if (!raylib::IsWindowReady())
+    return;
+  const auto dpi = raylib::GetWindowScaleDPI();
+  const float scale = dpi.x;
+  const bool occ = raylib::IsWindowHidden() || raylib::IsWindowMinimized();
+  if (occ != was_occluded) {
+    push({occ ? Type::Occluded : Type::Revealed, raylib::GetScreenWidth(),
+          raylib::GetScreenHeight(), scale});
+    was_occluded = occ;
+  }
+  if (raylib::IsWindowResized())
+    push({Type::Resized, raylib::GetScreenWidth(), raylib::GetScreenHeight(),
+          scale});
+  if (last_dpi > 0.f && scale > 0.f && scale != last_dpi)
+    push({Type::ScaleChanged, raylib::GetScreenWidth(),
+          raylib::GetScreenHeight(), scale});
+  if (scale > 0.f)
+    last_dpi = scale;
+}
+
 inline void raylib_begin_frame() {
+  poll_window_events();
   std::visit(
       [](auto &backend) {
         using T = std::decay_t<decltype(backend)>;
@@ -237,12 +265,16 @@ struct RaylibPlatformAPI {
   static constexpr int SHADER_UNIFORM_VEC2 = raylib::SHADER_UNIFORM_VEC2;
   static constexpr int SHADER_UNIFORM_FLOAT = raylib::SHADER_UNIFORM_FLOAT;
   static constexpr int SHADER_UNIFORM_VEC4 = raylib::SHADER_UNIFORM_VEC4;
+  static constexpr int SHADER_UNIFORM_VEC3 = raylib::SHADER_UNIFORM_VEC3;
 
   // ── Window lifecycle ──
   static void init_window(int w, int h, const char *title) {
     raylib::InitWindow(w, h, title);
   }
-  static void close_window() { raylib::CloseWindow(); }
+  static void close_window() {
+    raylib::CloseWindow();
+    bump_context_epoch();
+  }
   static bool window_should_close() { return raylib::WindowShouldClose(); }
   static bool is_window_ready() { return raylib::IsWindowReady(); }
   static bool is_window_fullscreen() { return raylib::IsWindowFullscreen(); }
@@ -386,6 +418,7 @@ struct RaylibPlatformAPI {
   // ── Unified run loop ──
   static void run(const RunConfig &cfg) {
     quit_flag() = false;
+    file_drop::set_enabled(cfg.enable_file_drop);
     const bool headless = cfg.display == DisplayMode::Headless;
     note_window_hidden(!headless && cfg.start_hidden);
     if (!headless) {
@@ -411,6 +444,15 @@ struct RaylibPlatformAPI {
     auto run_frame = [&cfg] {
       frame_loop::consume_frame_request();
       frame_loop::note_frame(true);
+      if (file_drop::enabled() && raylib::IsWindowReady() &&
+          raylib::IsFileDropped()) {
+        raylib::FilePathList dropped = raylib::LoadDroppedFiles();
+        std::vector<std::string> paths;
+        for (unsigned int i = 0; i < dropped.count; i++)
+          paths.emplace_back(dropped.paths[i]);
+        raylib::UnloadDroppedFiles(dropped);
+        file_drop::push_dropped_files(std::move(paths));
+      }
       if (cfg.frame)
         cfg.frame();
     };
@@ -437,6 +479,7 @@ struct RaylibPlatformAPI {
     raylib_backend::close_audio();
     if (!headless)
       close_window();
+    file_drop::set_enabled(false);
   }
 };
 
