@@ -245,6 +245,14 @@ inline float resolve_to_pixels(const Size &size, float screen_dimension,
   return size.value;
 }
 
+// The one site every font-size resolution should go through.
+inline float resolve_font_size(const Size &size, float screen_dimension,
+                               ScalingMode mode, float ui_scale, float text_scale,
+                               float screen_height = -1.f) {
+  return resolve_to_pixels(size, screen_dimension, mode, ui_scale, screen_height) *
+         text_scale;
+}
+
 // Shorthand spelling of the 8pt grid. Each step is an alias for the
 // DefaultSpacing method of the same rank, so there is one scale rather than
 // two that disagree.

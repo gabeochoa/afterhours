@@ -52,6 +52,7 @@ struct AutoLayout {
   std::vector<UIComponent *> cmp_cache_;
   bool enable_grid_snapping = false;
   float ui_scale = 1.0f;
+  float text_scale = 1.0f;
   // Theme::text_inset.x, already scaled. Sizing a box to its own text has to
   // charge the same inset the renderer will reserve inside it, or a Dim::Text
   // box comes out narrower than the text it is about to be handed.
@@ -239,9 +240,9 @@ struct AutoLayout {
     if (font_name != UIComponent::UNSET_FONT)
       if (auto *fm = EntityHelper::get_singleton_cmp<FontManager>())
         font_name = fm->resolve_weighted(font_name, child.font_weight);
-    const float font_size = resolve_to_pixels(
+    const float font_size = resolve_font_size(
         child.font_size, fetch_screen_value_(Axis::Y),
-        child.resolved_scaling_mode, ui_scale);
+        child.resolved_scaling_mode, ui_scale, text_scale);
     if (font_size <= 0.f)
       return std::nullopt;
     const float spacing = 1.f + label.letter_spacing;
@@ -264,9 +265,10 @@ struct AutoLayout {
       ascent = text_ascent(fm3->get_font(font_name), font_size);
     float line_box = child.computed[Axis::Y];
     if (label.line_height.has_value()) {
-      const float lh = resolve_to_pixels(*label.line_height,
+      const float lh = resolve_font_size(*label.line_height,
                                          fetch_screen_value_(Axis::Y),
-                                         child.resolved_scaling_mode, ui_scale);
+                                         child.resolved_scaling_mode, ui_scale,
+                                         text_scale);
       if (lh > 0.f)
         line_box = lh;
     } else if (label.label.find('\n') != std::string::npos) {
@@ -320,8 +322,9 @@ struct AutoLayout {
     const std::string &content = label.label;
     // Resolve font_size to pixels using screen height
     float screen_height = fetch_screen_value_(Axis::Y);
-    float font_size = resolve_to_pixels(widget.font_size, screen_height,
-                                        widget.resolved_scaling_mode, ui_scale);
+    float font_size = resolve_font_size(widget.font_size, screen_height,
+                                        widget.resolved_scaling_mode, ui_scale,
+                                        text_scale);
     float spacing = 1.f + label.letter_spacing;
 
     const auto measure_one = [&](const std::string &s) -> Vector2Type {
@@ -382,8 +385,9 @@ struct AutoLayout {
     // A pinned line height replaces the measured one, so the box is the
     // number of rows the renderer will stack at that height.
     if (label.line_height.has_value()) {
-      const float lh = resolve_to_pixels(*label.line_height, screen_height,
-                                         widget.resolved_scaling_mode, ui_scale);
+      const float lh = resolve_font_size(*label.line_height, screen_height,
+                                         widget.resolved_scaling_mode, ui_scale,
+                                         text_scale);
       if (lh > 0.f)
         result.y = lh * static_cast<float>(std::max(1, line_count));
     }
@@ -2111,10 +2115,12 @@ struct AutoLayout {
                          const window_manager::Resolution resolution,
                          const std::vector<Entity *> &map,
                          bool enable_grid_snapping = false,
-                         float ui_scale = 1.0f, float text_inset_x = 0.f) {
+                         float ui_scale = 1.0f, float text_inset_x = 0.f,
+                         float text_scale = 1.0f) {
     AutoLayout al(resolution, map);
     al.set_grid_snapping(enable_grid_snapping);
     al.ui_scale = ui_scale;
+    al.text_scale = text_scale;
     al.text_inset_x = text_inset_x;
     al.build_cmp_cache();
     al.prune_stale_children(widget);
@@ -2135,10 +2141,12 @@ struct AutoLayout {
                                  const window_manager::Resolution resolution,
                                  const std::vector<Entity *> &map,
                                  bool enable_grid_snapping = false,
-                                 float ui_scale = 1.0f, float text_inset_x = 0.f) {
+                                 float ui_scale = 1.0f, float text_inset_x = 0.f,
+                                 float text_scale = 1.0f) {
     AutoLayout al(resolution, map);
     al.set_grid_snapping(enable_grid_snapping);
     al.ui_scale = ui_scale;
+    al.text_scale = text_scale;
     al.text_inset_x = text_inset_x;
     al.build_cmp_cache();
     al.prune_stale_children(widget);

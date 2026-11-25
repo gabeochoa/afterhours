@@ -2056,15 +2056,17 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       // (see position_text_ex call ~100 lines below) so they don't diverge.
       float explicit_fs = 0.f;
       if (cmp.font_size_explicitly_set) {
-        float uis = imm::ThemeDefaults::get().theme.ui_scale;
-        explicit_fs = resolve_to_pixels(cmp.font_size, context.screen_height,
-                                        cmp.resolved_scaling_mode, uis);
+        const auto &theme = imm::ThemeDefaults::get().theme;
+        explicit_fs = resolve_font_size(cmp.font_size, context.screen_height,
+                                        cmp.resolved_scaling_mode, theme.ui_scale,
+                                        theme.text_scale);
       }
       const float label_line_h =
           hasLabel.line_height.has_value()
-              ? resolve_to_pixels(*hasLabel.line_height, context.screen_height,
+              ? resolve_font_size(*hasLabel.line_height, context.screen_height,
                                   cmp.resolved_scaling_mode,
-                                  imm::ThemeDefaults::get().theme.ui_scale)
+                                  imm::ThemeDefaults::get().theme.ui_scale,
+                                  imm::ThemeDefaults::get().theme.text_scale)
               : 0.f;
 
       const Vector2Type immediate_inset =
@@ -2696,15 +2698,17 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       if (cmp.font_size_explicitly_set) {
         // Use scaling-mode-aware resolution so font pixels scale with
         // ui_scale in Adaptive mode.
-        float uis = imm::ThemeDefaults::get().theme.ui_scale;
-        explicit_fs = resolve_to_pixels(cmp.font_size, context.screen_height,
-                                        cmp.resolved_scaling_mode, uis);
+        const auto &theme = imm::ThemeDefaults::get().theme;
+        explicit_fs = resolve_font_size(cmp.font_size, context.screen_height,
+                                        cmp.resolved_scaling_mode, theme.ui_scale,
+                                        theme.text_scale);
       }
       const float label_line_h =
           hasLabel.line_height.has_value()
-              ? resolve_to_pixels(*hasLabel.line_height, context.screen_height,
+              ? resolve_font_size(*hasLabel.line_height, context.screen_height,
                                   cmp.resolved_scaling_mode,
-                                  imm::ThemeDefaults::get().theme.ui_scale)
+                                  imm::ThemeDefaults::get().theme.ui_scale,
+                                  imm::ThemeDefaults::get().theme.text_scale)
               : 0.f;
 
       const Vector2Type label_inset =
