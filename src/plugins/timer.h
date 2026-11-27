@@ -19,6 +19,7 @@ struct timer : developer::Plugin {
     bool paused = false;
 
     HasTimer() = default;
+
     explicit HasTimer(float reset_time, bool auto_reset = false)
         : reset_time(reset_time), current_time(0.0f), auto_reset(auto_reset),
           paused(false) {}
@@ -62,6 +63,87 @@ struct timer : developer::Plugin {
         return true;
       }
       return false;
+    }
+  };
+
+  struct HasCountdownSerializable {
+    float duration = 0.0f;
+    float remaining = 0.0f;
+    bool auto_reset = false;
+    bool paused = false;
+  };
+
+  struct HasCountdown : BaseComponent {
+    float duration = 0.0f;
+    float remaining = 0.0f;
+    bool auto_reset = false;
+    bool paused = false;
+
+    HasCountdown() = default;
+
+    explicit HasCountdown(float duration, bool auto_reset = false)
+        : duration(duration), remaining(duration), auto_reset(auto_reset),
+          paused(false) {}
+
+    [[nodiscard]] bool is_ready() const { return remaining <= 0.0f; }
+
+    [[nodiscard]] float get_progress() const {
+      if (duration <= 0.0f)
+        return 1.0f;
+      return 1.0f - get_remaining() / duration;
+    }
+
+    [[nodiscard]] float get_remaining() const {
+      return std::max(0.0f, remaining);
+    }
+
+    void reset() { remaining = duration; }
+
+    void set_remaining(float time) { remaining = time; }
+
+    void add_time(float delta) {
+      if (!paused) {
+        remaining -= delta;
+      }
+    }
+
+    void pause() { paused = true; }
+
+    void resume() { paused = false; }
+
+    bool update(float delta) {
+      if (paused)
+        return false;
+
+      if (is_ready())
+        return true;
+
+      remaining -= delta;
+      if (remaining <= 0.0f) {
+        if (auto_reset) {
+          reset();
+        } else {
+          remaining = 0.0f;
+        }
+        return true;
+      }
+      return false;
+    }
+
+    [[nodiscard]] HasCountdownSerializable to_serializable() const {
+      return HasCountdownSerializable{.duration = duration,
+                             .remaining = remaining,
+                             .auto_reset = auto_reset,
+                             .paused = paused};
+    }
+
+    static HasCountdown from_serializable(const HasCountdownSerializable &serializable) {
+      HasCountdown countdown;
+      countdown.duration = serializable.duration;
+      countdown.remaining = serializable.remaining;
+      countdown.auto_reset = serializable.auto_reset;
+      countdown.paused = serializable.paused;
+      return countdown;
     }
   };
 
@@ -112,6 +194,13 @@ struct timer : developer::Plugin {
     }
   };
 
+  struct CountdownUpdateSystem : System<HasCountdown> {
+    virtual void for_each_with(Entity &, HasCountdown &countdown,
+                               float delta) override {
+      countdown.update(delta);
+    }
+  };
+
   // System to update triggers
   struct TriggerUpdateSystem : System<TriggerOnDt> {
     virtual void for_each_with(Entity &, TriggerOnDt &trigger,
@@ -126,6 +215,7 @@ struct timer : developer::Plugin {
 
   static void register_update_systems(SystemManager &sm) {
     sm.register_update_system(std::make_unique<TimerUpdateSystem>());
+    sm.register_update_system(std::make_unique<CountdownUpdateSystem>());
     sm.register_update_system(std::make_unique<TriggerUpdateSystem>());
   }
 };
