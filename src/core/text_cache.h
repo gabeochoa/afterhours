@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bit>
 #include <concepts>
 #include <cstdint>
 #include <functional>
@@ -33,14 +34,41 @@ public:
   static constexpr uint32_t DEFAULT_MAX_AGE = 120;
   static constexpr size_t DEFAULT_MAX_ENTRIES = 4096;
 
+public:
+  struct Key {
+    std::string text;
+    std::string font_name;
+    uint32_t font_size_bits = 0;
+    uint32_t spacing_bits = 0;
+    bool operator==(const Key &) const = default;
+    static Key make(std::string_view text, std::string_view font_name,
+                    float font_size, float spacing) {
+      return {std::string(text), std::string(font_name),
+              std::bit_cast<uint32_t>(font_size),
+              std::bit_cast<uint32_t>(spacing)};
+    }
+  };
+
 private:
-  static constexpr size_t ENTRY_COST = sizeof(uint64_t) + sizeof(Vector2Type);
+  struct KeyHash {
+    size_t operator()(const Key &k) const noexcept {
+      return static_cast<size_t>(compute_hash(
+          k.text, k.font_name, std::bit_cast<float>(k.font_size_bits),
+          std::bit_cast<float>(k.spacing_bits)));
+    }
+  };
+  struct LRUEntry {
+    Key key;
+    Vector2Type size;
+    uint32_t last_used_generation = 0;
+  };
+
+  using LRUList = std::list<LRUEntry>;
+  using LRUIter = LRUList::iterator;
 
   MeasureTextFn measure_fn_;
-  ByteCache<uint64_t, Vector2Type> cache{
-      DEFAULT_MAX_ENTRIES * ENTRY_COST,
-      [](const Vector2Type &) { return ENTRY_COST; }};
-  std::unordered_map<uint64_t, uint32_t> last_used_generation;
+  LRUList lru_list_;
+  std::unordered_map<Key, LRUIter, KeyHash> lookup;
 
   uint32_t current_generation_ = 0;
   uint32_t prune_interval_ = DEFAULT_PRUNE_INTERVAL;
@@ -65,34 +93,41 @@ public:
   void set_max_age(uint32_t frames) { max_age_ = frames; }
   void set_max_entries(size_t count) {
     max_entries_ = count;
-    cache.set_budget((count == 0 ? 1 : count) * ENTRY_COST);
-    if (last_used_generation.size() > cache.size()) {
-      std::unordered_map<uint64_t, uint32_t> kept;
-      for (const auto &[key, gen] : last_used_generation)
-        if (cache.contains(key))
-          kept.emplace(key, gen);
-      last_used_generation = std::move(kept);
+    while (!lru_list_.empty() && lookup.size() >= max_entries_) {
+      evict_lru();
     }
   }
 
   [[nodiscard]] Vector2Type measure(std::string_view text,
                                     std::string_view font_name, float font_size,
                                     float spacing = 1.0f) {
+    return measure(Key::make(text, font_name, font_size, spacing));
+  }
+
+  [[nodiscard]] Vector2Type measure(const Key &key) {
     if (!measure_fn_) {
       return {0.0f, 0.0f};
     }
-
-    uint64_t key = compute_hash(text, font_name, font_size, spacing);
-    if (const Vector2Type *cached = cache.get(key)) {
-      last_used_generation[key] = current_generation_;
+    auto it = lookup.find(key);
+    if (it != lookup.end()) {
+      it->second->last_used_generation = current_generation_;
+      lru_list_.splice(lru_list_.begin(), lru_list_, it->second);
       cache_hits_++;
-      return *cached;
+      return it->second->size;
     }
 
     cache_misses_++;
-    Vector2Type size = measure_fn_(text, font_name, font_size, spacing);
-    if (cache.put(key, size))
-      last_used_generation[key] = current_generation_;
+    Vector2Type size =
+        measure_fn_(key.text, key.font_name,
+                    std::bit_cast<float>(key.font_size_bits),
+                    std::bit_cast<float>(key.spacing_bits));
+
+    while (lookup.size() >= max_entries_) {
+      evict_lru();
+    }
+
+    lru_list_.push_front({key, size, current_generation_});
+    lookup[lru_list_.front().key] = lru_list_.begin();
     return size;
   }
 
@@ -118,18 +153,25 @@ public:
   void prune() { prune_stale_entries(); }
 
   void clear() {
-    cache.clear();
-    last_used_generation.clear();
+    lru_list_.clear();
+    lookup.clear();
     cache_hits_ = 0;
     cache_misses_ = 0;
   }
 
-  [[nodiscard]] size_t size() const { return cache.size(); }
+  [[nodiscard]] size_t size() const { return lookup.size(); }
+  static constexpr size_t ENTRY_COST = sizeof(Key) + sizeof(Vector2Type);
   [[nodiscard]] size_t accounted_bytes() const {
-    return cache.accounted_bytes();
+    return lookup.size() * ENTRY_COST;
   }
   [[nodiscard]] ByteCache<uint64_t, Vector2Type>::Stats byte_stats() const {
-    return cache.stats();
+    ByteCache<uint64_t, Vector2Type>::Stats s;
+    s.hits = cache_hits_;
+    s.misses = cache_misses_;
+    s.accounted_bytes = accounted_bytes();
+    s.entries = lookup.size();
+    s.budget_bytes = DEFAULT_MAX_ENTRIES * ENTRY_COST;
+    return s;
   }
   [[nodiscard]] uint64_t hits() const { return cache_hits_; }
   [[nodiscard]] uint64_t misses() const { return cache_misses_; }
@@ -180,18 +222,25 @@ public:
   }
 
 private:
+  void evict_lru() {
+    if (lru_list_.empty())
+      return;
+    auto &victim = lru_list_.back();
+    lookup.erase(victim.key);
+    lru_list_.pop_back();
+  }
+
   void prune_stale_entries() {
     if (current_generation_ < max_age_)
       return;
 
     uint32_t threshold = current_generation_ - max_age_;
-    for (auto it = last_used_generation.begin();
-         it != last_used_generation.end();) {
-      if (it->second < threshold) {
-        cache.erase(it->first);
-        it = last_used_generation.erase(it);
-      } else {
-        ++it;
+    auto it = lru_list_.end();
+    while (it != lru_list_.begin()) {
+      --it;
+      if (it->last_used_generation < threshold) {
+        lookup.erase(it->key);
+        it = lru_list_.erase(it);
       }
     }
   }

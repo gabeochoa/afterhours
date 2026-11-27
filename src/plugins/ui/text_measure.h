@@ -8,6 +8,7 @@
 // (AutoLayout::get_text_size_for_axis), so the two answers cannot drift.
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "../../core/text_cache.h"
@@ -58,6 +59,29 @@ wrap_text_lines(const std::string &text, float max_width,
                 const std::string &font_name, float font_size,
                 float spacing = 1.f) {
   return detail::wrap_lines(text, max_width, [&](const std::string &s) {
+    return measure_text_line(s, font_name, font_size, spacing).x;
+  });
+}
+
+using WrapChunkState = detail::WrapChunkState;
+
+inline std::vector<detail::WrappedLine>
+wrap_text_chunk(WrapChunkState &state, std::string_view chunk, float max_width,
+                const std::string &font_name, float font_size,
+                float spacing = 1.f) {
+  return detail::wrap_chunk(state, chunk, max_width,
+                            [&](const std::string &s) {
+                              return measure_text_line(s, font_name, font_size,
+                                                       spacing)
+                                  .x;
+                            });
+}
+
+inline std::vector<detail::WrappedLine>
+finish_wrap_text_chunk(WrapChunkState &state, float max_width,
+                       const std::string &font_name, float font_size,
+                       float spacing = 1.f) {
+  return detail::finish_wrap_chunk(state, max_width, [&](const std::string &s) {
     return measure_text_line(s, font_name, font_size, spacing).x;
   });
 }

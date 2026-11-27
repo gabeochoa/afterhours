@@ -1,6 +1,8 @@
 #pragma once
 
+#include <bit>
 #include <list>
+#include <string_view>
 #include <unordered_map>
 
 #include "text_units.h"
@@ -77,8 +79,45 @@ namespace wrap_memo {
 // allocation site.
 constexpr std::size_t kMaxEntries = 512;
 
+struct Key {
+  std::vector<TextSpan> runs;
+  std::string font_name;
+  std::uint32_t max_width_bits = 0;
+  std::uint32_t font_size_bits = 0;
+  std::uint32_t spacing_bits = 0;
+  std::uint64_t incoming_state = 0;
+  bool operator==(const Key &) const = default;
+};
+
+struct KeyHash {
+  std::size_t operator()(const Key &k) const noexcept {
+    std::uint64_t h = 1469598103934665603ull;
+    const auto mix = [&h](std::uint64_t v) {
+      h ^= v;
+      h *= 1099511628211ull;
+    };
+    for (const auto &r : k.runs) {
+      mix(r.text.size());
+      for (unsigned char c : r.text)
+        mix(c);
+      mix(static_cast<std::uint64_t>(r.weight));
+      mix(static_cast<std::uint64_t>(
+          r.color.r | (r.color.g << 8) | (r.color.b << 16) |
+          (static_cast<std::uint32_t>(r.color.a) << 24)));
+    }
+    mix(k.font_name.size());
+    for (unsigned char c : k.font_name)
+      mix(c);
+    mix(k.max_width_bits);
+    mix(k.font_size_bits);
+    mix(k.spacing_bits);
+    mix(k.incoming_state);
+    return static_cast<std::size_t>(h);
+  }
+};
+
 struct Entry {
-  std::uint64_t key;
+  Key key;
   std::uint64_t generation = 0;
   std::vector<TextRunLine> lines;
 };
@@ -87,8 +126,8 @@ inline std::list<Entry> &lru() {
   static std::list<Entry> l;
   return l;
 }
-inline std::unordered_map<std::uint64_t, std::list<Entry>::iterator> &index() {
-  static std::unordered_map<std::uint64_t, std::list<Entry>::iterator> m;
+inline std::unordered_map<Key, std::list<Entry>::iterator, KeyHash> &index() {
+  static std::unordered_map<Key, std::list<Entry>::iterator, KeyHash> m;
   return m;
 }
 inline std::uint64_t &hits() {
@@ -103,30 +142,19 @@ inline std::uint64_t &misses() {
 // Everything the wrap depends on is in the key: the runs, the width, the
 // face, the size and the spacing. Omitting the last three served one size's
 // line breaks to every other size of the same text.
-inline std::uint64_t key_for(const std::vector<TextSpan> &runs,
-                             float max_width, float font_size, float spacing,
-                             const std::string &font_name) {
-  std::uint64_t h = 1469598103934665603ull;
-  const auto mix = [&h](std::uint64_t v) {
-    h ^= v;
-    h *= 1099511628211ull;
-  };
-  for (const auto &r : runs) {
-    for (unsigned char c : r.text)
-      mix(c);
-    mix(0xff); // run boundary, so ["ab"]["c"] and ["a"]["bc"] differ
-    mix(static_cast<std::uint64_t>(r.weight));
-    mix(r.color.r | (r.color.g << 8) | (r.color.b << 16) | (r.color.a << 24));
-  }
-  for (unsigned char c : font_name)
-    mix(c);
-  mix(static_cast<std::uint64_t>(max_width * 64.f));
-  mix(static_cast<std::uint64_t>(font_size * 64.f));
-  mix(static_cast<std::uint64_t>(spacing * 64.f));
-  return h;
+inline Key key_for(const std::vector<TextSpan> &runs, float max_width,
+                   float font_size, float spacing,
+                   const std::string &font_name,
+                   std::uint64_t incoming_state = 0) {
+  return {runs,
+          font_name,
+          std::bit_cast<std::uint32_t>(max_width),
+          std::bit_cast<std::uint32_t>(font_size),
+          std::bit_cast<std::uint32_t>(spacing),
+          incoming_state};
 }
 
-inline const std::vector<TextRunLine> *lookup(std::uint64_t key) {
+inline const std::vector<TextRunLine> *lookup(const Key &key) {
   auto &idx = index();
   const auto it = idx.find(key);
   if (it == idx.end()) {
@@ -144,7 +172,7 @@ inline const std::vector<TextRunLine> *lookup(std::uint64_t key) {
   return &it->second->lines;
 }
 
-inline const std::vector<TextRunLine> &store(std::uint64_t key,
+inline const std::vector<TextRunLine> &store(const Key &key,
                                              std::vector<TextRunLine> lines) {
   auto &idx = index();
   const auto dup = idx.find(key);
@@ -404,6 +432,51 @@ wrap_lines(const std::string &text, float max_width, MeasureFn &&measure) {
     if (line.end > line.begin)
       line.width = measure(text.substr(line.begin, line.end - line.begin));
   return lines;
+}
+
+struct WrapChunkState {
+  std::string pending;
+  size_t base = 0;
+};
+
+template <typename MeasureFn>
+static inline std::vector<WrappedLine>
+wrap_chunk(WrapChunkState &state, std::string_view chunk, float max_width,
+           MeasureFn &&measure) {
+  std::vector<WrappedLine> out;
+  size_t pos = 0;
+  while (true) {
+    const size_t nl = chunk.find('\n', pos);
+    if (nl == std::string_view::npos)
+      break;
+    std::string segment = state.pending;
+    segment.append(chunk.substr(pos, nl - pos));
+    for (WrappedLine &line : wrap_lines(segment, max_width, measure)) {
+      line.begin += state.base;
+      line.end += state.base;
+      out.push_back(line);
+    }
+    state.base += segment.size() + 1;
+    state.pending.clear();
+    pos = nl + 1;
+  }
+  state.pending.append(chunk.substr(pos));
+  return out;
+}
+
+template <typename MeasureFn>
+static inline std::vector<WrappedLine>
+finish_wrap_chunk(WrapChunkState &state, float max_width,
+                  MeasureFn &&measure) {
+  std::vector<WrappedLine> out =
+      wrap_lines(state.pending, max_width, measure);
+  for (WrappedLine &line : out) {
+    line.begin += state.base;
+    line.end += state.base;
+  }
+  state.base += state.pending.size();
+  state.pending.clear();
+  return out;
 }
 
 // Wrap-aware text measurement: the pixel width/height and line count of `text`

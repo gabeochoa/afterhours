@@ -432,6 +432,7 @@ lighting_zones_test \
 	toast_test \
 	text_wrap_test \
 	label_word_wrap_test \
+	text_cache_key_chunk_test \
 	styled_ellipsis_test \
 	theme_io_test \
 	tree_view_test \
@@ -579,6 +580,7 @@ RAYLIB_TESTS := \
 	e2e_gamepad_test \
 	text_wrap_test \
 	label_word_wrap_test \
+	text_cache_key_chunk_test \
 	styled_ellipsis_test \
 	theme_io_test \
 	tree_view_test \
