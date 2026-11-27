@@ -2023,7 +2023,19 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
               ? context.theme.ui_scale
               : 1.f});
 
-    if (entity.has<HasColor>()) {
+    if (entity.has<HasGradient>()) {
+      const auto &g = entity.get<HasGradient>();
+      Color from = g.from, to = g.to;
+      if (effective_opacity < 1.0f) {
+        from = colors::opacity_pct(from, effective_opacity);
+        to = colors::opacity_pct(to, effective_opacity);
+      }
+      if (g.horizontal)
+        draw_rectangle_gradient_h(draw_rect, from, to);
+      else
+        draw_rectangle_gradient_v(draw_rect, from, to);
+    }
+    if (entity.has<HasColor>() && !entity.has<HasGradient>()) {
       Color col = entity.template get<HasColor>().color();
 
       // In FollowsMostRecentInput the ring is the only highlight, so skip the
@@ -2042,6 +2054,16 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         draw_rectangle_rounded(detail::fill_rect_for(entity, draw_rect),
                                roundness, segments, col, corner_settings);
       }
+    }
+
+    if (entity.has<HasLine>()) {
+      const auto &l = entity.get<HasLine>();
+      Color c = l.color;
+      if (effective_opacity < 1.0f)
+        c = colors::opacity_pct(c, effective_opacity);
+      if (c.a > 0 && l.thickness > 0.f)
+        draw_line_ex(line_point(draw_rect, l.from), line_point(draw_rect, l.to),
+                     l.thickness, c);
     }
 
     // Over the fill: filled panel art would otherwise be hidden by it, and a
@@ -2683,8 +2705,20 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           layer, entity.id);
     }
 
+    if (entity.has<HasGradient>()) {
+      const auto &g = entity.get<HasGradient>();
+      Color from = g.from, to = g.to;
+      if (effective_opacity < 1.0f) {
+        from = colors::opacity_pct(from, effective_opacity);
+        to = colors::opacity_pct(to, effective_opacity);
+      }
+      if (from.a > 0 || to.a > 0)
+        buffer.add_gradient_rectangle(draw_rect, from, to, g.horizontal, layer,
+                                      entity.id);
+    }
+
     // Background color
-    if (entity.has<HasColor>()) {
+    if (entity.has<HasColor>() && !entity.has<HasGradient>()) {
       Color col = entity.template get<HasColor>().color();
 
       // In FollowsMostRecentInput the ring is the only highlight, so skip the
@@ -2705,6 +2739,17 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
             corner_settings, layer, entity.id, rotation, world_center_x,
             world_center_y);
       }
+    }
+
+    if (entity.has<HasLine>()) {
+      const auto &l = entity.get<HasLine>();
+      Color c = l.color;
+      if (effective_opacity < 1.0f)
+        c = colors::opacity_pct(c, effective_opacity);
+      if (c.a > 0 && l.thickness > 0.f)
+        buffer.add_line(line_point(draw_rect, l.from),
+                        line_point(draw_rect, l.to), l.thickness, c, layer,
+                        entity.id);
     }
 
     // Over the fill: filled panel art would otherwise be hidden by it, and a

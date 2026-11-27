@@ -445,6 +445,20 @@ inline void apply_bevel(Entity &entity, const ComponentConfig &config) {
       config.has_bevel() ? config.bevel_config.value() : BevelBorder{});
 }
 
+inline void apply_gradient_line(Entity &entity, const ComponentConfig &config) {
+  if (auto *g = entity.toggleComponent<HasGradient>(config.gradient.has_value())) {
+    g->from = config.gradient->from;
+    g->to = config.gradient->to;
+    g->horizontal = config.gradient->horizontal;
+  }
+  if (auto *l = entity.toggleComponent<HasLine>(config.line_stroke.has_value())) {
+    l->from = config.line_stroke->from;
+    l->to = config.line_stroke->to;
+    l->color = config.line_stroke->color;
+    l->thickness = config.line_stroke->thickness;
+  }
+}
+
 inline void apply_on_draw(Entity &entity, const ComponentConfig &config) {
   if (auto *hod = entity.toggleComponent<HasOnDraw>(
           config.on_draw_bg || config.on_draw_fg || config.on_draw_over)) {
@@ -746,6 +760,7 @@ Entity &parent, const ComponentConfig &config,
   apply_bevel(entity, config);
   apply_nine_slice(entity, config);
   apply_on_draw(entity, config);
+  apply_gradient_line(entity, config);
   apply_render_layer(ctx, entity, parent, config);
   return created;
 }

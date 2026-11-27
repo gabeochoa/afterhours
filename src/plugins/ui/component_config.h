@@ -43,6 +43,17 @@ struct TextureConfig {
 // - Make it obvious which components need new features when adding them
 // See: https://en.cppreference.com/w/cpp/language/constraints
 
+struct GradientFill {
+  Color from{0, 0, 0, 255};
+  Color to{0, 0, 0, 255};
+  bool horizontal = true;
+};
+struct LineStroke {
+  Vector2Type from{0.f, 0.5f};
+  Vector2Type to{1.f, 0.5f};
+  Color color{255, 255, 255, 255};
+  float thickness = 1.f;
+};
 enum struct ButtonVariant { Filled, Outline, Ghost };
 
 struct SliderStyle {
@@ -183,6 +194,8 @@ struct ComponentConfig {
   RenderPrimitive::DrawCallback on_draw_bg;
   RenderPrimitive::DrawCallback on_draw_fg;
   RenderPrimitive::CustomDrawFn on_draw_over;
+  std::optional<GradientFill> gradient;
+  std::optional<LineStroke> line_stroke;
   using OnSubmitFn = std::function<void(std::string_view)>;
   OnSubmitFn on_submit;
 
@@ -733,6 +746,15 @@ struct ComponentConfig {
   }
   ComponentConfig &with_on_draw_over(RenderPrimitive::CustomDrawFn fn) {
     on_draw_over = std::move(fn);
+    return *this;
+  }
+  ComponentConfig &with_gradient(Color from, Color to, bool horizontal = true) {
+    gradient = GradientFill{from, to, horizontal};
+    return *this;
+  }
+  ComponentConfig &with_line(Vector2Type from, Vector2Type to, Color color,
+                             float thickness = 1.f) {
+    line_stroke = LineStroke{from, to, color, thickness};
     return *this;
   }
 
@@ -1466,6 +1488,10 @@ if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.deb
       merged.on_draw_fg = overrides.on_draw_fg;
     if (overrides.on_draw_over)
       merged.on_draw_over = overrides.on_draw_over;
+    if (overrides.gradient.has_value())
+      merged.gradient = overrides.gradient;
+    if (overrides.line_stroke.has_value())
+      merged.line_stroke = overrides.line_stroke;
     if (overrides.on_submit)
       merged.on_submit = overrides.on_submit;
 
