@@ -326,6 +326,7 @@ lighting_zones_test \
 	cleanup_order_test \
 	attachment_test \
 	canonical_snapshot_test \
+	ownership_cascade_test \
 	event_phases_test \
 	draw_only_test \
 	entity_pool_test \

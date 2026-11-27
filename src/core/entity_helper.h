@@ -216,6 +216,19 @@ struct EntityHelper {
     get_default_collection().markIDForCleanup(e_id);
   }
 
+  static void declare_ownership(EntityID owner, EntityID owned) {
+    get_default_collection().declare_ownership(owner, owned);
+  }
+  static void declare_ownership(Entity &owner, Entity &owned) {
+    get_default_collection().declare_ownership(owner, owned);
+  }
+  static bool release_ownership(EntityID owned) {
+    return get_default_collection().release_ownership(owned);
+  }
+  static EntityID owner_of(EntityID owned) {
+    return get_default_collection().owner_of(owned);
+  }
+
   static void cleanup() { get_default_collection().cleanup(); }
 
   template <typename C, typename KeyFn> static void add_index(KeyFn key_fn) {
