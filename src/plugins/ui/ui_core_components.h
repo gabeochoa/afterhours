@@ -579,6 +579,11 @@ enum struct TextAlignment {
   None,
 };
 
+enum struct VerticalAlignment {
+  Top,
+  Middle,
+  Bottom,
+};
 enum struct TextOverflow {
   Clip,     // Default: text is clipped at container boundary
   Ellipsis, // Text is truncated with "..." when it overflows
@@ -611,6 +616,7 @@ struct HasCheckboxMark : BaseComponent {};
 
 struct HasLabel : BaseComponent {
   TextAlignment alignment = TextAlignment::None;
+  VerticalAlignment vertical = VerticalAlignment::Middle;
   TextOverflow text_overflow = TextOverflow::Clip;
   bool truncated = false;
   float letter_spacing = 0.f; // Additional spacing between characters (pixels)
@@ -663,6 +669,10 @@ struct HasLabel : BaseComponent {
     return *this;
   }
 
+  auto &set_vertical(VerticalAlignment v) {
+    vertical = v;
+    return *this;
+  }
   auto &set_text_overflow(TextOverflow overflow) {
     text_overflow = overflow;
     return *this;

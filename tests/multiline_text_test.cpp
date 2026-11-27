@@ -79,7 +79,7 @@ TEST(hard_newline_splits_a_plain_label) {
 }
 
 // The three lines are stacked, not painted on top of each other.
-TEST(hard_newline_lines_are_stacked_and_centered) {
+TEST(hard_newline_lines_are_stacked_and_read_flexstart) {
   ImmTestHarness h;
   div(h.context(), mk(h.root(), 0),
       ComponentConfig{}
@@ -92,10 +92,9 @@ TEST(hard_newline_lines_are_stacked_and_centered) {
   CHECK(calls.size() == 3);
   if (calls.size() != 3)
     return;
-  // 3 lines * 20 = 60 in a 120 box, so the block starts 30 down.
-  CHECK_APPROX(calls[0].rect.y, 30.f);
-  CHECK_APPROX(calls[1].rect.y, 30.f + LINE_H);
-  CHECK_APPROX(calls[2].rect.y, 30.f + 2.f * LINE_H);
+  CHECK_APPROX(calls[0].rect.y, 0.f);
+  CHECK_APPROX(calls[1].rect.y, LINE_H);
+  CHECK_APPROX(calls[2].rect.y, 2.f * LINE_H);
 }
 
 // Without an explicit size the font is auto-fit. That fit is computed against
@@ -236,11 +235,9 @@ TEST(line_height_override_stacks_hard_broken_lines) {
   CHECK(calls.size() == 3);
   if (calls.size() != 3)
     return;
-  // 3 rows * 30 = 90 in a 120 box, so the rows start 15 down; each 20px
-  // line of glyphs sits centred in its 30px row, 5 further down.
-  CHECK_APPROX(calls[0].rect.y, 20.f);
-  CHECK_APPROX(calls[1].rect.y, 50.f);
-  CHECK_APPROX(calls[2].rect.y, 80.f);
+  CHECK_APPROX(calls[0].rect.y, 5.f);
+  CHECK_APPROX(calls[1].rect.y, 35.f);
+  CHECK_APPROX(calls[2].rect.y, 65.f);
 }
 
 TEST(line_height_override_is_what_measure_config_reports) {

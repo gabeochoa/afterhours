@@ -66,7 +66,8 @@ TEST(origin_tracks_alignment) {
   if (!lo || !ro || !co) return;
   CHECK(co->origin.x > lo->origin.x + 20.f);
   CHECK(ro->origin.x > co->origin.x + 20.f);
-  CHECK_APPROX(lo->origin.y, 20.f + 5.f + (40.f - 10.f - 16.f) * 0.5f);
+  // A plain div's own label is top-aligned by its flex defaults (r081).
+  CHECK_APPROX(lo->origin.y, 20.f + 5.f);
 }
 
 TEST(origin_scales_with_ui_scale) {
@@ -193,8 +194,7 @@ TEST(text_offset_y_shifts_down_and_survives_overrides) {
                                      (float)h.context().screen_height);
   CHECK(origin.has_value());
   if (!origin) return;
-  CHECK_APPROX(origin->origin.y,
-               20.f + 4.f + 5.f + (40.f - 10.f - 16.f) * 0.5f);
+  CHECK_APPROX(origin->origin.y, 20.f + 4.f + 5.f);
 }
 
 TEST(right_text_offset_renders_shifted_both_renderers) {
