@@ -12,9 +12,11 @@
 #include "../../file_drop.h"
 #include "../../graphics_common.h"
 #include "../../window_events.h"
+#include "font_helper.h"
 #include "headless.h"
 #include "windowed.h"
 
+#include <cmath>
 #include <variant>
 
 namespace afterhours::graphics {
@@ -329,7 +331,14 @@ struct RaylibPlatformAPI {
 
   // ── Text measurement ──
   static int measure_text(const char *text, int fontSize) {
-    return raylib::MeasureText(text, fontSize);
+    if (!text || fontSize <= 0)
+      return 0;
+    const raylib::Font font = get_default_font();
+    if (!font.glyphs || font.glyphCount <= 0)
+      return 0;
+    return static_cast<int>(std::ceil(
+        raylib::MeasureTextEx(font, text, static_cast<float>(fontSize), 1.f)
+            .x));
   }
 
   // ── Screenshots ──

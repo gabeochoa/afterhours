@@ -5,6 +5,7 @@
 // set, the default is the bundled face (src/assets/fonts/Roboto-Regular.ttf),
 // not raylib's built-in pixel font. No window: the font is a plain struct.
 
+#include <cmath>
 #include <cstdio>
 #include <string>
 
@@ -50,6 +51,24 @@ int main() {
   clear_default_font();
   check(get_default_font().glyphCount == unset.glyphCount,
         "clear_default_font restores the bundled default");
+
+  const int expected_bundled = static_cast<int>(std::ceil(
+      raylib::MeasureTextEx(get_default_font(), "Hello World", 24.f, 1.f).x));
+  check(expected_bundled > 0, "bundled default measures Hello World");
+  check(graphics::measure_text("Hello World", 24) == expected_bundled,
+        "graphics measure_text matches MeasureTextEx with bundled default");
+  raylib::Font custom = get_default_font();
+  custom.baseSize = custom.baseSize * 2;
+  set_default_font(custom);
+  const int expected_custom = static_cast<int>(std::ceil(
+      raylib::MeasureTextEx(get_default_font(), "Hello World", 24.f, 1.f).x));
+  check(expected_custom != expected_bundled,
+        "custom override changes the expected width");
+  check(graphics::measure_text("Hello World", 24) == expected_custom,
+        "graphics measure_text matches MeasureTextEx with custom override");
+  clear_default_font();
+  check(graphics::measure_text("Hello World", 24) == expected_bundled,
+        "clear restores bundled measure_text");
 
   capture::enable();
   capture::clear();
