@@ -37,6 +37,11 @@ template <typename V>
 inline void draw_cylinder_wires(V, V, float, float, int, Color) {
   log_error("@notimplemented draw_cylinder_wires");
 }
+
+template <typename V>
+inline void draw_cylinder_ex(V, V, float, float, int, Color) {
+  log_error("@notimplemented draw_cylinder_ex");
+}
 inline void draw_ellipse_3d(Vector3Type, float, float, Color) {
   log_error("@notimplemented draw_ellipse_3d");
 }
@@ -45,6 +50,12 @@ template <typename V> inline void draw_line_3d(V, V, Color) {
 }
 template <typename V>
 inline Vector2Type get_world_to_screen(V, Camera3D) {
+  log_error("@notimplemented get_world_to_screen");
+  return {0, 0};
+}
+
+template <typename V>
+inline Vector2Type get_world_to_screen(V, Camera3D, int, int) {
   log_error("@notimplemented get_world_to_screen");
   return {0, 0};
 }

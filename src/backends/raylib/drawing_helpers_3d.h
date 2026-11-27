@@ -39,6 +39,12 @@ inline void draw_cylinder(raylib::Vector3 pos, float rtop, float rbot, float h,
   raylib::DrawCylinder(pos, rtop, rbot, h, slices, c);
 }
 
+inline void draw_cylinder_ex(Vector3Type start, Vector3Type end,
+                             float start_radius, float end_radius, int sides,
+                             Color color) {
+  raylib::DrawCylinderEx(start, end, start_radius, end_radius, sides, color);
+}
+
 inline void draw_cylinder_wires(raylib::Vector3 start, raylib::Vector3 end,
                                 float rtop, float rbot, int slices, Color c) {
   raylib::DrawCylinderWiresEx(start, end, rtop, rbot, slices, c);
@@ -64,8 +70,14 @@ inline void draw_line_3d(raylib::Vector3 a, raylib::Vector3 b, Color c) {
   raylib::DrawLine3D(a, b, c);
 }
 
+inline Vector2Type get_world_to_screen(Vector3Type position, Camera3D camera,
+                                       int width, int height) {
+  return raylib::GetWorldToScreenEx(position, camera, width, height);
+}
+
 inline Vector2Type get_world_to_screen(raylib::Vector3 pos, Camera3D cam) {
-  return raylib::GetWorldToScreen(pos, cam);
+  return get_world_to_screen(pos, cam, raylib::GetScreenWidth(),
+                             raylib::GetScreenHeight());
 }
 
 } // namespace afterhours

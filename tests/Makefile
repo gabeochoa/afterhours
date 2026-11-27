@@ -198,6 +198,7 @@ ALL_TESTS := \
 	blur_shader_test \
 	rect_test \
 	math3d_test \
+	drawing_helpers_3d_test \
 	rounded_corners_test \
 	rounded_outline_mask_test \
 	viewport_test \
@@ -482,6 +483,7 @@ RAYLIB_TESTS := \
 	e2e_app_test \
 	skeletal_test \
 	math3d_test \
+	drawing_helpers_3d_test \
 	value_types_test \
 	wrappers_test \
 	window_focus_test \
