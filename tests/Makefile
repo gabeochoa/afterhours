@@ -175,6 +175,7 @@ ALL_TESTS := \
 	input_chord_specificity_test \
 	input_enum_actions_test \
 	input_repeat_test \
+	multi_click_test \
 	input_remap_test \
 	input_axis_edge_test \
 	file_watcher_test \
