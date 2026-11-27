@@ -421,6 +421,7 @@ lighting_zones_test \
 	load_font_size_test \
 	glyph_packing_test \
 	edit_keys_test \
+	edit_line_keys_test \
 	raw_text_edit_test \
 	tab_container_test \
 	tab_toggle_geometry_test \
@@ -488,6 +489,7 @@ RAYLIB_TESTS := \
 	window_state_test \
 	click_count_test \
 	edit_keys_test \
+	edit_line_keys_test \
 	raw_text_edit_test \
 	default_font_test \
 	font_display_size_test \
