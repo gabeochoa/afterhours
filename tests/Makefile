@@ -183,6 +183,7 @@ ALL_TESTS := \
 	triangle_winding_test \
 	bug_note_test \
 	charts_test \
+	character3d_test \
 	chart_options_test \
 	system_profile_test \
 	allocation_counters_test \
