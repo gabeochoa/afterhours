@@ -3,8 +3,10 @@
 #include <cstdio>
 #include <filesystem>
 #include <string>
+#include <vector>
 
 #include <afterhours/ah.h>
+#include <afterhours/src/drawing_helpers.h>
 #include <afterhours/src/graphics.h>
 #include <afterhours/src/plugins/ui/ui_core_components.h>
 
@@ -52,6 +54,29 @@ int main() {
   CHECK(fm.packing_failures("clean").empty());
   CHECK(!fm.has_packing_failure("clean"));
   CHECK(measure_text(clean, "AB", 32.f, 1.f).x > 0.f);
+
+  std::vector<unsigned char> bytes;
+  CHECK(font_coverage::read_file(path.string().c_str(), bytes));
+  const Font embedded = load_font_from_memory(
+      bytes.data(), static_cast<int>(bytes.size()), "embedded");
+  CHECK(embedded.glyphCount > 0);
+  CHECK(embedded.texture.id != 0);
+  CHECK(font_is_usable(embedded));
+  CHECK(measure_text(embedded, "AB", 32.f, 1.f).x > 0.f);
+
+  Font textureless = embedded;
+  textureless.texture.id = 0;
+  capture::enable();
+  capture::clear();
+  draw_text_ex(textureless, "hello", Vector2Type{0.f, 0.f}, 16.f, 0.f,
+               Color{255, 255, 255, 255});
+  CHECK(capture::calls().size() == 1 &&
+        capture::calls()[0].op == std::string("text"));
+  capture::clear();
+  draw_text_ex(textureless, "hello", Vector2Type{0.f, 0.f}, 16.f, 0.f,
+               Color{255, 255, 255, 255}, 30.f, 0.f, 0.f);
+  CHECK(capture::calls().size() == 1);
+  capture::disable();
 
   Font notex = clean;
   notex.texture.id = 0;
