@@ -421,6 +421,7 @@ lighting_zones_test \
 	load_font_size_test \
 	glyph_packing_test \
 	edit_keys_test \
+	editor_core_test \
 	raw_text_edit_test \
 	tab_container_test \
 	tab_toggle_geometry_test \
