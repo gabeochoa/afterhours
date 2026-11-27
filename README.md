@@ -36,7 +36,7 @@ runnable examples.
 ## Compiler options
 
 AFTER_HOURS_MAX_COMPONENTS
-- sets how big the bitset is for components, defaults to 128
+- sets how big the bitset is for components, defaults to 256
 
 AFTER_HOURS_USE_RAYLIB
 - some of the plugins use raylib functions (like raylib::SetWindowSize or raylib::IsKeyPressed). Not used for main library 

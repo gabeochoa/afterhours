@@ -17,7 +17,7 @@
 
 // Max distinct component types.
 #ifndef AFTER_HOURS_MAX_COMPONENTS
-#define AFTER_HOURS_MAX_COMPONENTS 128
+#define AFTER_HOURS_MAX_COMPONENTS 256
 #endif
 
 // Sprite atlas geometry (texture_manager).
