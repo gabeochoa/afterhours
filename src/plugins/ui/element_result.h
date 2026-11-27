@@ -36,6 +36,10 @@ struct ElementResult {
   EntityID id() const { return element.id; }
   Entity &ent() const { return element; }
   UIComponent &cmp() const { return element.get<UIComponent>(); }
+  RectangleType rect_now() { return ui::rect_now(element); }
+  bool point_in(const input::MousePosition &pos) {
+    return is_mouse_inside(pos, rect_now());
+  }
 
   /// Apply a decorator to this element. The decorator is any callable
   /// that takes an Entity& and adds visual decorations as children.

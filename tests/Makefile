@@ -61,6 +61,7 @@ OUT := $(realpath ..)/output
 $(shell mkdir -p $(OUT))
 
 ALL_TESTS := \
+	build_geometry_test \
 	prompt_bar_test \
 	subtree_rotation_test \
 	window_events_test \

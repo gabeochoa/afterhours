@@ -469,6 +469,67 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
   }
 };
 
+inline RectangleType rect_now(Entity &ent) {
+  if (!ent.has<UIComponent>())
+    return RectangleType{};
+  UIComponent &cmp = ent.get<UIComponent>();
+
+  UIComponent *root = &cmp;
+  for (int guard = 0; root->parent != -1 && guard < 64; guard++) {
+    OptEntity parent = UICollectionHolder::getEntityForID(root->parent);
+    if (!parent.has_value() || !parent.asE().has<UIComponent>())
+      break;
+    root = &parent.asE().get<UIComponent>();
+  }
+
+  auto &coll = UICollectionHolder::get().collection;
+  coll.merge_entity_arrays();
+  EntityID max_id = 0;
+  for (const auto &e : coll.get_entities())
+    if (e)
+      max_id = std::max(max_id, e->id);
+  std::vector<Entity *> mapping(static_cast<size_t>(max_id) + 1, nullptr);
+  for (const auto &e : coll.get_entities())
+    if (e)
+      mapping[static_cast<size_t>(e->id)] = e.get();
+
+  window_manager::Resolution resolution{};
+  if (auto *pcr = EntityHelper::get_singleton_cmp<
+          window_manager::ProvidesCurrentResolution>())
+    resolution = pcr->current_resolution;
+
+  const Theme &theme = imm::ThemeDefaults::get().theme;
+  const bool grid = imm::UIStylingDefaults::get().enable_grid_snapping;
+
+  bool ancestors_laid_out = cmp.absolute && cmp.parent != -1;
+  if (ancestors_laid_out) {
+    UIComponent *a = &cmp;
+    for (int guard = 0; a->parent != -1 && guard < 64; guard++) {
+      OptEntity parent = UICollectionHolder::getEntityForID(a->parent);
+      if (!parent.has_value() || !parent.asE().has<UIComponent>()) {
+        ancestors_laid_out = false;
+        break;
+      }
+      a = &parent.asE().get<UIComponent>();
+      if (a->computed[Axis::X] < 0.f || a->computed[Axis::Y] < 0.f) {
+        ancestors_laid_out = false;
+        break;
+      }
+    }
+  }
+
+  if (ancestors_laid_out) {
+    AutoLayout::autolayout_subtree(cmp, resolution, mapping, grid,
+                                   theme.ui_scale,
+                                   theme.text_inset.x * theme.ui_scale);
+  } else {
+    AutoLayout::autolayout(*root, resolution, mapping, grid, theme.ui_scale,
+                           theme.text_inset.x * theme.ui_scale);
+    root->laid_out = true;
+  }
+  return cmp.rect();
+}
+
 inline Vector2Type measure_scroll_content(const UIComponent &cmp, const HasScrollView &scroll) {
   // How children stack, not how we scroll: a scrolling column is a column.
   const Axis main = static_cast<bool>(cmp.flex_direction & FlexDirection::Row)

@@ -84,6 +84,8 @@ static inline bool is_mouse_inside(const input::MousePosition &mouse_pos,
          mouse_pos.y >= rect.y && mouse_pos.y <= rect.y + rect.height;
 }
 
+RectangleType rect_now(Entity &ent);
+
 struct RenderInfo {
   EntityID id;
   int layer = 0;
@@ -463,6 +465,18 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   /// resolved until after.
   [[nodiscard]] bool mouse_was_in_subtree(EntityID id) const {
     return contains_in_subtree(id, prev_hot_id);
+  }
+  [[nodiscard]] RectangleType rect_now(EntityID id) {
+    OptEntity opt = UICollectionHolder::getEntityForID(id);
+    if (!opt.has_value())
+      return RectangleType{};
+    return ui::rect_now(opt.asE());
+  }
+  [[nodiscard]] bool point_in(EntityID id, const input::MousePosition &pos) {
+    OptEntity opt = UICollectionHolder::getEntityForID(id);
+    if (!opt.has_value())
+      return false;
+    return is_mouse_inside(pos, ui::rect_now(opt.asE()));
   }
   /// Does focus sit on this element or anything inside it?
   [[nodiscard]] bool focus_in_subtree(EntityID id) const {
