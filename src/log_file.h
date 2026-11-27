@@ -11,6 +11,7 @@
 // AFTER_HOURS_REPLACE_LOGGING the host's own macros own the output.
 
 #include <cstdio>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -34,8 +35,14 @@ inline std::vector<std::string> &pending() {
   return lines;
 }
 
+inline std::mutex &mutex() {
+  static std::mutex m;
+  return m;
+}
+
 // Per line, not per buffer: a crash takes an unflushed tail with it.
 inline void write_line(const char *level, const char *message) {
+  std::lock_guard<std::mutex> guard(mutex());
   if (handle() == nullptr) {
     // A ring, not a full stop: the recent lines are the ones that matter.
     if (pending().size() >= max_buffered_lines)
@@ -55,6 +62,7 @@ inline const bool buffering_from_include = (log_sink_fn = write_line, true);
 
 // Truncates, then writes out whatever was buffered.
 inline void open(const char *path) {
+  std::lock_guard<std::mutex> guard(detail::mutex());
   if (detail::handle() != nullptr)
     std::fclose(detail::handle());
   detail::handle() = std::fopen(path, "w");
@@ -71,6 +79,7 @@ inline void open(const char *path) {
 }
 
 inline void close() {
+  std::lock_guard<std::mutex> guard(detail::mutex());
   if (detail::handle() == nullptr)
     return;
   std::fflush(detail::handle());
