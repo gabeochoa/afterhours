@@ -393,6 +393,24 @@ class E2ERunner {
     // after it was attributed to the following script.
     static constexpr const char *kScriptBoundary = "__end_of_script";
 
+    struct ScriptInfo {
+        size_t index = 0;
+        std::string path;
+        std::string name;
+    };
+
+    std::optional<ScriptInfo> current_script() const {
+        if (!script_results_.empty()) {
+            if (current_script_idx_ >= script_results_.size())
+                return std::nullopt;
+            const auto &result = script_results_[current_script_idx_];
+            return ScriptInfo{current_script_idx_, result.path, result.name};
+        }
+        if (script_path_.empty()) return std::nullopt;
+        return ScriptInfo{0, script_path_,
+                          std::filesystem::path(script_path_).stem().string()};
+    }
+
     void load_script(const std::string &path) {
         commands_ = parse_script(path);
         script_path_ = path;
@@ -511,6 +529,10 @@ class E2ERunner {
         presented_screenshot_fn_ = as_screenshot_fn(std::move(fn));
     }
     void set_reset_callback(std::function<void()> fn) { clear_fn_ = fn; }
+
+    void set_reset_callback(std::function<void(const ScriptInfo &)> fn) {
+        clear_with_info_fn = std::move(fn);
+    }
     void set_results_path(std::string path) { results_path_ = std::move(path); }
     void set_property_getter(
         std::function<std::string(const std::string &)> fn) {
@@ -865,7 +887,7 @@ class E2ERunner {
         if (cmd.name == kScriptBoundary) {
             finalize_current_script();
             pending.consume();
-            if (clear_fn_) clear_fn_();
+            notify_reset_callbacks();
             test_input::reset_all();
             key_release_detail::reset();
             VisibleTextRegistry::instance().clear();
@@ -964,13 +986,23 @@ class E2ERunner {
         return script_path_.empty() ? "(unknown)" : script_path_;
     }
 
+    void notify_reset_callbacks() {
+        if (clear_fn_) clear_fn_();
+        if (!clear_with_info_fn) return;
+        if (script_results_.empty()) return;
+        const size_t next_index = current_script_idx_ + 1;
+        if (next_index >= script_results_.size()) return;
+        const auto &next = script_results_[next_index];
+        clear_with_info_fn(ScriptInfo{next_index, next.path, next.name});
+    }
+
     void skip_to_next_script() {
         test_input::reset_all();
         key_release_detail::reset();
         while (index_ < commands_.size()) {
             if (commands_[index_].name == kScriptBoundary) {
                 VisibleTextRegistry::instance().clear();
-                if (clear_fn_) clear_fn_();
+                notify_reset_callbacks();
                 current_script_idx_++;
                 current_script_errors_ = 0;
                 elapsed_time_ = 0.0f;
@@ -1033,6 +1065,7 @@ class E2ERunner {
     ScreenshotFn presented_screenshot_fn_;
     std::string results_path_;
     std::function<void()> clear_fn_;
+    std::function<void(const ScriptInfo &)> clear_with_info_fn;
     std::function<std::string(const std::string &)> property_getter_;
 };
 
