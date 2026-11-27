@@ -633,6 +633,14 @@ private:
 };
 
 template <typename InputAction>
+struct RunPostBuildActions : System<UIContext<InputAction>> {
+  virtual void for_each_with(Entity &, UIContext<InputAction> &context,
+                             float) override {
+    context.run_post_build();
+  }
+};
+
+template <typename InputAction>
 struct TrackIfComponentWillBeRendered : System<UIContext<InputAction>> {
   UIEntityMappingCache *cache = nullptr;
 

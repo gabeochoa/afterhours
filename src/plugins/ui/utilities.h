@@ -266,6 +266,8 @@ inline std::vector<std::unique_ptr<SystemBase>> make_layout_systems() {
 template<typename InputAction>
 inline std::vector<std::unique_ptr<SystemBase>> make_post_layout_systems() {
     std::vector<std::unique_ptr<SystemBase>> systems;
+    systems.push_back(
+        std::make_unique<ui::RunPostBuildActions<InputAction>>());
     systems.push_back(std::make_unique<
                   ui::TrackIfComponentWillBeRendered<InputAction>>());
     systems.push_back(std::make_unique<ui::HandleTabbing<InputAction>>());
