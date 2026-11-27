@@ -277,6 +277,7 @@ lighting_zones_test \
 	autolayout_test \
 	origin_rounding_test \
 	trailing_anchor_test \
+	layout_invalidate_test \
 	dialog_test \
 	escape_owner_test \
 	modal_centering_test \

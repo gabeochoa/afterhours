@@ -295,6 +295,11 @@ inline std::vector<std::unique_ptr<SystemBase>> make_post_layout_systems() {
         std::make_unique<ui::ComputeVisualFocusId<InputAction>>());
     systems.push_back(
         std::make_unique<ui::RevealKeyboardFocus<InputAction>>());
+    {
+        auto relayout = std::make_unique<ui::RunAutoLayout>();
+        relayout->only_if_invalidated = true;
+        systems.push_back(std::move(relayout));
+    }
     systems.push_back(
     std::make_unique<ui::EndUIContextManager<InputAction>>());
     return systems;

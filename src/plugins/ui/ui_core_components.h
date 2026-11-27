@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <map>
 #include <optional>
 #include <set>
@@ -26,6 +27,26 @@ using vec2 = Vector2Type;
 namespace ui {
 
 struct AutoLayoutRoot : BaseComponent {};
+
+inline std::uint64_t &layout_generation_storage() {
+  static std::uint64_t v = 0;
+  return v;
+}
+
+inline std::uint64_t &laid_out_generation_storage() {
+  static std::uint64_t v = 0;
+  return v;
+}
+
+inline std::uint64_t layout_generation() { return layout_generation_storage(); }
+inline std::uint64_t laid_out_generation() {
+  return laid_out_generation_storage();
+}
+
+inline void invalidate_layout() { layout_generation_storage()++; }
+inline bool layout_is_stale() {
+  return laid_out_generation() < layout_generation();
+}
 
 struct UIComponent : BaseComponent {
   // Sentinel font names. Kept as `const char*` (not `constexpr std::string`,
@@ -242,6 +263,11 @@ struct UIComponent : BaseComponent {
     parent = entity.id;
     entity.get<UIComponent>().add_child(this->id);
     return *this;
+  }
+
+  void invalidate_layout() {
+    size_dirty = true;
+    ui::invalidate_layout();
   }
 
   auto &set_desired_width(Size s) {
