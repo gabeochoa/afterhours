@@ -789,6 +789,14 @@ struct HasScrollView : BaseComponent {
   std::optional<ColorType> scrollbar_thumb_color;
 };
 
+// CSS position:sticky analogue: pin to an edge of the nearest scroll
+// ancestor while scrolling, clamped to the immediate parent's bounds.
+struct HasSticky : BaseComponent {
+  bool top = false, bottom = false, left = false, right = false;
+  float top_offset = 0.f, bottom_offset = 0.f, left_offset = 0.f,
+        right_offset = 0.f;
+};
+
 // Retained row geometry for a measured virtual_list (hanabi #420). The
 // prefix is summed once and kept on the list entity; height_of is re-asked
 // only for the dirty range, because asking is the expensive part (it wraps

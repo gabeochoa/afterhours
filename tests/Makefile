@@ -283,6 +283,7 @@ lighting_zones_test \
 	dump_ui_test \
 	accessibility_test \
 	scroll_anchor_test \
+	sticky_children_test \
 	scroll_absolute_content_test \
 	measure_config_test \
 	widget_retirement_test \
@@ -537,8 +538,10 @@ RAYLIB_TESTS := \
 	modal_centering_test \
 	dump_ui_test \
 	scroll_anchor_test \
+	sticky_children_test \
 	measure_config_test \
 	scroll_anchor_test \
+	sticky_children_test \
 	widget_retirement_test \
 	text_line_edit_test \
 	grapheme_edit_test \
