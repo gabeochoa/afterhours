@@ -401,6 +401,7 @@ lighting_zones_test \
 	lod_test \
 	blob_shadow_test \
 	world_label_test \
+	terrain_steering_test \
 	render_view_test \
 	image_test \
 	image_raylib_test \
