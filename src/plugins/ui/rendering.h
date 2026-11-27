@@ -2427,6 +2427,35 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
   }
 };
 
+template <typename InputAction>
+void render_subtree_to_texture(RenderImm<InputAction> &renderer,
+                               UIContext<InputAction> &context,
+                               FontManager &font_manager, Entity &root,
+                               graphics::RenderTextureType &rt) {
+  if (!root.has<UIComponent>())
+    return;
+  const RectangleType root_rect = root.get<UIComponent>().rect();
+  const Vector2Type offset{-root_rect.x, -root_rect.y};
+  begin_texture_mode(rt);
+  const auto visit = [&](auto &&self, Entity &entity) -> void {
+    if (!entity.has<UIComponent>())
+      return;
+    auto &cmp = entity.get<UIComponent>();
+    const auto position = cmp.computed_rel;
+    cmp.computed_rel[Axis::X] += offset.x;
+    cmp.computed_rel[Axis::Y] += offset.y;
+    renderer.render(context, font_manager, entity);
+    for (auto id : cmp.children) {
+      auto child = UICollectionHolder::getEntityForID(id);
+      if (child && child.asE().has<UIComponent>())
+        self(self, child.asE());
+    }
+    cmp.computed_rel = position;
+  };
+  visit(visit, root);
+  end_texture_mode();
+}
+
 // Batched renderer system - collects render commands into a buffer
 // then executes them all at once for better batching opportunities
 template <typename InputAction>

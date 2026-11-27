@@ -63,6 +63,8 @@ $(shell mkdir -p $(OUT))
 ALL_TESTS := \
 	prompt_bar_test \
 	subtree_rotation_test \
+	offscreen_layer_test \
+	subtree_texture_test \
 	window_events_test \
 	text_input_no_host_enum_test \
 	scroll_logical_anchor_test \
@@ -516,6 +518,8 @@ RAYLIB_TESTS := \
 	render_capture_test \
 	presented_frame_test \
 	triangle_winding_test \
+	offscreen_layer_test \
+	subtree_texture_test \
 	bug_note_test \
 	blur_shader_test \
 	rounded_outline_mask_test \

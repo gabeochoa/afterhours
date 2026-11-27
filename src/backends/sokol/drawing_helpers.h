@@ -573,6 +573,9 @@ inline void set_blend_mode(blend::Mode mode) {
   case blend::Mode::AlphaPremultiply:
     sgl_load_pipeline(graphics::metal_detail::g_blend_pip_premultiplied);
     break;
+  case blend::Mode::Layer:
+    sgl_load_pipeline(graphics::metal_detail::g_blend_pip);
+    break;
   }
 }
 
@@ -1259,7 +1262,12 @@ inline void unload_render_texture(graphics::RenderTextureType &rt) {
   rt = {};
 }
 
-inline void begin_texture_mode(graphics::RenderTextureType &rt) {
+inline std::vector<graphics::RenderTextureType> &texture_mode_stack() {
+  static std::vector<graphics::RenderTextureType> stack;
+  return stack;
+}
+
+inline void activate_texture_mode(graphics::RenderTextureType &rt) {
   graphics::metal_detail::ensure_sokol_gl_and_fonts();
   if (rt.sgl_ctx_id == 0) {
     const auto cdesc = sg_query_image_desc({rt.color_img_id});
@@ -1267,7 +1275,7 @@ inline void begin_texture_mode(graphics::RenderTextureType &rt) {
     const sgl_context ctx =
         sgl_context_for(cdesc.pixel_format, ddesc.pixel_format, cdesc.sample_count);
     if (ctx.id == SG_INVALID_ID) {
-      log_error("begin_texture_mode: sgl context creation failed");
+      log_error("activate_texture_mode: sgl context creation failed");
       return;
     }
     rt.sgl_ctx_id = ctx.id;
@@ -1357,6 +1365,14 @@ inline void copy_screen_to_render_texture(graphics::RenderTextureType &, Rectang
   log_error("@notimplemented copy_screen_to_render_texture");
 }
 
+inline void begin_texture_mode(graphics::RenderTextureType &rt) {
+  auto &stack = texture_mode_stack();
+  if (!stack.empty() && stack.back().color_view_id == rt.color_view_id)
+    return;
+  stack.push_back(rt);
+  activate_texture_mode(rt);
+}
+
 inline void end_texture_mode() {
   auto unwind_camera_stack = []() {
     if (graphics::metal_detail::g_camera_mode_depth <= 0)
@@ -1369,6 +1385,10 @@ inline void end_texture_mode() {
     log_warn("end_texture_mode: cleared unbalanced begin_mode_2d stack");
   };
 
+  auto &stack = texture_mode_stack();
+  const bool nested = stack.size() > 1;
+  if (!stack.empty())
+    stack.pop_back();
   if (graphics::metal_detail::g_pass_active) {
     unwind_camera_stack();
     if (graphics::metal_detail::g_fons_ctx)
@@ -1377,6 +1397,11 @@ inline void end_texture_mode() {
     sg_end_pass();
     graphics::metal_detail::g_pass_active = false;
     graphics::metal_detail::g_active_rt_color_view_id = 0;
+  }
+
+  if (nested) {
+    activate_texture_mode(stack.back());
+    return;
   }
 
   // Restore the default sgl context (swapchain format).
