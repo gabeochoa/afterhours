@@ -5,7 +5,7 @@
 
 using namespace afterhours;
 
-// Create many test components to trigger overflow at 128 limit
+// Create many test components to trigger overflow at the limit
 struct TestComponent1 : public BaseComponent {};
 struct TestComponent2 : public BaseComponent {};
 struct TestComponent3 : public BaseComponent {};
