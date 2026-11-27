@@ -421,6 +421,7 @@ lighting_zones_test \
 	load_font_size_test \
 	glyph_packing_test \
 	edit_keys_test \
+	list_menu_test \
 	raw_text_edit_test \
 	tab_container_test \
 	tab_toggle_geometry_test \
@@ -488,6 +489,7 @@ RAYLIB_TESTS := \
 	window_state_test \
 	click_count_test \
 	edit_keys_test \
+	list_menu_test \
 	raw_text_edit_test \
 	default_font_test \
 	font_display_size_test \
@@ -627,6 +629,7 @@ $(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test $(OUT)/input_ax
 # Linux too).
 $(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test $(OUT)/input_axis_edge_test: LDFLAGS_T = $(subst -lraylib,,$(subst $(RAYLIB_LIB)/libraylib.a,,$(LDFLAGS_RAYLIB)))
 
+$(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/middle_click_test $(OUT)/edit_keys_test $(OUT)/list_menu_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_input_no_host_enum_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/middle_click_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/raw_text_edit_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
