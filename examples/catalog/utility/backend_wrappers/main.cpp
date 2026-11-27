@@ -14,7 +14,7 @@ int main() {
   cfg.height = 180;
   if (!g::init(cfg)) {
     std::printf("no GPU, nothing to show\n");
-    return 0;
+    return 1;
   }
 
   Font font = load_font_from_file(FONT_PATH);
@@ -36,8 +36,9 @@ int main() {
     g::end_drawing();
   }
 
+  const bool tile_ok = tile.width == 2 && tile.height == 2;
   unload_texture(tile);
   unload_font(font);
   std::printf("drew 3 frames with draw_fps\n");
-  return 0;
+  return tile_ok ? 0 : 1;
 }

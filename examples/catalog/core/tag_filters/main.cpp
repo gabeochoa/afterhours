@@ -1,3 +1,4 @@
+#include <cassert>
 #include <iostream>
 
 #include "../../../../ah.h"
@@ -40,28 +41,22 @@ int main() {
     Entities &ents = EntityHelper::get_entities_for_mod();
 
     // Create sample entities
-    {
-        auto &e = EntityHelper::createEntity();
-        e.addComponent<Transform>().x = 0;
-        e.enableTag(DemoTag::Runner);
-    }
-    {
-        auto &e = EntityHelper::createEntity();
-        e.addComponent<Transform>().x = 5;
-        e.enableTag(DemoTag::Runner);
-        e.enableTag(DemoTag::Store);  // should be excluded from MoveRunners and
-                                      // DebugNonStore
-    }
-    {
-        auto &e = EntityHelper::createEntity();
-        e.addComponent<Health>().hp = 50;
-        e.enableTag(DemoTag::Chaser);
-    }
-    {
-        auto &e = EntityHelper::createEntity();
-        e.addComponent<Health>().hp = 10;
-        e.enableTag(DemoTag::Runner);
-    }
+    auto &runner = EntityHelper::createEntity();
+    runner.addComponent<Transform>().x = 0;
+    runner.enableTag(DemoTag::Runner);
+
+    auto &store_runner = EntityHelper::createEntity();
+    store_runner.addComponent<Transform>().x = 5;
+    store_runner.enableTag(DemoTag::Runner);
+    store_runner.enableTag(DemoTag::Store);  // excluded from MoveRunners
+
+    auto &chaser = EntityHelper::createEntity();
+    chaser.addComponent<Health>().hp = 50;
+    chaser.enableTag(DemoTag::Chaser);
+
+    auto &hurt_runner = EntityHelper::createEntity();
+    hurt_runner.addComponent<Health>().hp = 10;
+    hurt_runner.enableTag(DemoTag::Runner);
 
     SystemManager sm;
     sm.register_update_system(std::make_unique<MoveRunners>());
@@ -92,5 +87,11 @@ int main() {
         }
     }
 
+    // MoveRunners moved only the non-Store Runner; both Health entities
+    // matching Any<Chaser, Runner> healed on both ticks.
+    assert(runner.get<Transform>().x == 1);
+    assert(store_runner.get<Transform>().x == 5);
+    assert(chaser.get<Health>().hp == 60);
+    assert(hurt_runner.get<Health>().hp == 20);
     return 0;
 }

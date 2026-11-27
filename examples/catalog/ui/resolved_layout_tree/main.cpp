@@ -1,3 +1,4 @@
+#include <cmath>
 #define AFTER_HOURS_IMM_UI
 #include "../../../../src/plugins/ui.h"
 
@@ -10,6 +11,7 @@ using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
 static EntityID panel_id = -1;
+static bool resolved_ok = false;
 
 struct BuildUI : System<DefaultUIContext> {
     void for_each_with(Entity &entity, DefaultUIContext &ctx, float) override {
@@ -43,6 +45,8 @@ struct PrintResolvedTree : System<> {
         used += cmp.gap * static_cast<float>(cmp.children.size() - 1);
         log_info("panel h={}, children + padding + gaps = {}", cmp.rect().height,
                  used);
+        resolved_ok = cmp.children.size() == 3 &&
+                      std::abs(cmp.rect().height - used) < 0.5f;
 
         std::string xml;
         testing::ui_commands::dump_ui_node(xml, panel, 0);
@@ -55,5 +59,5 @@ int main() {
     ui::setup_with_resolution<>(systems, {800, 600}, std::make_unique<BuildUI>());
     systems.register_update_system(std::make_unique<PrintResolvedTree>());
     systems.run(1.f / 60.f);
-    return 0;
+    return resolved_ok ? 0 : 1;
 }

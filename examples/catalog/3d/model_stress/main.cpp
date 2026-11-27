@@ -155,6 +155,7 @@ static void frame(SystemManager &systems, Camera3D &cam, int count,
 
 int main(int argc, char **argv) {
     int count = 4096;
+    int test_frames = 0;
     bool bench = false;
     Mode mode = Mode::Instanced;
     for (int i = 1; i < argc; i++) {
@@ -166,9 +167,12 @@ int main(int argc, char **argv) {
         }
         else if (!strcmp(argv[i], "--count") && i + 1 < argc)
             count = std::max(1, atoi(argv[++i]));
+        else if (!strncmp(argv[i], "--test-frames=", 14))
+            test_frames = std::max(0, atoi(argv[i] + 14));
     }
 
-    graphics::set_config_flags(graphics::FLAG_WINDOW_RESIZABLE);
+    graphics::set_config_flags(graphics::FLAG_WINDOW_RESIZABLE |
+                               (test_frames > 0 ? raylib::FLAG_WINDOW_HIDDEN : 0));
     graphics::init_window(1280, 720, "model_stress");
     graphics::set_target_fps(0);
 
@@ -200,6 +204,7 @@ int main(int argc, char **argv) {
         model, shader, cards, card_shader, cam, mode));
 
     spawn(count, count);
+    int frames = 0;
 
     if (bench) {
         constexpr int WARMUP = 30, FRAMES = 120;
@@ -221,7 +226,9 @@ int main(int argc, char **argv) {
             count *= 2;
         }
     } else {
-        while (!graphics::window_should_close()) {
+        while (!graphics::window_should_close() &&
+               (test_frames == 0 || frames < test_frames)) {
+            ++frames;
             if (graphics::is_key_pressed(keys::UP)) {
                 spawn(count, count * 2);
                 count *= 2;
@@ -241,5 +248,7 @@ int main(int argc, char **argv) {
     graphics::unload_shader(shader);
     models.unload_all();
     graphics::close_window();
+    if (test_frames > 0)
+        return frames == test_frames && count > 0 && tris_per_tree > 0 ? 0 : 1;
     return 0;
 }

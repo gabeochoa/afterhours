@@ -7,4 +7,10 @@ LDFLAGS     = $(RAYLIB_PREFIX)/lib/libraylib.a -framework OpenGL \
               -framework CoreFoundation -framework Cocoa -framework IOKit \
               -framework CoreGraphics -framework CoreVideo -lobjc
 
+NO_DEFAULT_TEST = 1
+
 include ../../common.mk
+
+.PHONY: test
+test: $(EXE)
+	AFTERHOURS_TEST_FRAMES=3 $(EXE)

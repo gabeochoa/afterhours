@@ -38,7 +38,8 @@ int main() {
     print_color("UI_PINK", UI_PINK);
 
     assert(UI_BLACK.r == 0 && UI_BLACK.g == 0 && UI_BLACK.b == 0);
-    assert(UI_WHITE.r == 255 && UI_WHITE.g == 255 && UI_WHITE.b == 255);
+    assert(UI_WHITE.r == RAYWHITE.r && UI_WHITE.g == RAYWHITE.g &&
+           UI_WHITE.b == RAYWHITE.b);
     assert(UI_RED.r == 230 && UI_RED.g == 41 && UI_RED.b == 55);
 
     // Test 2: Named colors
@@ -74,7 +75,7 @@ int main() {
 
     Color quarter = lerp(UI_BLACK, UI_WHITE, 0.25f);
     print_color("25% from BLACK to WHITE", quarter);
-    assert(quarter.r == 63);  // 255 * 0.25
+    assert(quarter.r == 61);  // 245 * 0.25 (UI_WHITE is RAYWHITE)
 
     // Test 6: mix() - weighted blend
     std::cout << "\n6. Color mixing:" << std::endl;
@@ -119,7 +120,7 @@ int main() {
     std::cout << "  White luminance: " << white_lum << " (should be ~1.0)" << std::endl;
     std::cout << "  Black luminance: " << black_lum << " (should be ~0.0)" << std::endl;
     std::cout << "  Red luminance: " << red_lum << std::endl;
-    assert(approx_eq(white_lum, 1.0f));
+    assert(approx_eq(white_lum, 0.913f));  // RAYWHITE (245), not pure white
     assert(approx_eq(black_lum, 0.0f));
 
     // Test 11: Brightness calculation
@@ -128,7 +129,7 @@ int main() {
     float black_bright = brightness(UI_BLACK);
     std::cout << "  White brightness: " << white_bright << std::endl;
     std::cout << "  Black brightness: " << black_bright << std::endl;
-    assert(approx_eq(white_bright, 1.0f));
+    assert(approx_eq(white_bright, 245.f / 255.f));
     assert(approx_eq(black_bright, 0.0f));
 
     // Test 12: is_light() and is_dark()
@@ -142,8 +143,8 @@ int main() {
     // Test 13: Contrast ratio (WCAG 2.1)
     std::cout << "\n13. Contrast ratio (WCAG 2.1):" << std::endl;
     float bw_contrast = contrast_ratio(UI_BLACK, UI_WHITE);
-    std::cout << "  Black on White: " << bw_contrast << ":1 (should be ~21:1)" << std::endl;
-    assert(bw_contrast >= 20.0f);  // Should be ~21:1
+    std::cout << "  Black on White: " << bw_contrast << ":1 (should be ~19:1)" << std::endl;
+    assert(bw_contrast >= 18.0f);  // ~19:1 for RAYWHITE; pure white would be 21:1
 
     float rw_contrast = contrast_ratio(pure_red, UI_WHITE);
     std::cout << "  Red on White: " << rw_contrast << ":1" << std::endl;

@@ -29,7 +29,7 @@ struct BuildRail : System<DefaultUIContext> {
                             .with_absolute_position(100, 50)
                             .with_debug_name("rail"));
         const Rectangle r = rail.ent().get<UIComponent>().rect();
-        scrub.held = inj::detail::mouse.left_down;
+        scrub.held = inj::is_mouse_button_down();
         if (scrub.held) scrub.offset = inj::detail::mouse.pos.x - r.x;
         if (const float dy = inj::consume_wheel().y; dy != 0.f) scrub.wheel = dy;
     }

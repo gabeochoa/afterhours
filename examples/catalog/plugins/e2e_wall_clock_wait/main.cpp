@@ -23,7 +23,7 @@ struct StartWorkCommand : System<PendingE2ECommand> {
         if (cmd.is_consumed() || !cmd.is("start_work")) return;
         worker.value.reset();
         worker.result = std::async(std::launch::async, [] {
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            std::this_thread::sleep_for(std::chrono::milliseconds(150));
             return 42;
         });
         cmd.consume();

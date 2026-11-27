@@ -13,6 +13,8 @@
 //   F             fog on / off (with lighting)
 
 #include <algorithm>
+#include <cstdlib>
+#include <cstring>
 #include <cmath>
 #include <format>
 #include <string>
@@ -49,8 +51,16 @@ static bool prepare(Entry &e) {
     return true;
 }
 
-int main(int, char **) {
-    graphics::set_config_flags(graphics::FLAG_WINDOW_RESIZABLE);
+int main(int argc, char **argv) {
+    int test_frames = 0;
+    for (int i = 1; i < argc; ++i) {
+        if (!std::strcmp(argv[i], "--test-frames") && i + 1 < argc)
+            test_frames = std::atoi(argv[++i]);
+        else if (!std::strncmp(argv[i], "--test-frames=", 14))
+            test_frames = std::atoi(argv[i] + 14);
+    }
+    graphics::set_config_flags(graphics::FLAG_WINDOW_RESIZABLE |
+                               (test_frames > 0 ? raylib::FLAG_WINDOW_HIDDEN : 0));
     graphics::init_window(1200, 640, "house_of_cards");
     graphics::set_target_fps(60);
 
@@ -81,7 +91,10 @@ int main(int, char **) {
     Lighting light;
     light.fog = sky;
 
-    while (!graphics::window_should_close()) {
+    int frames = 0;
+    while (!graphics::window_should_close() &&
+           (test_frames == 0 || frames < test_frames)) {
+        ++frames;
         float dt = graphics::get_frame_time();
         bool next = graphics::is_key_pressed(keys::RIGHT);
         if (next || graphics::is_key_pressed(keys::LEFT)) {
@@ -181,5 +194,7 @@ int main(int, char **) {
     graphics::unload_shader(lit_cards);
     graphics::unload_shader(lit_model);
     graphics::close_window();
+    if (test_frames > 0)
+        return frames == test_frames && entries[current].ready ? 0 : 1;
     return 0;
 }

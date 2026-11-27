@@ -18,6 +18,8 @@ template <typename ActionEnum> void validate(bool full) {
 
 int main(int argc, char **) {
   validate<Action>(argc > 1);
-  std::printf("ok\n");
-  return 0;
+  const bool ok = magic_enum::enum_contains<Action>("Up") &&
+                  !magic_enum::enum_contains<Action>("Jump");
+  std::printf("%s\n", ok ? "ok" : "enum validation drifted");
+  return ok ? 0 : 1;
 }
