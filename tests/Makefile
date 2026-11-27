@@ -395,6 +395,7 @@ lighting_zones_test \
 	effects_uniform_cache_test \
 	house_of_cards_test \
 	frustum_test \
+	heightfield_test \
 	eye_position_test \
 	instance_batcher_test \
 	instance_batcher_persist_test \
