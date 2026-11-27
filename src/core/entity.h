@@ -46,6 +46,23 @@ inline std::size_t component_mutation_gen(ComponentID id) {
   return COMPONENT_MUTATION_GENS[id].load(std::memory_order_relaxed);
 }
 
+// Per-type membership generation (#379's public spelling of the counter
+// above): bumps only when a component of that type is added or removed --
+// including when an entity holding it leaves a collection -- so a system
+// can cache against component_generation<T>() and skip work while it is
+// unchanged. Field writes are invisible: get<T>() hands out a mutable
+// reference, so this covers membership, not mutation. One storage, two
+// readings: this forwards to #459's component_mutation_gen so the two
+// can never disagree.
+[[nodiscard]] inline std::size_t component_generation(ComponentID id) {
+  return component_mutation_gen(id);
+}
+
+template <typename T>
+[[nodiscard]] std::size_t component_generation() {
+  return component_generation(components::get_type_id<T>());
+}
+
 struct Entity {
   EntityID id;
   int entity_type = 0;

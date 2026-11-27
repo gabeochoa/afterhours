@@ -304,6 +304,7 @@ lighting_zones_test \
 	design_defaults_test \
 	default_theme_test \
 	entity_index_test \
+	component_generation_test \
 	index_scaling_test \
 	query_seed_test \
 	query_skip_mods_test \
