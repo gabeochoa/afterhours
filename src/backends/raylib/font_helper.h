@@ -319,9 +319,17 @@ build_font_atlas(const char *file, int px, const int *codepoints, int count,
   font.baseSize = px;
   font.glyphCount = count;
   font.glyphPadding = atlas_config.padding;
+#if RAYLIB_VERSION_MAJOR >= 6
+  int loaded_count = 0;
+  font.glyphs = raylib::LoadFontData(data, data_size, px, codepoints, count,
+                                     raylib::FONT_DEFAULT, &loaded_count);
+  if (loaded_count > 0)
+    font.glyphCount = loaded_count;
+#else
   font.glyphs = raylib::LoadFontData(data, data_size, px,
                                      const_cast<int *>(codepoints), count,
                                      raylib::FONT_DEFAULT);
+#endif
   if (!font.glyphs) {
     log_error("build_font_atlas: no glyph data from '{}'", file);
     raylib::UnloadFileData(data);

@@ -26,6 +26,11 @@ namespace raylib {
 inline void InitWindow(int, int, const char *) {}
 inline void CloseWindow() {}
 inline bool IsWindowReady() { return false; }
+inline bool IsWindowHidden() { return false; }
+inline bool IsWindowMinimized() { return false; }
+inline bool IsWindowResized() { return false; }
+inline int GetScreenWidth() { return 0; }
+inline int GetScreenHeight() { return 0; }
 inline Vector2 GetWindowScaleDPI() { return {1.f, 1.f}; }
 inline void BeginTextureMode(RenderTexture2D) {}
 inline void EndTextureMode() {}
@@ -43,7 +48,11 @@ inline bool ExportImage(Image, const char *) { return false; }
 inline void ImageFlipVertical(Image *) {}
 inline Image GenImageColor(int, int, Color) { return {}; }
 inline Image ImageCopy(Image) { return {}; }
+#if RAYLIB_VERSION_MAJOR >= 6
+inline void ImageDrawImage(Image *, Image, int, int, Color) {}
+#else
 inline void ImageDraw(Image *, Image, Rectangle, Rectangle, Color) {}
+#endif
 inline void ImageResize(Image *, int, int) {}
 inline RenderTexture2D LoadRenderTexture(int, int) { return {}; }
 inline void UnloadRenderTexture(RenderTexture2D) {}
