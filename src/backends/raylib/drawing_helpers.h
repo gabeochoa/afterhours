@@ -34,13 +34,15 @@ inline int CalculateSegments(const float radius) {
 }
 
 inline void DrawCorner(const float x, const float y, const float radius,
-                       const int segments, const Color color, float angle) {
-  const float stepLength = 90.0f / (float)segments;
+                       const int segments, const Color color, float angle,
+                       const bool chamfer = false) {
+  const int count = chamfer ? 1 : segments;
+  const float stepLength = 90.0f / (float)count;
 
   rlBegin(RL_TRIANGLES);
   rlColor4ub(color.r, color.g, color.b, color.a);
 
-  for (int i = 0; i < segments; i++) {
+  for (int i = 0; i < count; i++) {
     rlVertex2f(x, y);
     rlVertex2f(x + cosf(DEG2RAD * (angle + stepLength)) * radius,
                y + sinf(DEG2RAD * (angle + stepLength)) * radius);
@@ -56,7 +58,12 @@ inline void DrawRectangleCustom(const Rectangle rec,
                                 const float roundnessBottomLeft,
                                 const float roundnessTopRight,
                                 const float roundnessTopLeft,
-                                const int segments, const Color color) {
+                                const int segments,
+                                const bool chamferBottomRight,
+                                const bool chamferBottomLeft,
+                                const bool chamferTopRight,
+                                const bool chamferTopLeft,
+                                const Color color) {
   // Calculate corner radius for each corner
   const float radiusBottomRight = (rec.width > rec.height)
                                       ? (rec.height * roundnessBottomRight) / 2
@@ -151,19 +158,21 @@ inline void DrawRectangleCustom(const Rectangle rec,
   if (radiusBottomRight > 0) {
     DrawCorner(rec.x + rec.width - radiusBottomRight,
                rec.y + rec.height - radiusBottomRight, radiusBottomRight,
-               segmentsBottomRight, color, 0.0f);
+               segmentsBottomRight, color, 0.0f, chamferBottomRight);
   }
   if (radiusBottomLeft > 0) {
     DrawCorner(rec.x + radiusBottomLeft, rec.y + rec.height - radiusBottomLeft,
-               radiusBottomLeft, segmentsBottomLeft, color, 90.0f);
+               radiusBottomLeft, segmentsBottomLeft, color, 90.0f,
+               chamferBottomLeft);
   }
   if (radiusTopRight > 0) {
     DrawCorner(rec.x + rec.width - radiusTopRight, rec.y + radiusTopRight,
-               radiusTopRight, segmentsTopRight, color, 270.0f);
+               radiusTopRight, segmentsTopRight, color, 270.0f,
+               chamferTopRight);
   }
   if (radiusTopLeft > 0) {
     DrawCorner(rec.x + radiusTopLeft, rec.y + radiusTopLeft, radiusTopLeft,
-               segmentsTopLeft, color, 180.0f);
+               segmentsTopLeft, color, 180.0f, chamferTopLeft);
   }
 }
 
@@ -244,40 +253,44 @@ inline void draw_rectangle(const RectangleType rect, const Color color) {
 inline void draw_rectangle_rounded(
     const RectangleType rect, const float roundness, const int segments,
     const Color color,
-    const std::bitset<4> corners = std::bitset<4>().reset()) {
+    const std::bitset<4> corners = std::bitset<4>().reset(),
+    const std::bitset<4> chamfer = std::bitset<4>().reset()) {
   capture::record("rectangle_rounded", rect, color);
-  if (corners.all()) {
+  if (corners.all() && chamfer.none()) {
     raylib::DrawRectangleRounded(rect, roundness, segments, color);
     return;
   }
 
-  if (corners.none()) {
+  if (corners.none() && chamfer.none()) {
     draw_rectangle(rect, color);
     return;
   }
 
+  const std::bitset<4> styled = corners | chamfer;
   const float ROUND = roundness;
   const float SHARP = 0.f;
   // DrawRectangleCustom takes its roundness args bottom-right first.
   raylib::DrawRectangleCustom(rect,
-                              corners.test(0) ? ROUND : SHARP, // Bottom Right
-                              corners.test(1) ? ROUND : SHARP, // Bottom Left
-                              corners.test(2) ? ROUND : SHARP, // Top Right
-                              corners.test(3) ? ROUND : SHARP, // Top-Left
-                              segments, color);
+                              styled.test(0) ? ROUND : SHARP,
+                              styled.test(1) ? ROUND : SHARP,
+                              styled.test(2) ? ROUND : SHARP,
+                              styled.test(3) ? ROUND : SHARP,
+                              segments, chamfer.test(0), chamfer.test(1),
+                              chamfer.test(2), chamfer.test(3), color);
 }
 
 inline void draw_rectangle_rounded_lines(
     const RectangleType rect, const float roundness, const int segments,
     const Color color,
-    const std::bitset<4> corners = std::bitset<4>().reset()) {
+    const std::bitset<4> corners = std::bitset<4>().reset(),
+    const std::bitset<4> chamfer = std::bitset<4>().reset()) {
   capture::record("rectangle_rounded_lines", rect, color);
-  if (corners.all()) {
+  if (corners.all() && chamfer.none()) {
     raylib::DrawRectangleRoundedLines(rect, roundness, segments, color);
     return;
   }
 
-  if (corners.none()) {
+  if (corners.none() && chamfer.none()) {
     draw_rectangle_outline(rect, color);
     return;
   }
@@ -286,10 +299,11 @@ inline void draw_rectangle_rounded_lines(
   // the perimeter with a per-corner radius (0 = sharp), like the sokol path.
   const float x = rect.x, y = rect.y, w = rect.width, h = rect.height;
   const float r = (w < h ? w : h) * 0.5f * roundness;
-  const float rTL = corners.test(3) ? r : 0.f;
-  const float rTR = corners.test(2) ? r : 0.f;
-  const float rBL = corners.test(1) ? r : 0.f;
-  const float rBR = corners.test(0) ? r : 0.f;
+  const std::bitset<4> styled = corners | chamfer;
+  const float rTL = styled.test(3) ? r : 0.f;
+  const float rTR = styled.test(2) ? r : 0.f;
+  const float rBL = styled.test(1) ? r : 0.f;
+  const float rBR = styled.test(0) ? r : 0.f;
   const int segs = segments > 0 ? segments : 8;
   const float PI_HALF = PI * 0.5f;
 
@@ -301,21 +315,21 @@ inline void draw_rectangle_rounded_lines(
     prev = p;
     has_prev = true;
   };
-  auto arc_to = [&](float cx, float cy, float radius, float start) {
-    for (int i = 0; i <= segs; i++) {
-      const float a = start + PI_HALF * static_cast<float>(i) / segs;
+  auto arc_to = [&](float cx, float cy, float radius, float start, bool cut) {
+    const int count = cut ? 1 : segs;
+    for (int i = 0; i <= count; i++) {
+      const float a = start + PI_HALF * static_cast<float>(i) / count;
       line_to(Vector2Type{cx + radius * cosf(a), cy + radius * sinf(a)});
     }
   };
-
   line_to(Vector2Type{x + w - rTR, y});
-  arc_to(x + w - rTR, y + rTR, rTR, -PI_HALF);
+  arc_to(x + w - rTR, y + rTR, rTR, -PI_HALF, chamfer.test(2));
   line_to(Vector2Type{x + w, y + h - rBR});
-  arc_to(x + w - rBR, y + h - rBR, rBR, 0.f);
+  arc_to(x + w - rBR, y + h - rBR, rBR, 0.f, chamfer.test(0));
   line_to(Vector2Type{x + rBL, y + h});
-  arc_to(x + rBL, y + h - rBL, rBL, PI_HALF);
+  arc_to(x + rBL, y + h - rBL, rBL, PI_HALF, chamfer.test(1));
   line_to(Vector2Type{x, y + rTL});
-  arc_to(x + rTL, y + rTL, rTL, PI);
+  arc_to(x + rTL, y + rTL, rTL, PI, chamfer.test(3));
   line_to(Vector2Type{x + rTL, y});
 }
 
@@ -366,10 +380,11 @@ inline void draw_circle_gradient(int centerX, int centerY, float radius,
 // The rectangle rotates around its center
 inline void draw_rectangle_rounded_rotated(
     const RectangleType rect, const float roundness, const int segments,
-    const Color color, const std::bitset<4> corners, const float rotation) {
+    const Color color, const std::bitset<4> corners, const float rotation,
+    const std::bitset<4> chamfer = std::bitset<4>().reset()) {
   // Skip rotation if angle is effectively zero
   if (std::abs(rotation) < 0.001f) {
-    draw_rectangle_rounded(rect, roundness, segments, color, corners);
+    draw_rectangle_rounded(rect, roundness, segments, color, corners, chamfer);
     return;
   }
 
@@ -387,7 +402,8 @@ inline void draw_rectangle_rounded_rotated(
   raylib::rlRotatef(rotation, 0.0f, 0.0f, 1.0f);
 
   // Draw the rectangle at origin (now rotated)
-  draw_rectangle_rounded(centeredRect, roundness, segments, color, corners);
+  draw_rectangle_rounded(centeredRect, roundness, segments, color, corners,
+                         chamfer);
 
   raylib::rlPopMatrix();
 }

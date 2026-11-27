@@ -76,19 +76,22 @@ inline void draw_rectangle_outline(const RectangleType rect, const Color color,
 }
 inline void draw_rectangle_rounded(const RectangleType rect, const float,
                                    const int, const Color color,
-                                   const std::bitset<4>) {
+                                   const std::bitset<4>,
+                                   const std::bitset<4> = std::bitset<4>()) {
   capture::record("rectangle_rounded", rect, color);
 }
 inline void draw_rectangle_rounded_rotated(const RectangleType rect, const float,
                                            const int, const Color color,
-                                           const std::bitset<4>, const float) {
+                                           const std::bitset<4>, const float,
+                                           const std::bitset<4> = std::bitset<4>()) {
   capture::record("rectangle_rounded", rect, color);
 }
 // Every outline goes through here -- borders and the focus ring -- so it has
 // to record, not stub, or neither is observable in a test.
 inline void draw_rectangle_rounded_lines(const RectangleType rect, const float,
                                          const int, const Color color,
-                                         const std::bitset<4>) {
+                                         const std::bitset<4>,
+                                         const std::bitset<4> = std::bitset<4>()) {
   capture::record("rectangle_rounded_lines", rect, color);
 }
 inline void draw_rectangle_rounded_lines_ex(const RectangleType rect,

@@ -271,6 +271,7 @@ struct HasNavigationBarState : ui::HasDropdownState {
 
 struct HasRoundedCorners : BaseComponent {
   std::bitset<4> rounded_corners = std::bitset<4>().reset();
+  std::bitset<4> chamfer_corners = std::bitset<4>().reset();
   float roundness = 0.5f; // 0.0 = sharp, 1.0 = fully rounded
   // A radius in pixels, which wins over roundness when set. roundness is a
   // fraction of the widget's short side, so one theme value is 8px on a row
@@ -292,6 +293,10 @@ struct HasRoundedCorners : BaseComponent {
   }
   auto &set_segments(int s) {
     segments = s;
+    return *this;
+  }
+  auto &set_chamfer(const std::bitset<4> &input) {
+    chamfer_corners = input;
     return *this;
   }
   auto &get() const { return rounded_corners; }

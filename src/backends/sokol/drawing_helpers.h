@@ -142,9 +142,10 @@ inline void draw_rectangle_outline(const RectangleType rect,
 inline void draw_rectangle_rounded(
     const RectangleType rect, const float roundness, const int segments,
     const Color color,
-    const std::bitset<4> corners = std::bitset<4>().reset()) {
+    const std::bitset<4> corners = std::bitset<4>().reset(),
+    const std::bitset<4> chamfer = std::bitset<4>().reset()) {
   capture::record("rectangle_rounded", rect, color);
-  if (corners.none() || roundness <= 0.0f) {
+  if ((corners | chamfer).none() || roundness <= 0.0f) {
     draw_rectangle(rect, color);
     return;
   }
@@ -161,10 +162,11 @@ inline void draw_rectangle_rounded(
   const float PI_HALF = PI * 0.5f;
 
   // Bit layout: 3=TL, 2=TR, 1=BL, 0=BR
-  float rTL = corners.test(3) ? r : 0.0f;
-  float rTR = corners.test(2) ? r : 0.0f;
-  float rBL = corners.test(1) ? r : 0.0f;
-  float rBR = corners.test(0) ? r : 0.0f;
+  const std::bitset<4> styled = corners | chamfer;
+  float rTL = styled.test(3) ? r : 0.0f;
+  float rTR = styled.test(2) ? r : 0.0f;
+  float rBL = styled.test(1) ? r : 0.0f;
+  float rBR = styled.test(0) ? r : 0.0f;
 
   // Center of the rectangle for triangle fan
   float cx = x + w * 0.5f;
@@ -174,18 +176,19 @@ inline void draw_rectangle_rounded(
 
   // Helper: emit a corner arc as triangles from center
   auto emit_corner_arc = [&](float cornerX, float cornerY, float radius,
-                             float startAngle) {
+                             float startAngle, bool cut = false) {
     if (radius <= 0.0f) {
       // Emit nothing: the edge triangles already reach the corner point, so
       // the centre fan tiles it. A 2-vertex triangle here drew a diagonal
       // slice on any mixed round/sharp config.
       return;
     }
-    for (int i = 0; i < segs; i++) {
+    const int count = cut ? 1 : segs;
+    for (int i = 0; i < count; i++) {
       float a0 = startAngle +
-                 PI_HALF * static_cast<float>(i) / static_cast<float>(segs);
+                 PI_HALF * static_cast<float>(i) / static_cast<float>(count);
       float a1 = startAngle +
-                 PI_HALF * static_cast<float>(i + 1) / static_cast<float>(segs);
+                 PI_HALF * static_cast<float>(i + 1) / static_cast<float>(count);
       sgl_begin_triangles();
       metal_draw_detail::set_color(color);
       sgl_v2f(cx, cy);
@@ -197,7 +200,7 @@ inline void draw_rectangle_rounded(
 
   // Build rounded rect as triangles from center to perimeter
   // Top-left corner arc (center at x+rTL, y+rTL), angles PI to 1.5*PI
-  emit_corner_arc(x + rTL, y + rTL, rTL, PI);
+  emit_corner_arc(x + rTL, y + rTL, rTL, PI, chamfer.test(3));
 
   // Top edge: TL arc end -> TR arc start
   sgl_begin_triangles();
@@ -208,7 +211,7 @@ inline void draw_rectangle_rounded(
   sgl_end();
 
   // Top-right corner arc (center at x+w-rTR, y+rTR), angles -PI/2 to 0
-  emit_corner_arc(x + w - rTR, y + rTR, rTR, -PI_HALF);
+  emit_corner_arc(x + w - rTR, y + rTR, rTR, -PI_HALF, chamfer.test(2));
 
   // Right edge: TR arc end -> BR arc start
   sgl_begin_triangles();
@@ -219,7 +222,7 @@ inline void draw_rectangle_rounded(
   sgl_end();
 
   // Bottom-right corner arc (center at x+w-rBR, y+h-rBR), angles 0 to PI/2
-  emit_corner_arc(x + w - rBR, y + h - rBR, rBR, 0.0f);
+  emit_corner_arc(x + w - rBR, y + h - rBR, rBR, 0.0f, chamfer.test(0));
 
   // Bottom edge: BR arc end -> BL arc start
   sgl_begin_triangles();
@@ -230,7 +233,7 @@ inline void draw_rectangle_rounded(
   sgl_end();
 
   // Bottom-left corner arc (center at x+rBL, y+h-rBL), angles PI/2 to PI
-  emit_corner_arc(x + rBL, y + h - rBL, rBL, PI_HALF);
+  emit_corner_arc(x + rBL, y + h - rBL, rBL, PI_HALF, chamfer.test(1));
 
   // Left edge: BL arc end -> TL arc start
   sgl_begin_triangles();
@@ -245,7 +248,9 @@ inline void
 draw_rectangle_rounded_rotated(const RectangleType rect, const float roundness,
                                const int segments, const Color color,
                                const std::bitset<4> corners,
-                               const float rotation) {
+                               const float rotation,
+                               const std::bitset<4> chamfer =
+                                   std::bitset<4>().reset()) {
   if (std::abs(rotation) >= 0.001f) {
     const float centerX = rect.x + rect.width * 0.5f;
     const float centerY = rect.y + rect.height * 0.5f;
@@ -253,19 +258,20 @@ draw_rectangle_rounded_rotated(const RectangleType rect, const float roundness,
     sgl_translate(centerX, centerY, 0.0f);
     sgl_rotate(sgl_rad(rotation), 0.0f, 0.0f, 1.0f);
     sgl_translate(-centerX, -centerY, 0.0f);
-    draw_rectangle_rounded(rect, roundness, segments, color, corners);
+    draw_rectangle_rounded(rect, roundness, segments, color, corners, chamfer);
     sgl_pop_matrix();
     return;
   }
-  draw_rectangle_rounded(rect, roundness, segments, color, corners);
+  draw_rectangle_rounded(rect, roundness, segments, color, corners, chamfer);
 }
 
 inline void draw_rectangle_rounded_lines(
     const RectangleType rect, const float roundness, const int segments,
     const Color color,
-    const std::bitset<4> corners = std::bitset<4>().reset()) {
+    const std::bitset<4> corners = std::bitset<4>().reset(),
+    const std::bitset<4> chamfer = std::bitset<4>().reset()) {
   capture::record("rectangle_rounded_lines", rect, color);
-  if (corners.none() || roundness <= 0.0f) {
+  if ((corners | chamfer).none() || roundness <= 0.0f) {
     draw_rectangle_outline(rect, color);
     return;
   }
@@ -281,10 +287,11 @@ inline void draw_rectangle_rounded_lines(
   const int segs = (segments > 0) ? segments : 8;
   const float PI_HALF = PI * 0.5f;
 
-  float rTL = corners.test(3) ? r : 0.0f;
-  float rTR = corners.test(2) ? r : 0.0f;
-  float rBL = corners.test(1) ? r : 0.0f;
-  float rBR = corners.test(0) ? r : 0.0f;
+  const std::bitset<4> styled = corners | chamfer;
+  float rTL = styled.test(3) ? r : 0.0f;
+  float rTR = styled.test(2) ? r : 0.0f;
+  float rBL = styled.test(1) ? r : 0.0f;
+  float rBR = styled.test(0) ? r : 0.0f;
 
   sgl_begin_line_strip();
   metal_draw_detail::set_color(color);
@@ -293,10 +300,10 @@ inline void draw_rectangle_rounded_lines(
   sgl_v2f(x + rTL, y);
   sgl_v2f(x + w - rTR, y);
 
-  // Top-right arc
-  for (int i = 0; i <= segs; i++) {
+  for (int i = 0; i <= (chamfer.test(2) ? 1 : segs); i++) {
     float a =
-        -PI_HALF + PI_HALF * static_cast<float>(i) / static_cast<float>(segs);
+        -PI_HALF + PI_HALF * static_cast<float>(i) /
+                       static_cast<float>(chamfer.test(2) ? 1 : segs);
     sgl_v2f(x + w - rTR + rTR * cosf(a), y + rTR + rTR * sinf(a));
   }
 
@@ -304,8 +311,9 @@ inline void draw_rectangle_rounded_lines(
   sgl_v2f(x + w, y + h - rBR);
 
   // Bottom-right arc
-  for (int i = 0; i <= segs; i++) {
-    float a = PI_HALF * static_cast<float>(i) / static_cast<float>(segs);
+  for (int i = 0; i <= (chamfer.test(0) ? 1 : segs); i++) {
+    float a = PI_HALF * static_cast<float>(i) /
+              static_cast<float>(chamfer.test(0) ? 1 : segs);
     sgl_v2f(x + w - rBR + rBR * cosf(a), y + h - rBR + rBR * sinf(a));
   }
 
@@ -313,9 +321,10 @@ inline void draw_rectangle_rounded_lines(
   sgl_v2f(x + rBL, y + h);
 
   // Bottom-left arc
-  for (int i = 0; i <= segs; i++) {
+  for (int i = 0; i <= (chamfer.test(1) ? 1 : segs); i++) {
     float a =
-        PI_HALF + PI_HALF * static_cast<float>(i) / static_cast<float>(segs);
+        PI_HALF + PI_HALF * static_cast<float>(i) /
+                      static_cast<float>(chamfer.test(1) ? 1 : segs);
     sgl_v2f(x + rBL + rBL * cosf(a), y + h - rBL + rBL * sinf(a));
   }
 
@@ -323,9 +332,10 @@ inline void draw_rectangle_rounded_lines(
   sgl_v2f(x, y + rTL);
 
   // Top-left arc
-  for (int i = 0; i <= segs; i++) {
+  for (int i = 0; i <= (chamfer.test(3) ? 1 : segs); i++) {
     float a = PI +
-              PI_HALF * static_cast<float>(i) / static_cast<float>(segs);
+              PI_HALF * static_cast<float>(i) /
+                  static_cast<float>(chamfer.test(3) ? 1 : segs);
     sgl_v2f(x + rTL + rTL * cosf(a), y + rTL + rTL * sinf(a));
   }
 

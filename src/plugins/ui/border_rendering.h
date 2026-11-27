@@ -12,6 +12,7 @@ enum class BorderEdge { Top, Right, Bottom, Left, All };
 
 inline void draw_uniform_border(RectangleType rect, float roundness, int segments,
                                 std::bitset<4> corners, float thickness, Color color,
+                                std::bitset<4> chamfer = std::bitset<4>().reset(),
                                 BorderEdge edge = BorderEdge::All) {
   const float shorter = std::min(rect.width, rect.height);
   if (shorter <= 0.f || thickness <= 0.f || color.a == 0) return;
@@ -28,7 +29,8 @@ inline void draw_uniform_border(RectangleType rect, float roundness, int segment
     draw_triangle(outer, previous_inner, inner, color);
   };
   for (int corner = 0; corner < 4; ++corner) {
-    const float r = corners.test(bits[corner]) ? radius : 0.f;
+    const bool cut = chamfer.test(bits[corner]);
+    const float r = (corners.test(bits[corner]) || cut) ? radius : 0.f;
     const float inner_radius = std::max(0.f, r - width);
     const bool right = corner < 2;
     const bool bottom = corner == 1 || corner == 2;
@@ -43,7 +45,7 @@ inline void draw_uniform_border(RectangleType rect, float roundness, int segment
       if (edge == BorderEdge::Top || edge == BorderEdge::Bottom) inner_center.x = center.x;
       else inner_center.y = center.y;
     }
-    const int count = r > 0.f ? steps : 1;
+    const int count = r > 0.f ? (cut ? 1 : steps) : 1;
     for (int step = 0; step <= count; ++step) {
       const float angle = (static_cast<float>(corner - 1) +
                            static_cast<float>(step) / count) * PI * 0.5f;

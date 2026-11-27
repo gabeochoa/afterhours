@@ -440,6 +440,7 @@ lighting_zones_test \
 	skeletal_test \
 	translation_test \
 	layout_inspector_test \
+	chamfer_corners_test \
 	letter_spacing_zero_test \
 	padding_empty_test \
 	mouse_pre_event_test
@@ -454,6 +455,7 @@ ALL_TESTS += image_metal_test
 ALL_TESTS += texture_usable_metal_test
 # Sokol is Metal here, so macOS-only; renders headless, no window.
 ALL_TESTS += sokol_blend_test
+ALL_TESTS += sokol_chamfer_corners_test
 ALL_TESTS += sokol_capture_test
 ALL_TESTS += sokol_geometry_test
 ALL_TESTS += sokol_rounded_outline_mask_test
@@ -582,6 +584,7 @@ RAYLIB_TESTS := \
 	styled_ellipsis_test \
 	theme_io_test \
 	tree_view_test \
+	chamfer_corners_test \
 	disclosure_test \
 	layout_inspector_test
 
@@ -712,11 +715,15 @@ $(OUT)/web_metal_symbols_test: web_metal_symbols_test.cpp web_sim/web_probe.cpp 
 	@echo "native: metal_* symbols referenced" >> $(OUT)/web_metal_symbols.audit
 	$(CXX) $(CXXFLAGS) -DWEB_METAL_AUDIT_PATH=\"$$(realpath $(OUT)/web_metal_symbols.audit)\" $(INCLUDES) $< -o $@
 
+$(OUT)/sokol_chamfer_corners_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_chamfer_corners_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_chamfer_corners_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 # The multi-TU sokol rules emit a .d covering only sokol_impl.cc, so header
 # edits rebuild nothing without an explicit prerequisite (stale-binary trap).
 $(OUT)/sokol_blend_test: ../src/backends/sokol/drawing_helpers.h
 $(OUT)/sokol_capture_test: ../src/backends/sokol/drawing_helpers.h ../src/capture.h ../src/graphics_common.h
 $(OUT)/sokol_geometry_test: ../src/backends/sokol/drawing_helpers.h
+$(OUT)/sokol_chamfer_corners_test: ../src/backends/sokol/drawing_helpers.h
 $(OUT)/sokol_rounded_outline_mask_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_rounded_outline_mask_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_rounded_outline_mask_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
