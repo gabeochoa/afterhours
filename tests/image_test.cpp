@@ -95,6 +95,27 @@ static void check_cpu() {
   check(!make_image(2, 2, Color{0, 0, 0, 0}, {.max_bytes = 15}),
         "make_image honors max_bytes");
 
+  auto drawn = make_image(4, 3, Color{0, 0, 0, 0});
+  check(drawn.has_value(), "make_image for draw_rectangle");
+  if (drawn) {
+    draw_rectangle(*drawn, RectangleType{1, 1, 2, 1}, Color{255, 0, 0, 255});
+    check(same(drawn->pixel(1, 1), Color{255, 0, 0, 255}),
+          "draw_rectangle fills inside pixels");
+    check(same(drawn->pixel(2, 1), Color{255, 0, 0, 255}),
+          "draw_rectangle fills the full width");
+    check(same(drawn->pixel(0, 1), Color{0, 0, 0, 0}),
+          "draw_rectangle leaves outside pixels alone");
+    draw_rectangle(*drawn, -1, -1, 3, 3, Color{0, 0, 255, 255});
+    check(same(drawn->pixel(0, 0), Color{0, 0, 255, 255}),
+          "draw_rectangle clips at the top-left edge");
+    check(same(drawn->pixel(1, 1), Color{0, 0, 255, 255}),
+          "draw_rectangle clipped rect overwrites in-bounds pixels");
+  }
+  Image truncated_image{2, 2, {1, 2, 3}};
+  draw_rectangle(truncated_image, 0, 0, 2, 2, Color{255, 255, 255, 255});
+  check(truncated_image.rgba.size() == 3,
+        "draw_rectangle rejects a truncated image without writing");
+
   auto encoded = made ? encode_image(*made) : std::nullopt;
   check(encoded && image_size(*encoded)->width == 2, "encode_image writes a PNG");
   auto roundtrip = encoded ? decode_image(*encoded) : std::nullopt;

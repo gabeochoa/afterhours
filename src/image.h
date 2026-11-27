@@ -1,6 +1,8 @@
 #pragma once
 
+#include <algorithm>
 #include <climits>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
@@ -138,6 +140,45 @@ inline std::optional<Image> make_image(int width, int height, Color color,
     image.rgba[i + 3] = color.a;
   }
   return image;
+}
+
+// CPU-side filled rectangle for procedural test cards and baked masks.
+// Clipped to the image; partially or fully off-image rects are safe.
+inline void draw_rectangle(Image &image, RectangleType rect, Color color) {
+  const std::size_t expected = static_cast<std::size_t>(std::max(0, image.width)) *
+                               static_cast<std::size_t>(std::max(0, image.height)) * 4;
+  if (image.width <= 0 || image.height <= 0 || image.rgba.size() < expected) {
+    log_warn("draw_rectangle: image is empty or truncated");
+    return;
+  }
+  const int x0 = std::max(0, static_cast<int>(std::floor(rect.x)));
+  const int y0 = std::max(0, static_cast<int>(std::floor(rect.y)));
+  const int x1 = std::min(image.width,
+                          static_cast<int>(std::ceil(rect.x + rect.width)));
+  const int y1 = std::min(image.height,
+                          static_cast<int>(std::ceil(rect.y + rect.height)));
+  for (int y = y0; y < y1; ++y) {
+    std::uint8_t *row = image.rgba.data() +
+                        (static_cast<std::size_t>(y) *
+                             static_cast<std::size_t>(image.width) +
+                         static_cast<std::size_t>(x0)) * 4;
+    for (int x = x0; x < x1; ++x) {
+      row[0] = color.r;
+      row[1] = color.g;
+      row[2] = color.b;
+      row[3] = color.a;
+      row += 4;
+    }
+  }
+}
+
+inline void draw_rectangle(Image &image, int x, int y, int width, int height,
+                           Color color) {
+  draw_rectangle(image,
+                 RectangleType{static_cast<float>(x), static_cast<float>(y),
+                               static_cast<float>(width),
+                               static_cast<float>(height)},
+                 color);
 }
 
 inline std::optional<std::vector<std::uint8_t>>
