@@ -298,8 +298,8 @@ inline float get_gamepad_axis(int id, int axis) {
 /// Set mouse position
 inline void set_mouse_position(float x, float y) {
   if (detail::mouse.active) {
-    detail::mouse.delta.x = x - detail::mouse.pos.x;
-    detail::mouse.delta.y = y - detail::mouse.pos.y;
+    detail::mouse.delta.x += x - detail::mouse.pos.x;
+    detail::mouse.delta.y += y - detail::mouse.pos.y;
   } else {
     // First synthetic position has no previous point to diff against.
     detail::mouse.delta = {};
@@ -323,12 +323,13 @@ inline void get_mouse_position(float &x, float &y) {
 /// Get mouse position as Position
 inline Position get_mouse_position() { return detail::mouse.pos; }
 
-/// Consume synthetic mouse delta (returns and clears it)
-inline Position consume_mouse_delta() {
-  Position d = detail::mouse.delta;
-  detail::mouse.delta = {};
-  return d;
-}
+/// Read the synthetic mouse delta. Stable within a frame, like the
+/// wheel and like raylib's GetMouseDelta: every reader in the frame sees
+/// the same value, and reset_frame() is what clears it. The name is kept
+/// for existing callers.
+inline Position consume_mouse_delta() { return detail::mouse.delta; }
+
+inline Position get_mouse_delta() { return detail::mouse.delta; }
 
 /// Schedule a click at center of rectangle
 inline void schedule_click_at(float x, float y, float w, float h) {

@@ -348,11 +348,13 @@ template <typename BackendFn> inline int get_key_pressed(BackendFn backend_fn) {
   return backend_fn();
 }
 
-// Get mouse position (wraps backend call)
+// Get mouse position (wraps backend call). In test mode the injector
+// always answers, active or not: falling through to the OS mouse would
+// let a trackpad move move the cursor a script is asserting on.
 template <typename Vec2, typename BackendFn>
 inline Vec2 get_mouse_position(BackendFn backend_fn) {
   auto &m = input_injector::detail::mouse;
-  if (detail::test_mode && m.active) {
+  if (detail::test_mode) {
     return Vec2{m.pos.x, m.pos.y};
   }
   return backend_fn();
@@ -403,6 +405,20 @@ inline bool is_mouse_button_released(int button, BackendFn backend_fn) {
     return false;
   }
   return backend_fn(button);
+}
+
+template <typename BackendFn>
+inline bool is_mouse_button_up(int button, BackendFn backend_fn) {
+  if (detail::test_mode)
+    return !is_mouse_button_down(button, backend_fn);
+  return backend_fn(button);
+}
+
+template <typename BackendFn>
+inline float get_mouse_wheel_move(BackendFn backend_fn) {
+  if (detail::test_mode)
+    return input_injector::consume_wheel().y;
+  return backend_fn();
 }
 
 } // namespace test_input

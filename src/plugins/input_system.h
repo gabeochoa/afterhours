@@ -57,8 +57,7 @@ struct input : developer::Plugin {
 
     static MousePosition get_mouse_position() {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
-        if (testing::test_input::detail::test_mode &&
-            testing::input_injector::detail::mouse.active) {
+        if (testing::test_input::detail::test_mode) {
             auto &m = testing::input_injector::detail::mouse;
             return {m.pos.x, m.pos.y};
         }
@@ -87,28 +86,34 @@ struct input : developer::Plugin {
     }
     static MousePosition get_mouse_delta() {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
-        if (testing::test_input::detail::test_mode &&
-            testing::input_injector::detail::mouse.active) {
-            auto d = testing::input_injector::consume_mouse_delta();
+        if (testing::test_input::detail::test_mode) {
+            auto d = testing::input_injector::get_mouse_delta();
             return {d.x, d.y};
         }
 #endif
         raylib::Vector2 v = raylib::GetMouseDelta();
         return {v.x, v.y};
     }
+
     static bool is_mouse_button_up(const MouseButton button) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        return testing::test_input::is_mouse_button_up(
+            button, [](int b) { return raylib::IsMouseButtonUp(b); });
+#else
         return raylib::IsMouseButtonUp(button);
+#endif
     }
+
     static bool is_mouse_button_down(const MouseButton button) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
-        if (testing::test_input::detail::test_mode &&
-            testing::input_injector::detail::mouse.active) {
+        if (testing::test_input::detail::test_mode) {
             if (button == 0)
                 return testing::input_injector::is_mouse_button_down();
             if (button == 1)
                 return testing::input_injector::is_mouse_right_button_down();
             if (button == 2)
                 return testing::input_injector::is_mouse_middle_button_down();
+            return false;
         }
 #endif
         return raylib::IsMouseButtonDown(button);
@@ -597,9 +602,8 @@ struct input : developer::Plugin {
     }
     static MousePosition get_mouse_delta() {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
-        if (testing::test_input::detail::test_mode &&
-            testing::input_injector::detail::mouse.active) {
-            auto d = testing::input_injector::consume_mouse_delta();
+        if (testing::test_input::detail::test_mode) {
+            auto d = testing::input_injector::get_mouse_delta();
             return {d.x, d.y};
         }
 #endif
