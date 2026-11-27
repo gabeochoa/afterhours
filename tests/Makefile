@@ -268,6 +268,7 @@ lighting_zones_test \
 	sound_playback_test \
 	headless_runconfig_test \
 	window_state_runconfig_test \
+	game_runner_test \
 	harness_spellings_test \
 	fit_content_test \
 	label_inset_test \
@@ -738,6 +739,10 @@ $(OUT)/sokol_multires_capture_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_headless_run_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_headless_run_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_headless_run_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/game_runner_test: ../examples/web/sokol_impl.cc
+$(OUT)/game_runner_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/game_runner_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/game_runner_test: ../src/game.h
 $(OUT)/sokol_lazy_gl_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_lazy_gl_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_lazy_gl_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
