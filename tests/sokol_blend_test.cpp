@@ -202,6 +202,57 @@ int main() {
 
   g::shutdown();
 
+  // Separate-factor mapping is pure: it must hold before any GPU exists, so
+  // a caller can rely on the desc without a device in hand.
+  {
+    const auto factor = afterhours::graphics::metal_detail::to_sg_factor;
+    check(factor(afterhours::blend::Factor::Zero) == SG_BLENDFACTOR_ZERO,
+          "zero maps to SG_BLENDFACTOR_ZERO");
+    check(factor(afterhours::blend::Factor::One) == SG_BLENDFACTOR_ONE,
+          "one maps to SG_BLENDFACTOR_ONE");
+    check(factor(afterhours::blend::Factor::SrcAlpha) ==
+              SG_BLENDFACTOR_SRC_ALPHA,
+          "src alpha maps");
+    check(factor(afterhours::blend::Factor::OneMinusSrcAlpha) ==
+              SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+          "one minus src alpha maps");
+    check(factor(afterhours::blend::Factor::DstColor) ==
+              SG_BLENDFACTOR_DST_COLOR,
+          "dst color maps");
+    check(factor(afterhours::blend::Factor::DstAlpha) ==
+              SG_BLENDFACTOR_DST_ALPHA,
+          "dst alpha maps");
+    check(factor(afterhours::blend::Factor::SrcColor) ==
+              SG_BLENDFACTOR_SRC_COLOR,
+          "src color maps");
+    check(factor(afterhours::blend::Factor::SrcAlphaSaturate) ==
+              SG_BLENDFACTOR_SRC_ALPHA_SATURATED,
+          "src alpha saturate maps");
+
+    const auto equation = afterhours::graphics::metal_detail::to_sg_equation;
+    check(equation(afterhours::blend::Equation::Add) == SG_BLENDOP_ADD,
+          "add maps");
+    check(equation(afterhours::blend::Equation::Subtract) ==
+              SG_BLENDOP_SUBTRACT,
+          "subtract maps");
+    check(equation(afterhours::blend::Equation::ReverseSubtract) ==
+              SG_BLENDOP_REVERSE_SUBTRACT,
+          "reverse subtract maps");
+    check(equation(afterhours::blend::Equation::Min) == SG_BLENDOP_MIN,
+          "min maps");
+    check(equation(afterhours::blend::Equation::Max) == SG_BLENDOP_MAX,
+          "max maps");
+
+    const auto keep = afterhours::blend::Separate::multiply_preserving_alpha();
+    check(afterhours::graphics::metal_detail::separate_key(keep) ==
+              afterhours::graphics::metal_detail::separate_key(keep),
+          "separate key is stable");
+    check(afterhours::graphics::metal_detail::separate_key(keep) !=
+              afterhours::graphics::metal_detail::separate_key(
+                  afterhours::blend::Separate{}),
+          "separate key distinguishes settings");
+  }
+
   // The D19 hidpi assertions live in sokol_hidpi_test: they need their own
   // process, because a second init() after this shutdown yields a render
   // target that silently never receives draws.

@@ -428,7 +428,68 @@ inline void draw_ring(float centerX, float centerY, float innerRadius,
 // logical coords by the supersample factor to match the render texture.
 // Skips the call when the mode is already active: rlSetBlendMode flushes the
 // GPU batch whenever it differs.
+inline int to_rl_factor(blend::Factor factor) {
+  switch (factor) {
+  case blend::Factor::Zero:
+    return RL_ZERO;
+  case blend::Factor::One:
+    return RL_ONE;
+  case blend::Factor::SrcColor:
+    return RL_SRC_COLOR;
+  case blend::Factor::OneMinusSrcColor:
+    return RL_ONE_MINUS_SRC_COLOR;
+  case blend::Factor::SrcAlpha:
+    return RL_SRC_ALPHA;
+  case blend::Factor::OneMinusSrcAlpha:
+    return RL_ONE_MINUS_SRC_ALPHA;
+  case blend::Factor::DstColor:
+    return RL_DST_COLOR;
+  case blend::Factor::OneMinusDstColor:
+    return RL_ONE_MINUS_DST_COLOR;
+  case blend::Factor::DstAlpha:
+    return RL_DST_ALPHA;
+  case blend::Factor::OneMinusDstAlpha:
+    return RL_ONE_MINUS_DST_ALPHA;
+  case blend::Factor::SrcAlphaSaturate:
+    return RL_SRC_ALPHA_SATURATE;
+  }
+  return RL_ONE;
+}
+
+inline int to_rl_equation(blend::Equation equation) {
+  switch (equation) {
+  case blend::Equation::Add:
+    return RL_FUNC_ADD;
+  case blend::Equation::Subtract:
+    return RL_FUNC_SUBTRACT;
+  case blend::Equation::ReverseSubtract:
+    return RL_FUNC_REVERSE_SUBTRACT;
+  case blend::Equation::Min:
+    return RL_MIN;
+  case blend::Equation::Max:
+    return RL_MAX;
+  }
+  return RL_FUNC_ADD;
+}
+
+inline void apply_blend_separate(const blend::Separate &separate) {
+  raylib::rlSetBlendFactorsSeparate(
+      to_rl_factor(separate.src_rgb), to_rl_factor(separate.dst_rgb),
+      to_rl_factor(separate.src_alpha), to_rl_factor(separate.dst_alpha),
+      to_rl_equation(separate.rgb_eq), to_rl_equation(separate.alpha_eq));
+  raylib::rlSetBlendMode(raylib::RL_BLEND_CUSTOM_SEPARATE);
+}
+
 inline void set_blend_mode(blend::Mode mode) {
+  if (mode == blend::Mode::CustomSeparate) {
+    if (mode == blend::detail::current_mode())
+      return;
+    const blend::Separate separate = blend::detail::current_separate();
+    blend::detail::current_mode() = mode;
+    blend::detail::transition_count()++;
+    apply_blend_separate(separate);
+    return;
+  }
   if (mode == blend::detail::current_mode())
     return;
   blend::detail::current_mode() = mode;
@@ -446,18 +507,56 @@ inline void set_blend_mode(blend::Mode mode) {
   case blend::Mode::AlphaPremultiply:
     raylib::rlSetBlendMode(raylib::RL_BLEND_ALPHA_PREMULTIPLY);
     break;
+  case blend::Mode::CustomSeparate:
+    break;
   }
+}
+
+inline void set_blend_mode_separate(const blend::Separate &separate) {
+  if (blend::detail::current_mode() == blend::Mode::CustomSeparate &&
+      blend::detail::current_separate() == separate)
+    return;
+  blend::detail::current_separate() = separate;
+  blend::detail::current_mode() = blend::Mode::CustomSeparate;
+  blend::detail::transition_count()++;
+  apply_blend_separate(separate);
 }
 
 // Restores the previous mode, so a scope inside a matching one is free.
 struct blend_scope {
   blend::Mode previous;
-  explicit blend_scope(blend::Mode mode) : previous(blend::current()) {
+  blend::Separate previous_separate;
+  explicit blend_scope(blend::Mode mode)
+      : previous(blend::current()),
+        previous_separate(blend::current_separate()) {
     set_blend_mode(mode);
   }
-  ~blend_scope() { set_blend_mode(previous); }
+  ~blend_scope() {
+    if (previous == blend::Mode::CustomSeparate)
+      set_blend_mode_separate(previous_separate);
+    else
+      set_blend_mode(previous);
+  }
   blend_scope(const blend_scope &) = delete;
   blend_scope &operator=(const blend_scope &) = delete;
+};
+
+struct blend_separate_scope {
+  blend::Mode previous;
+  blend::Separate previous_separate;
+  explicit blend_separate_scope(const blend::Separate &separate)
+      : previous(blend::current()),
+        previous_separate(blend::current_separate()) {
+    set_blend_mode_separate(separate);
+  }
+  ~blend_separate_scope() {
+    if (previous == blend::Mode::CustomSeparate)
+      set_blend_mode_separate(previous_separate);
+    else
+      set_blend_mode(previous);
+  }
+  blend_separate_scope(const blend_separate_scope &) = delete;
+  blend_separate_scope &operator=(const blend_separate_scope &) = delete;
 };
 
 inline void begin_shader_mode(graphics::ShaderType &shader) { graphics::begin_shader_mode(shader); }

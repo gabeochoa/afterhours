@@ -554,7 +554,22 @@ inline void draw_ring(float centerX, float centerY, float innerRadius,
 
 // sokol has no rlSetBlendMode, so each mode is its own pipeline. Skipped when
 // already active: a pipeline swap breaks the batch.
+inline void apply_blend_separate(const blend::Separate &separate) {
+  graphics::metal_detail::ensure_sokol_gl_and_fonts();
+  sgl_load_pipeline(
+      graphics::metal_detail::separate_pipeline(separate));
+}
+
 inline void set_blend_mode(blend::Mode mode) {
+  if (mode == blend::Mode::CustomSeparate) {
+    if (mode == blend::detail::current_mode())
+      return;
+    const blend::Separate separate = blend::detail::current_separate();
+    blend::detail::current_mode() = mode;
+    blend::detail::transition_count()++;
+    apply_blend_separate(separate);
+    return;
+  }
   graphics::metal_detail::ensure_sokol_gl_and_fonts();
   if (mode == blend::detail::current_mode())
     return;
@@ -573,17 +588,55 @@ inline void set_blend_mode(blend::Mode mode) {
   case blend::Mode::AlphaPremultiply:
     sgl_load_pipeline(graphics::metal_detail::g_blend_pip_premultiplied);
     break;
+  case blend::Mode::CustomSeparate:
+    break;
   }
+}
+
+inline void set_blend_mode_separate(const blend::Separate &separate) {
+  if (blend::detail::current_mode() == blend::Mode::CustomSeparate &&
+      blend::detail::current_separate() == separate)
+    return;
+  blend::detail::current_separate() = separate;
+  blend::detail::current_mode() = blend::Mode::CustomSeparate;
+  blend::detail::transition_count()++;
+  apply_blend_separate(separate);
 }
 
 struct blend_scope {
   blend::Mode previous;
-  explicit blend_scope(blend::Mode mode) : previous(blend::current()) {
+  blend::Separate previous_separate;
+  explicit blend_scope(blend::Mode mode)
+      : previous(blend::current()),
+        previous_separate(blend::current_separate()) {
     set_blend_mode(mode);
   }
-  ~blend_scope() { set_blend_mode(previous); }
+  ~blend_scope() {
+    if (previous == blend::Mode::CustomSeparate)
+      set_blend_mode_separate(previous_separate);
+    else
+      set_blend_mode(previous);
+  }
   blend_scope(const blend_scope &) = delete;
   blend_scope &operator=(const blend_scope &) = delete;
+};
+
+struct blend_separate_scope {
+  blend::Mode previous;
+  blend::Separate previous_separate;
+  explicit blend_separate_scope(const blend::Separate &separate)
+      : previous(blend::current()),
+        previous_separate(blend::current_separate()) {
+    set_blend_mode_separate(separate);
+  }
+  ~blend_separate_scope() {
+    if (previous == blend::Mode::CustomSeparate)
+      set_blend_mode_separate(previous_separate);
+    else
+      set_blend_mode(previous);
+  }
+  blend_separate_scope(const blend_separate_scope &) = delete;
+  blend_separate_scope &operator=(const blend_separate_scope &) = delete;
 };
 
 inline void begin_shader_mode(graphics::ShaderType &shader) { graphics::begin_shader_mode(shader); }
