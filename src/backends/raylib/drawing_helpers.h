@@ -186,7 +186,7 @@ inline void draw_text_ex(const raylib::Font font, const char *content,
                     content);
   if (!font.glyphs || !font.recs || font.glyphCount <= 0)
     return;
-  if (font.texture.id == 0 && !font_gl_ready())
+  if (font.texture.id == 0)
     return;
   warn_on_missing_glyphs(font, content);
   std::string shown;
@@ -198,7 +198,7 @@ inline void draw_text_ex(const raylib::Font font, const char *content,
     float x = position.x;
     for (const FaceRun &run : runs) {
       if (!run.face.glyphs || !run.face.recs || run.face.glyphCount <= 0 ||
-          (run.face.texture.id == 0 && !font_gl_ready())) {
+          run.face.texture.id == 0) {
         x += estimate_text_size(run.text.c_str(), font_size).x + spacing;
         continue;
       }

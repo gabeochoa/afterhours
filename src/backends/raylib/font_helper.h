@@ -306,14 +306,15 @@ inline void prepare_font_texture(
 }
 
 inline raylib::Font
-build_font_atlas(const char *file, int px, const int *codepoints, int count,
-                 const FontAtlasConfig &atlas_config =
-                     default_font_atlas_config()) {
+build_font_atlas_from_bytes(const unsigned char *data, int data_size, int px,
+                            const int *codepoints, int count, const char *what,
+                            std::vector<int> &unpacked,
+                            const FontAtlasConfig &atlas_config =
+                                default_font_atlas_config()) {
   raylib::Font font{};
-  int data_size = 0;
-  unsigned char *data = raylib::LoadFileData(file, &data_size);
+  unpacked.clear();
   if (!data || data_size <= 0) {
-    log_error("build_font_atlas: could not read '{}'", file);
+    log_error("build_font_atlas: no data from '{}'", what ? what : "");
     return font;
   }
   font.baseSize = px;
@@ -331,18 +332,35 @@ build_font_atlas(const char *file, int px, const int *codepoints, int count,
                                      raylib::FONT_DEFAULT);
 #endif
   if (!font.glyphs) {
-    log_error("build_font_atlas: no glyph data from '{}'", file);
-    raylib::UnloadFileData(data);
+    log_error("build_font_atlas: no glyph data from '{}'", what ? what : "");
     return raylib::Font{};
   }
   raylib::Image atlas = raylib::GenImageFontAtlas(
       font.glyphs, &font.recs, font.glyphCount, px, atlas_config.padding,
       static_cast<int>(atlas_config.packer));
-  const std::vector<int> unpacked = find_unpacked_glyphs(
-      font.glyphs, font.recs, font.glyphCount, atlas, atlas_config.padding);
+  unpacked = find_unpacked_glyphs(font.glyphs, font.recs, font.glyphCount,
+                                  atlas, atlas_config.padding);
   font.texture = raylib::LoadTextureFromImage(atlas);
   raylib::UnloadImage(atlas);
+  return font;
+}
+
+inline raylib::Font
+build_font_atlas(const char *file, int px, const int *codepoints, int count,
+                 const FontAtlasConfig &atlas_config =
+                     default_font_atlas_config()) {
+  int data_size = 0;
+  unsigned char *data = raylib::LoadFileData(file, &data_size);
+  if (!data || data_size <= 0) {
+    log_error("build_font_atlas: could not read '{}'", file);
+    return raylib::Font{};
+  }
+  std::vector<int> unpacked;
+  raylib::Font font = build_font_atlas_from_bytes(
+      data, data_size, px, codepoints, count, file, unpacked, atlas_config);
   raylib::UnloadFileData(data);
+  if (!font.glyphs)
+    return font;
   record_font_coverage(font, file);
   report_glyph_packing_failures(font, file, unpacked);
   return font;
@@ -400,6 +418,17 @@ inline raylib::Font load_font_from_memory(const unsigned char *data, int size,
   if (font.glyphCount <= 0) {
     log_warn("Failed to load font from memory: {}", name ? name : "");
     return font;
+  }
+  // Glyphs but no texture is the headless case, and it draws nothing.
+  if (font.texture.id == 0 && font_gl_ready()) {
+    std::vector<int> unpacked;
+    raylib::Font rebuilt = build_font_atlas_from_bytes(
+        data, size, px, cps.data(), static_cast<int>(cps.size()),
+        name ? name : "", unpacked);
+    if (rebuilt.glyphs && rebuilt.texture.id != 0) {
+      font = rebuilt;
+      report_glyph_packing_failures(font, name ? name : "", unpacked);
+    }
   }
   prepare_font_texture(font);
   font_coverage::Ranges ranges;
