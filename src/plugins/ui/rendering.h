@@ -390,6 +390,18 @@ std::optional<FocusPaint> prepare_focus_paint(const UIContext<InputAction> &cont
       widget = detail::apply_ancestor_transform(entity, widget);
       pivot = {widget.x + widget.width * .5f, widget.y + widget.height * .5f};
     }
+    RectangleType base = cmp.rect();
+    if (entity.has<HasUIModifiers>())
+      base = entity.get<HasUIModifiers>().apply_modifier(base);
+    const auto world = detail::resolve_world_transform(entity, base);
+    if (world.ancestor_rotated) {
+      FocusRing adjusted = *ring;
+      adjusted.rect.x += world.rot_center.x - (widget.x + widget.width * .5f);
+      adjusted.rect.y += world.rot_center.y - (widget.y + widget.height * .5f);
+      return FocusPaint{adjusted, entity.id, i - 1, cmd.layer, world.rotation,
+                        world.rot_center,
+                        has_clip ? clip : std::optional<RectangleType>{}};
+    }
     return FocusPaint{*ring, entity.id, i - 1, cmd.layer,
                       entity.has<HasUIModifiers>() ? entity.get<HasUIModifiers>().rotation : 0.f,
                       pivot,
@@ -1716,6 +1728,53 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
   }
 };
 
+inline unsigned char glow_layer_alpha(unsigned char base_a, float fall,
+                                     int layers) {
+  return static_cast<unsigned char>(
+      std::min(255.f, static_cast<float>(base_a) * (fall + 0.08f) * 2.f /
+                          static_cast<float>(layers)));
+}
+
+// One glow-layer schedule shared by the immediate and batched renderers:
+// layer count, spread and per-layer alpha. Callers only choose the sink.
+template <typename Fn>
+void for_each_glow_layer(const Glow &glow, RectangleType draw_rect,
+                         float effective_opacity, Fn &&fn) {
+  if (glow.radius <= 0.f || glow.color.a == 0)
+    return;
+  Color base = glow.color;
+  if (effective_opacity < 1.0f)
+    base.a = static_cast<unsigned char>(base.a * effective_opacity);
+  const int layers =
+      std::max(4, std::min(static_cast<int>(glow.radius / 2.f), 10));
+  for (int i = layers; i >= 1; --i) {
+    const float t = static_cast<float>(i) / static_cast<float>(layers);
+    const float spread = glow.radius * t;
+    const float fall = (1.f - t) * (1.f - t);
+    Color layer = base;
+    layer.a = glow_layer_alpha(base.a, fall, layers);
+    fn(RectangleType{draw_rect.x - spread, draw_rect.y - spread,
+                     draw_rect.width + spread * 2.f,
+                     draw_rect.height + spread * 2.f},
+       layer);
+  }
+}
+
+inline void draw_radial_glow(Vector2Type center, float radius_x,
+                             float radius_y, Color color, int rings = 10) {
+  if (radius_x <= 0.f || radius_y <= 0.f || color.a == 0)
+    return;
+  rings = std::max(1, rings);
+  for (int i = rings; i >= 1; --i) {
+    const float frac = static_cast<float>(i) / static_cast<float>(rings);
+    const float fall = (1.f - frac) * (1.f - frac);
+    Color layer = color;
+    layer.a = glow_layer_alpha(color.a, fall, rings);
+    draw_ellipse(static_cast<int>(center.x), static_cast<int>(center.y),
+                 radius_x * frac, radius_y * frac, layer);
+  }
+}
+
 template <typename InputAction>
 struct RenderImm : System<UIContext<InputAction>, FontManager> {
   RenderImm() : System<UIContext<InputAction>, FontManager>() {
@@ -1776,6 +1835,25 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         }
       }
     }
+  }
+
+  // Rotation is already applied by render_me's push_rotation.
+  void render_glow(const Entity &entity, RectangleType draw_rect,
+                   const std::bitset<4> &corner_settings,
+                   float effective_opacity, float roundness = 0.5f,
+                   int segments = 8) {
+    if (!entity.has<HasGlow>())
+      return;
+    for_each_glow_layer(entity.get<HasGlow>().glow, draw_rect,
+                        effective_opacity,
+                        [&](RectangleType rect, Color layer) {
+                          if (corner_settings.any()) {
+                            draw_rectangle_rounded(rect, roundness, segments,
+                                                   layer, corner_settings);
+                          } else {
+                            draw_rectangle(rect, layer);
+                          }
+                        });
   }
 
   void render_nine_slice(const Entity &entity, RectangleType draw_rect,
@@ -1910,13 +1988,9 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         cmp.rect(), cmp.resolved_scaling_mode, context.theme.ui_scale);
     if (entity.has<HasUIModifiers>())
       draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
-    draw_rect = detail::apply_ancestor_transform(entity, draw_rect);
-
-    // Get rotation from modifiers (applied separately since rectangles rotate
-    // around center)
-    float rotation = entity.has<HasUIModifiers>()
-                         ? entity.get<HasUIModifiers>().rotation
-                         : 0.0f;
+    const auto world = detail::resolve_world_transform(entity, draw_rect);
+    draw_rect = world.rect;
+    float rotation = world.rotation;
 
     auto corner_settings = entity.has<HasRoundedCorners>()
                                ? entity.get<HasRoundedCorners>().get()
@@ -1930,10 +2004,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                        ? entity.get<HasRoundedCorners>().segments
                        : 8;
 
-    const Vector2Type rot_center = entity.has<HasUIModifiers>()
-        ? entity.get<HasUIModifiers>().rotation_center(draw_rect)
-        : Vector2Type{draw_rect.x + draw_rect.width / 2.0f,
-                      draw_rect.y + draw_rect.height / 2.0f};
+    const Vector2Type rot_center = world.rot_center;
     float centerX = rot_center.x;
     float centerY = rot_center.y;
     push_rotation(centerX, centerY, rotation);
@@ -1941,6 +2012,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     // Draw shadow first (behind the element)
     render_shadow(entity, draw_rect, corner_settings, effective_opacity,
                   roundness, segments);
+    render_glow(entity, draw_rect, corner_settings, effective_opacity,
+                roundness, segments);
 
     // Custom draw (behind): drawn before the widget's own fill.
     if (entity.has<HasOnDraw>() && entity.get<HasOnDraw>().bg)
@@ -2419,6 +2492,28 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     }
   }
 
+  void collect_glow(RenderCommandBuffer &buffer, const Entity &entity,
+                    RectangleType draw_rect,
+                    const std::bitset<4> &corner_settings,
+                    float effective_opacity, int layer,
+                    float roundness = 0.5f, int segments = 8,
+                    float rotation = 0.f) {
+    if (!entity.has<HasGlow>())
+      return;
+    for_each_glow_layer(entity.get<HasGlow>().glow, draw_rect,
+                        effective_opacity,
+                        [&](RectangleType rect, Color lc) {
+                          if (corner_settings.any()) {
+                            buffer.add_rounded_rectangle(
+                                rect, lc, roundness, segments, corner_settings,
+                                layer, entity.id, rotation);
+                          } else {
+                            buffer.add_rectangle(rect, lc, layer, entity.id,
+                                                 rotation);
+                          }
+                        });
+  }
+
   void collect_nine_slice(RenderCommandBuffer &buffer, const Entity &entity,
                           RectangleType draw_rect, float effective_opacity,
                           int layer) {
@@ -2553,13 +2648,11 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         cmp.rect(), cmp.resolved_scaling_mode, context.theme.ui_scale);
     if (entity.has<HasUIModifiers>())
       draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
-    draw_rect = detail::apply_ancestor_transform(entity, draw_rect);
-
-    // Get rotation from modifiers (applied separately since rectangles rotate
-    // around center)
-    float rotation = entity.has<HasUIModifiers>()
-                         ? entity.get<HasUIModifiers>().rotation
-                         : 0.0f;
+    const auto world = detail::resolve_world_transform(entity, draw_rect);
+    draw_rect = world.rect;
+    float rotation = world.rotation;
+    const float world_center_x = world.rot_center.x;
+    const float world_center_y = world.rot_center.y;
 
     auto corner_settings = entity.has<HasRoundedCorners>()
                                ? entity.get<HasRoundedCorners>().get()
@@ -2576,6 +2669,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     // Shadow first
     collect_shadow(buffer, entity, draw_rect, corner_settings,
                    effective_opacity, layer, roundness, segments);
+    collect_glow(buffer, entity, draw_rect, corner_settings,
+                 effective_opacity, layer, roundness, segments, rotation);
 
     // Custom draw (behind): enqueued before the fill so it renders under the
     // widget; the fn pointer is stable on the HasOnDraw component for the frame.
@@ -2607,7 +2702,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       if (col.a > 0) {
         buffer.add_rounded_rectangle(
             detail::fill_rect_for(entity, draw_rect), col, roundness, segments,
-            corner_settings, layer, entity.id, rotation);
+            corner_settings, layer, entity.id, rotation, world_center_x,
+            world_center_y);
       }
     }
 
@@ -2818,10 +2914,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         label_rect.y += label_inset.y;
         label_rect.width = std::max(0.f, label_rect.width - 2.f * label_inset.x);
         label_rect.height = std::max(0.f, label_rect.height - 2.f * label_inset.y);
-        const Vector2Type rot_center = entity.has<HasUIModifiers>()
-            ? entity.get<HasUIModifiers>().rotation_center(draw_rect)
-            : Vector2Type{draw_rect.x + draw_rect.width / 2.0f,
-                          draw_rect.y + draw_rect.height / 2.0f};
+        const Vector2Type rot_center{world_center_x, world_center_y};
         float centerX = rot_center.x;
         float centerY = rot_center.y;
 
@@ -3048,7 +3141,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       // Honor with_opacity like the HasImage branch below (and the direct
       // render path); previously HasTexture ignored it in the buffered pass.
       const Color tex_col = detail::resolve_image_tint(entity, effective_opacity);
-      buffer.add_image(dest, src, texture.texture, tex_col, layer, entity.id);
+      buffer.add_image(dest, src, texture.texture, tex_col, layer, entity.id,
+                       -1, rotation, world_center_x, world_center_y);
     } else if (entity.has<ui::HasImage>()) {
       const ui::HasImage &img = entity.get<ui::HasImage>();
       texture_manager::Rectangle src =
@@ -3064,7 +3158,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
       RectangleType dest = {location.x, location.y, size.x, size.y};
       buffer.add_image(dest, src, img.texture, img_col, layer, entity.id,
-                       img.filter.value_or(-1));
+                       img.filter.value_or(-1), rotation, world_center_x,
+                       world_center_y);
     }
 
     // Custom draw (on top): enqueued after all of the widget's own primitives.

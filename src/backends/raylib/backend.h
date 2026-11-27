@@ -11,6 +11,7 @@
 
 #include "../../file_drop.h"
 #include "../../graphics_common.h"
+#include "../../window_events.h"
 #include "headless.h"
 #include "windowed.h"
 
@@ -89,7 +90,32 @@ inline bool host_input_activity() {
   return active;
 }
 
+inline void poll_window_events() {
+  using namespace window_events;
+  static float last_dpi = 0.f;
+  static bool was_occluded = false;
+  if (!raylib::IsWindowReady())
+    return;
+  const auto dpi = raylib::GetWindowScaleDPI();
+  const float scale = dpi.x;
+  const bool occ = raylib::IsWindowHidden() || raylib::IsWindowMinimized();
+  if (occ != was_occluded) {
+    push({occ ? Type::Occluded : Type::Revealed, raylib::GetScreenWidth(),
+          raylib::GetScreenHeight(), scale});
+    was_occluded = occ;
+  }
+  if (raylib::IsWindowResized())
+    push({Type::Resized, raylib::GetScreenWidth(), raylib::GetScreenHeight(),
+          scale});
+  if (last_dpi > 0.f && scale > 0.f && scale != last_dpi)
+    push({Type::ScaleChanged, raylib::GetScreenWidth(),
+          raylib::GetScreenHeight(), scale});
+  if (scale > 0.f)
+    last_dpi = scale;
+}
+
 inline void raylib_begin_frame() {
+  poll_window_events();
   std::visit(
       [](auto &backend) {
         using T = std::decay_t<decltype(backend)>;
@@ -176,11 +202,16 @@ inline bool raylib_capture_presented_frame(const std::filesystem::path &path,
   raylib::Image scaled = raylib::ImageCopy(canvas);
   raylib::ImageResize(&scaled, static_cast<int>(pf.dest_w),
                       static_cast<int>(pf.dest_h));
+#if RAYLIB_VERSION_MAJOR >= 6
+  raylib::ImageDrawImage(&presented, scaled, static_cast<int>(pf.dest_x),
+                         static_cast<int>(pf.dest_y), raylib::WHITE);
+#else
   raylib::ImageDraw(&presented, scaled,
                     raylib::Rectangle{0.f, 0.f, pf.dest_w, pf.dest_h},
                     raylib::Rectangle{pf.dest_x, pf.dest_y, pf.dest_w,
                                       pf.dest_h},
                     raylib::WHITE);
+#endif
   const bool ok = raylib::ExportImage(presented, path.string().c_str());
   raylib::UnloadImage(scaled);
   raylib::UnloadImage(presented);
