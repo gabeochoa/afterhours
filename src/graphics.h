@@ -30,6 +30,8 @@ using Camera2D = PlatformAPI::Camera2D;
 inline constexpr unsigned int FLAG_WINDOW_RESIZABLE =
     PlatformAPI::FLAG_WINDOW_RESIZABLE;
 inline constexpr unsigned int FLAG_VSYNC_HINT = PlatformAPI::FLAG_VSYNC_HINT;
+inline constexpr unsigned int FLAG_BORDERLESS_WINDOWED_MODE =
+    PlatformAPI::FLAG_BORDERLESS_WINDOWED_MODE;
 inline constexpr int LOG_ERROR = PlatformAPI::LOG_ERROR;
 inline constexpr int TEXTURE_FILTER_BILINEAR =
     PlatformAPI::TEXTURE_FILTER_BILINEAR;
@@ -48,8 +50,14 @@ inline bool is_window_ready() { return PlatformAPI::is_window_ready(); }
 inline bool is_window_fullscreen() {
   return PlatformAPI::is_window_fullscreen();
 }
+inline bool is_window_borderless_windowed() {
+  return PlatformAPI::is_window_borderless_windowed();
+}
 inline bool is_window_focused() { return PlatformAPI::is_window_focused(); }
 inline void toggle_fullscreen() { PlatformAPI::toggle_fullscreen(); }
+inline void toggle_borderless_windowed() {
+  PlatformAPI::toggle_borderless_windowed();
+}
 inline void minimize_window() { PlatformAPI::minimize_window(); }
 inline void set_window_size(int w, int h) { PlatformAPI::set_window_size(w, h); }
 inline void set_window_min_size(int w, int h) {
@@ -72,6 +80,9 @@ inline void set_config_flags(unsigned int flags) {
 inline void set_target_fps(int fps) { PlatformAPI::set_target_fps(fps); }
 inline void set_exit_key(int key) { PlatformAPI::set_exit_key(key); }
 inline void set_trace_log_level(int level) {
+  PlatformAPI::set_trace_log_level(level);
+}
+inline void set_trace_log_level(TraceLogLevel level) {
   PlatformAPI::set_trace_log_level(level);
 }
 

@@ -579,6 +579,7 @@ struct MetalPlatformAPI {
   // ── Constants ──
   static constexpr unsigned int FLAG_WINDOW_RESIZABLE = 0x00000004;
   static constexpr unsigned int FLAG_VSYNC_HINT = 0x00000040;
+  static constexpr unsigned int FLAG_BORDERLESS_WINDOWED_MODE = 0x00008000;
   static constexpr int LOG_ERROR = 5;
   static constexpr int TEXTURE_FILTER_BILINEAR = 1;
   static constexpr int TEXTURE_FILTER_POINT = 0;
@@ -606,6 +607,13 @@ struct MetalPlatformAPI {
     return !metal_detail::g_headless && metal_detail::g_window_focused;
   }
   static void toggle_fullscreen() { sapp_toggle_fullscreen(); }
+
+  static void toggle_borderless_windowed() {
+    log_error("@notimplemented toggle_borderless_windowed");
+  }
+
+  static bool is_window_borderless_windowed() { return false; }
+
   static void minimize_window() {
     log_error("@notimplemented minimize_window");
   }
@@ -661,6 +669,10 @@ struct MetalPlatformAPI {
   static void set_exit_key(int) { /* no-op: Metal/Sokol handles quit via sapp */
   }
   static void set_trace_log_level(int) { /* no-op: uses afterhours logging */ }
+
+  static void set_trace_log_level(TraceLogLevel) {
+    /* no-op: uses afterhours logging */
+  }
 
   // ── Frame ──
   static void begin_drawing() {
