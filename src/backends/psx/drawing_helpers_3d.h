@@ -46,4 +46,4 @@ inline Vector2Type get_world_to_screen(V, Camera3D) {
   return {0, 0};
 }
 
-} // namespace afterhours
+}
