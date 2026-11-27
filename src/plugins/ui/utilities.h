@@ -224,6 +224,19 @@ inline void run_systems_on_ui_entities(
     }
 }
 
+template<typename Old, typename New>
+static bool replace_bridge_system(
+    std::vector<std::unique_ptr<SystemBase>> &systems,
+    std::unique_ptr<New> replacement) {
+    for (auto &system : systems) {
+        if (system && typeid(*system) == typeid(Old)) {
+            system = std::move(replacement);
+            return true;
+        }
+    }
+    return false;
+}
+
 // Bridge system: runs ClearUIComponentChildren + BeginUIContextManager
 // on UI collection entities.
 template<typename InputAction>
@@ -372,6 +385,43 @@ struct UIPluginRenderBridge : System<> {
         run_systems_on_ui_entities(systems, dt, /*is_render=*/true);
     }
 };
+
+template<typename InputAction, typename Old, typename New>
+static bool replace_pre_update_system(SystemManager &sm,
+                                      std::unique_ptr<New> replacement) {
+    for (auto &system : sm.update_systems_) {
+        if (auto *bridge = dynamic_cast<UIPluginPreUpdateBridge<InputAction> *>(
+                system.get()))
+            return replace_bridge_system<Old>(bridge->systems,
+                                              std::move(replacement));
+    }
+    return false;
+}
+
+template<typename InputAction, typename Old, typename New>
+static bool replace_post_update_system(SystemManager &sm,
+                                       std::unique_ptr<New> replacement) {
+    for (auto &system : sm.update_systems_) {
+        if (auto *bridge =
+                dynamic_cast<UIPluginPostUpdateBridge<InputAction> *>(
+                    system.get()))
+            return replace_bridge_system<Old>(bridge->systems,
+                                              std::move(replacement));
+    }
+    return false;
+}
+
+template<typename InputAction, typename Old, typename New>
+static bool replace_render_system(SystemManager &sm,
+                                  std::unique_ptr<New> replacement) {
+    for (auto &system : sm.render_systems_) {
+        if (auto *bridge = dynamic_cast<UIPluginRenderBridge<InputAction> *>(
+                system.get()))
+            return replace_bridge_system<Old>(bridge->systems,
+                                              std::move(replacement));
+    }
+    return false;
+}
 
 // --- Registration functions ---
 
