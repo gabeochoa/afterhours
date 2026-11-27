@@ -263,6 +263,8 @@ struct RaylibPlatformAPI {
   static constexpr unsigned int FLAG_WINDOW_RESIZABLE =
       raylib::FLAG_WINDOW_RESIZABLE;
   static constexpr unsigned int FLAG_VSYNC_HINT = raylib::FLAG_VSYNC_HINT;
+  static constexpr unsigned int FLAG_BORDERLESS_WINDOWED_MODE =
+      raylib::FLAG_BORDERLESS_WINDOWED_MODE;
   static constexpr int LOG_ERROR = raylib::LOG_ERROR;
   static constexpr int TEXTURE_FILTER_BILINEAR =
       raylib::TEXTURE_FILTER_BILINEAR;
@@ -287,6 +289,16 @@ struct RaylibPlatformAPI {
     return raylib::IsWindowReady() && raylib::IsWindowFocused();
   }
   static void toggle_fullscreen() { raylib::ToggleFullscreen(); }
+
+  static void toggle_borderless_windowed() {
+    raylib::ToggleBorderlessWindowed();
+    window_state_flags_ ^= FLAG_BORDERLESS_WINDOWED_MODE;
+  }
+
+  static bool is_window_borderless_windowed() {
+    return raylib::IsWindowState(raylib::FLAG_BORDERLESS_WINDOWED_MODE);
+  }
+
   static void minimize_window() { raylib::MinimizeWindow(); }
   static void set_window_size(int w, int h) { raylib::SetWindowSize(w, h); }
   static void set_window_min_size(int w, int h) {
@@ -311,6 +323,10 @@ struct RaylibPlatformAPI {
   static void set_exit_key(int key) { raylib::SetExitKey(key); }
   static void set_trace_log_level(int level) {
     raylib::SetTraceLogLevel(level);
+  }
+
+  static void set_trace_log_level(TraceLogLevel level) {
+    set_trace_log_level(static_cast<int>(level));
   }
 
   // ── Frame ──

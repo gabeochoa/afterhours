@@ -12,6 +12,17 @@
 
 namespace afterhours::graphics {
 enum class DisplayMode { Windowed, Headless };
+
+enum class TraceLogLevel {
+  All = 0,
+  Trace,
+  Debug,
+  Info,
+  Warning,
+  Error,
+  Fatal,
+  None
+};
 } // namespace afterhours::graphics
 
 #ifdef AFTER_HOURS_USE_RAYLIB
@@ -158,8 +169,10 @@ concept PlatformBackend = requires {
   { T::window_should_close() } -> std::same_as<bool>;
   { T::is_window_ready() } -> std::same_as<bool>;
   { T::is_window_fullscreen() } -> std::same_as<bool>;
+  { T::is_window_borderless_windowed() } -> std::same_as<bool>;
   { T::is_window_focused() } -> std::same_as<bool>;
   { T::toggle_fullscreen() } -> std::same_as<void>;
+  { T::toggle_borderless_windowed() } -> std::same_as<void>;
   { T::minimize_window() } -> std::same_as<void>;
   { T::set_window_size(int{}, int{}) } -> std::same_as<void>;
   { T::set_window_min_size(int{}, int{}) } -> std::same_as<void>;
@@ -173,6 +186,7 @@ concept PlatformBackend = requires {
   { T::set_target_fps(int{}) } -> std::same_as<void>;
   { T::set_exit_key(int{}) } -> std::same_as<void>;
   { T::set_trace_log_level(int{}) } -> std::same_as<void>;
+  { T::set_trace_log_level(TraceLogLevel{}) } -> std::same_as<void>;
 
   // ── Frame ──
   { T::begin_drawing() } -> std::same_as<void>;
