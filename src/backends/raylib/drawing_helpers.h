@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <optional>
+#include <span>
 #include <filesystem>
 #include <unordered_map>
 #include <vector>
@@ -810,6 +811,62 @@ inline TextureType load_texture_from_rgba(const std::uint8_t *rgba, int w,
   raylib::SetTextureFilter(texture, filter);
   known_texture_filters()[texture.id] = filter;
   return texture;
+}
+
+inline bool update_texture_rgba(TextureType texture,
+                                std::span<const uint8_t> rgba,
+                                std::optional<RectangleType> rect = std::nullopt) {
+  if (texture.id == 0) return false;
+  int width = texture.width;
+  int height = texture.height;
+  if (rect) {
+    if (rect->x < 0 || rect->y < 0 || rect->width <= 0 || rect->height <= 0 ||
+        rect->x + rect->width > texture.width ||
+        rect->y + rect->height > texture.height) {
+      return false;
+    }
+    width = static_cast<int>(rect->width);
+    height = static_cast<int>(rect->height);
+  }
+  const auto needed =
+      static_cast<size_t>(width) * static_cast<size_t>(height) * 4;
+  if (rgba.size() < needed) return false;
+  if (rect) {
+    raylib::UpdateTextureRec(texture, *rect, rgba.data());
+  } else {
+    raylib::UpdateTexture(texture, rgba.data());
+  }
+  return true;
+}
+
+inline std::optional<RGBACapture>
+read_texture_rgba(TextureType texture,
+                  std::optional<RectangleType> rect = std::nullopt,
+                  bool flip = false) {
+  if (texture.id == 0) return std::nullopt;
+  raylib::Image img = raylib::LoadImageFromTexture(texture);
+  if (!img.data) return std::nullopt;
+  raylib::ImageFormat(&img, raylib::PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+  if (!img.data || img.width <= 0 || img.height <= 0) {
+    raylib::UnloadImage(img);
+    return std::nullopt;
+  }
+  if (rect) {
+    if (rect->x < 0 || rect->y < 0 || rect->width <= 0 || rect->height <= 0 ||
+        rect->x + rect->width > img.width ||
+        rect->y + rect->height > img.height) {
+      raylib::UnloadImage(img);
+      return std::nullopt;
+    }
+    raylib::ImageCrop(&img, *rect);
+  }
+  if (flip) raylib::ImageFlipVertical(&img);
+  const auto *bytes = static_cast<const uint8_t *>(img.data);
+  const auto size =
+      static_cast<size_t>(img.width) * static_cast<size_t>(img.height) * 4;
+  RGBACapture result{img.width, img.height, {bytes, bytes + size}};
+  raylib::UnloadImage(img);
+  return result;
 }
 
 inline void unload_texture(TextureType &texture) {

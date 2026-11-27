@@ -8,6 +8,8 @@
 #include <bitset>
 #include <cstdint>
 #include <filesystem>
+#include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -341,6 +343,19 @@ inline TextureType load_texture_from_rgba(const std::uint8_t *, int w, int h,
   const std::string label =
       "<rgba " + std::to_string(w) + "x" + std::to_string(h) + ">";
   return make_budgeted_texture(w, h, label.c_str());
+}
+
+inline bool update_texture_rgba(TextureType, std::span<const uint8_t>,
+                                std::optional<RectangleType> = std::nullopt) {
+  log_error("@notimplemented update_texture_rgba (no console equivalent)");
+  return false;
+}
+
+inline std::optional<RGBACapture>
+read_texture_rgba(TextureType, std::optional<RectangleType> = std::nullopt,
+                  bool = false) {
+  log_error("@notimplemented read_texture_rgba (no console equivalent)");
+  return std::nullopt;
 }
 
 inline void unload_texture(TextureType &tex) {
