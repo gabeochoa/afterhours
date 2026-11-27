@@ -279,6 +279,7 @@ lighting_zones_test \
 	trailing_anchor_test \
 	dialog_test \
 	escape_owner_test \
+	presentation_test \
 	modal_centering_test \
 	dump_ui_test \
 	accessibility_test \
@@ -534,6 +535,7 @@ RAYLIB_TESTS := \
 	instance_batcher_persist_test \
 	dialog_test \
 	escape_owner_test \
+	presentation_test \
 	modal_centering_test \
 	dump_ui_test \
 	scroll_anchor_test \
