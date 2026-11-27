@@ -9,6 +9,7 @@
 #include <string>
 
 #include <afterhours/ah.h>
+#include <afterhours/src/graphics.h>
 #include <afterhours/src/plugins/models.h>
 
 using namespace afterhours;
@@ -27,8 +28,14 @@ static void check(bool cond, const std::string &what) {
 
 int main() {
   raylib::SetTraceLogLevel(raylib::LOG_ERROR);
-  raylib::SetConfigFlags(raylib::FLAG_WINDOW_HIDDEN);
-  raylib::InitWindow(64, 64, "models_test");
+  afterhours::graphics::Config cfg;
+  cfg.display = afterhours::graphics::DisplayMode::Headless;
+  cfg.width = 64;
+  cfg.height = 64;
+  if (!afterhours::graphics::init(cfg)) {
+    fprintf(stderr, "models_test: headless graphics init failed\n");
+    return 1;
+  }
 
   auto &models = ModelLibrary::get();
 
@@ -83,7 +90,7 @@ int main() {
   check(models.size() == 0 && !models.contains("tree"),
         "unload_all drops the entries");
 
-  raylib::CloseWindow();
+  afterhours::graphics::shutdown();
 
   printf("models_test: %d/%d checks passed\n", checks_passed, checks_run);
   return checks_passed == checks_run ? 0 : 1;

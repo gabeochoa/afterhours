@@ -18,6 +18,7 @@
 #include <vector>
 
 #include <afterhours/ah.h>
+#include <afterhours/src/graphics.h>
 #include <afterhours/tools/house_of_cards/compare.h>
 
 using namespace afterhours;
@@ -55,8 +56,14 @@ static Result run(const raylib::Model &model, hoc::Cards &cards,
 
 int main() {
   raylib::SetTraceLogLevel(raylib::LOG_ERROR);
-  raylib::SetConfigFlags(raylib::FLAG_WINDOW_HIDDEN);
-  raylib::InitWindow(64, 64, "house_of_cards_test");
+  afterhours::graphics::Config cfg;
+  cfg.display = afterhours::graphics::DisplayMode::Headless;
+  cfg.width = 64;
+  cfg.height = 64;
+  if (!afterhours::graphics::init(cfg)) {
+    fprintf(stderr, "house_of_cards_test: headless graphics init failed\n");
+    return 1;
+  }
   raylib::Shader shader = hoc::load_shader();
   raylib::Shader lit_cards = hoc::load_shader(DEFAULT_LIGHTING);
   raylib::Shader lit_model = load_lit_shader();
@@ -162,7 +169,7 @@ int main() {
   raylib::UnloadShader(shader);
   raylib::UnloadShader(lit_cards);
   raylib::UnloadShader(lit_model);
-  raylib::CloseWindow();
+  afterhours::graphics::shutdown();
 
   printf("house_of_cards_test: %d/%d checks passed\n", checks_passed,
          checks_run);

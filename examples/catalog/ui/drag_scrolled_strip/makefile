@@ -6,6 +6,6 @@ EXTRA_FLAGS = -DAFTER_HOURS_USE_RAYLIB -DAFTER_HOURS_ENABLE_E2E_TESTING \
               -DSCRIPT_PATH='"$(abspath drag_third_tab.e2e)"'
 LDFLAGS     = $(RAYLIB_PREFIX)/lib/libraylib.a -framework OpenGL \
               -framework CoreFoundation -framework Cocoa -framework IOKit \
-              -framework CoreGraphics -framework CoreVideo -lobjc
+              -framework CoreGraphics -framework CoreVideo -framework QuartzCore -framework CoreAudio -lobjc
 
 include ../../common.mk

@@ -6,6 +6,6 @@ EXTRA_FLAGS = -DAFTER_HOURS_USE_RAYLIB -isystem $(BREW_PREFIX)/include \
               -DIMAGE_PATH='"$(abspath ../../3d/Textures/colormap.png)"'
 LDFLAGS     = $(RAYLIB_PREFIX)/lib/libraylib.a -framework OpenGL \
               -framework CoreFoundation -framework Cocoa -framework IOKit \
-              -framework CoreGraphics -framework CoreVideo -lobjc
+              -framework CoreGraphics -framework CoreVideo -framework QuartzCore -framework CoreAudio -lobjc
 
 include ../../common.mk

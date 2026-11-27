@@ -4,6 +4,7 @@
 #include <string>
 
 #include <afterhours/ah.h>
+#include <afterhours/src/graphics.h>
 #include <afterhours/src/plugins/effects.h>
 
 using namespace afterhours;
@@ -35,8 +36,14 @@ void main() { finalColor = uColor * uFloat + vec4(uVec2, 0.0, 1.0); })";
 
 int main() {
   raylib::SetTraceLogLevel(raylib::LOG_ERROR);
-  raylib::SetConfigFlags(raylib::FLAG_WINDOW_HIDDEN);
-  raylib::InitWindow(64, 64, "effects_uniform_cache_test");
+  afterhours::graphics::Config cfg;
+  cfg.display = afterhours::graphics::DisplayMode::Headless;
+  cfg.width = 64;
+  cfg.height = 64;
+  if (!afterhours::graphics::init(cfg)) {
+    fprintf(stderr, "effects_uniform_cache_test: headless graphics init failed\n");
+    return 1;
+  }
 
   effects::Effect e;
   e.shader = raylib::LoadShaderFromMemory(VS, FS);
@@ -75,7 +82,7 @@ int main() {
     check(e.upload_count == before + 1, "same value re-uploads after reload");
   }
 
-  raylib::CloseWindow();
+  afterhours::graphics::shutdown();
   printf("effects_uniform_cache_test: %d/%d checks passed\n", checks_passed, checks_run);
   return checks_passed == checks_run ? 0 : 1;
 }
