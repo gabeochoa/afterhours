@@ -137,6 +137,7 @@ ALL_TESTS := \
 	color_palette_none_test \
 	wrappers_test \
 	window_state_test \
+	cursor_mode_test \
 	animation_presets_test \
 	shimmer_test \
 	particles_test \
@@ -486,6 +487,7 @@ RAYLIB_TESTS := \
 	wrappers_test \
 	window_focus_test \
 	window_state_test \
+	cursor_mode_test \
 	click_count_test \
 	edit_keys_test \
 	raw_text_edit_test \

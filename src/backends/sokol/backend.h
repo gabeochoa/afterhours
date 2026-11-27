@@ -594,6 +594,7 @@ struct MetalPlatformAPI {
   }
   static void close_window() {
     // Handled by sokol cleanup callback.
+    cursor_mode_state() = CursorMode::Free;
   }
   static bool window_should_close() {
     // Sokol owns the event loop; this is only meaningful
@@ -652,6 +653,23 @@ struct MetalPlatformAPI {
   }
   static unsigned int window_state() {
     return metal_detail::g_window_state_flags;
+  }
+
+  static void set_cursor_mode(CursorMode mode) {
+    if (!metal_detail::g_initialized || metal_detail::g_headless) return;
+    switch (mode) {
+    case CursorMode::Free:
+      sapp_lock_mouse(false);
+      sapp_show_mouse(true);
+      break;
+    case CursorMode::Hidden:
+      sapp_lock_mouse(false);
+      sapp_show_mouse(false);
+      break;
+    case CursorMode::Captured:
+      sapp_lock_mouse(true);
+      break;
+    }
   }
 
   // ── Config (legacy API -- prefer RunConfig fields) ──

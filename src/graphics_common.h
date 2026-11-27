@@ -12,6 +12,22 @@
 
 namespace afterhours::graphics {
 enum class DisplayMode { Windowed, Headless };
+
+enum class CursorMode { Free, Hidden, Captured };
+
+inline CursorMode &cursor_mode_state() {
+  static CursorMode mode = CursorMode::Free;
+  return mode;
+}
+
+#if defined(AFTER_HOURS_USE_NONE) || defined(AFTER_HOURS_USE_PSX)
+inline CursorMode get_cursor_mode() { return cursor_mode_state(); }
+
+inline void set_cursor_mode(CursorMode mode) {
+  if (cursor_mode_state() == mode) return;
+  cursor_mode_state() = mode;
+}
+#endif
 } // namespace afterhours::graphics
 
 #ifdef AFTER_HOURS_USE_RAYLIB
