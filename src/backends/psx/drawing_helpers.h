@@ -117,14 +117,50 @@ inline void set_blend_mode(blend::Mode mode) {
   capture::record("blend", RectangleType{}, ColorType{});
 }
 
+inline void set_blend_mode_separate(const blend::Separate &separate) {
+  if (blend::detail::current_mode() == blend::Mode::CustomSeparate &&
+      blend::detail::current_separate() == separate)
+    return;
+  blend::detail::current_separate() = separate;
+  blend::detail::current_mode() = blend::Mode::CustomSeparate;
+  blend::detail::transition_count()++;
+  capture::record("blend_separate", RectangleType{}, ColorType{});
+}
+
 struct blend_scope {
   blend::Mode previous;
-  explicit blend_scope(blend::Mode mode) : previous(blend::current()) {
+  blend::Separate previous_separate;
+  explicit blend_scope(blend::Mode mode)
+      : previous(blend::current()),
+        previous_separate(blend::current_separate()) {
     set_blend_mode(mode);
   }
-  ~blend_scope() { set_blend_mode(previous); }
+  ~blend_scope() {
+    if (previous == blend::Mode::CustomSeparate)
+      set_blend_mode_separate(previous_separate);
+    else
+      set_blend_mode(previous);
+  }
   blend_scope(const blend_scope &) = delete;
   blend_scope &operator=(const blend_scope &) = delete;
+};
+
+struct blend_separate_scope {
+  blend::Mode previous;
+  blend::Separate previous_separate;
+  explicit blend_separate_scope(const blend::Separate &separate)
+      : previous(blend::current()),
+        previous_separate(blend::current_separate()) {
+    set_blend_mode_separate(separate);
+  }
+  ~blend_separate_scope() {
+    if (previous == blend::Mode::CustomSeparate)
+      set_blend_mode_separate(previous_separate);
+    else
+      set_blend_mode(previous);
+  }
+  blend_separate_scope(const blend_separate_scope &) = delete;
+  blend_separate_scope &operator=(const blend_separate_scope &) = delete;
 };
 
 inline void begin_shader_mode(graphics::ShaderType &) {}

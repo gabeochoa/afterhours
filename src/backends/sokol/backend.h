@@ -11,6 +11,7 @@
 
 #ifdef AFTER_HOURS_SOKOL
 
+#include "../../blend.h"
 #include "../../file_drop.h"
 #include "../../graphics_common.h"
 #include "../../logging.h"
@@ -174,6 +175,93 @@ inline sgl_pipeline g_blend_pip{};
 inline sgl_pipeline g_blend_pip_additive{};
 inline sgl_pipeline g_blend_pip_multiplied{};
 inline sgl_pipeline g_blend_pip_premultiplied{};
+
+// Separate-factor mapping and pipeline cache. Pipelines are immutable, so
+// each distinct Separate gets its own, cached for the life of the process.
+inline sg_blend_factor to_sg_factor(blend::Factor factor) {
+  switch (factor) {
+  case blend::Factor::Zero:
+    return SG_BLENDFACTOR_ZERO;
+  case blend::Factor::One:
+    return SG_BLENDFACTOR_ONE;
+  case blend::Factor::SrcColor:
+    return SG_BLENDFACTOR_SRC_COLOR;
+  case blend::Factor::OneMinusSrcColor:
+    return SG_BLENDFACTOR_ONE_MINUS_SRC_COLOR;
+  case blend::Factor::SrcAlpha:
+    return SG_BLENDFACTOR_SRC_ALPHA;
+  case blend::Factor::OneMinusSrcAlpha:
+    return SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+  case blend::Factor::DstColor:
+    return SG_BLENDFACTOR_DST_COLOR;
+  case blend::Factor::OneMinusDstColor:
+    return SG_BLENDFACTOR_ONE_MINUS_DST_COLOR;
+  case blend::Factor::DstAlpha:
+    return SG_BLENDFACTOR_DST_ALPHA;
+  case blend::Factor::OneMinusDstAlpha:
+    return SG_BLENDFACTOR_ONE_MINUS_DST_ALPHA;
+  case blend::Factor::SrcAlphaSaturate:
+    return SG_BLENDFACTOR_SRC_ALPHA_SATURATED;
+  }
+  return SG_BLENDFACTOR_ONE;
+}
+
+inline sg_blend_op to_sg_equation(blend::Equation equation) {
+  switch (equation) {
+  case blend::Equation::Add:
+    return SG_BLENDOP_ADD;
+  case blend::Equation::Subtract:
+    return SG_BLENDOP_SUBTRACT;
+  case blend::Equation::ReverseSubtract:
+    return SG_BLENDOP_REVERSE_SUBTRACT;
+  case blend::Equation::Min:
+    return SG_BLENDOP_MIN;
+  case blend::Equation::Max:
+    return SG_BLENDOP_MAX;
+  }
+  return SG_BLENDOP_ADD;
+}
+
+inline std::unordered_map<std::string, sgl_pipeline> &separate_pipelines() {
+  static std::unordered_map<std::string, sgl_pipeline> cache;
+  return cache;
+}
+
+// Factors and equations fit in a few bits each; string key keeps the cache
+// obvious and allocation-free per lookup is not a concern here.
+inline std::string separate_key(const blend::Separate &separate) {
+  const auto f = [](blend::Factor factor) {
+    return static_cast<int>(factor);
+  };
+  const auto e = [](blend::Equation equation) {
+    return static_cast<int>(equation);
+  };
+  return std::to_string(f(separate.src_rgb)) + "," +
+         std::to_string(f(separate.dst_rgb)) + "," +
+         std::to_string(f(separate.src_alpha)) + "," +
+         std::to_string(f(separate.dst_alpha)) + "," +
+         std::to_string(e(separate.rgb_eq)) + "," +
+         std::to_string(e(separate.alpha_eq));
+}
+
+inline sgl_pipeline separate_pipeline(const blend::Separate &separate) {
+  auto &cache = separate_pipelines();
+  const std::string key = separate_key(separate);
+  const auto found = cache.find(key);
+  if (found != cache.end())
+    return found->second;
+  sg_pipeline_desc d{};
+  d.colors[0].blend.enabled = true;
+  d.colors[0].blend.src_factor_rgb = to_sg_factor(separate.src_rgb);
+  d.colors[0].blend.dst_factor_rgb = to_sg_factor(separate.dst_rgb);
+  d.colors[0].blend.src_factor_alpha = to_sg_factor(separate.src_alpha);
+  d.colors[0].blend.dst_factor_alpha = to_sg_factor(separate.dst_alpha);
+  d.colors[0].blend.op_rgb = to_sg_equation(separate.rgb_eq);
+  d.colors[0].blend.op_alpha = to_sg_equation(separate.alpha_eq);
+  const sgl_pipeline pip = sgl_make_pipeline(&d);
+  cache.emplace(key, pip);
+  return pip;
+}
 
 inline bool g_sgl_ready = false;
 
