@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <map>
 #include <optional>
 #include <set>
@@ -26,6 +27,30 @@ using vec2 = Vector2Type;
 namespace ui {
 
 struct AutoLayoutRoot : BaseComponent {};
+
+inline std::uint64_t &layout_generation_storage() {
+  static std::uint64_t v = 0;
+  return v;
+}
+
+inline std::uint64_t &laid_out_generation_storage() {
+  static std::uint64_t v = 0;
+  return v;
+}
+
+inline std::uint64_t layout_generation() { return layout_generation_storage(); }
+
+inline std::uint64_t laid_out_generation() {
+  return laid_out_generation_storage();
+}
+
+inline void invalidate_layout() {
+  layout_generation_storage() = laid_out_generation_storage() + 1;
+}
+
+inline bool layout_is_stale() {
+  return laid_out_generation() < layout_generation();
+}
 
 struct UIComponent : BaseComponent {
   // Sentinel font names. Kept as `const char*` (not `constexpr std::string`,
@@ -82,6 +107,7 @@ struct UIComponent : BaseComponent {
   bool padding_is_default = false;
   bool size_dirty = false;
   bool laid_out = false;
+  std::uint64_t laid_out_generation = 0;
   AxisArray<Size> desired;
   AxisArray<Size>
       min_size; // Minimum size constraint (Dim::None = no constraint)
@@ -364,6 +390,11 @@ struct UIComponent : BaseComponent {
     computed_rel[Axis::Y] = 0.f;
   }
 };
+
+// True once a later pass re-laid out the widget read at read_gen.
+inline bool laid_out_since(const UIComponent &cmp, std::uint64_t read_gen) {
+  return cmp.laid_out_generation != read_gen;
+}
 
 // final so has_child_of can answer in one test instead of a dynamic_cast
 // per occupied slot. Nothing derives from it, and now nothing can.

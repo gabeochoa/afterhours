@@ -10,6 +10,7 @@
 #include "../../../vendor/magic_enum/magic_enum.hpp"
 #endif
 #include <algorithm>
+#include <cstdint>
 #include <functional>
 #include <magic_enum/magic_enum.hpp>
 #include <optional>
@@ -645,6 +646,7 @@ struct HasScrollView : BaseComponent {
   // above the fold is detected without anyone reporting one.
   EntityID anchor_child = -1;
   float anchor_child_y = 0.f;
+  std::uint64_t anchor_generation = 0;
   size_t anchor_item_key = 0;
   bool has_anchor_item_key = false;
   // Unset until a layout pass has measured it. A plain {0,0} could not be told

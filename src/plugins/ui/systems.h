@@ -622,6 +622,7 @@ private:
       if (bottom > scroll.scroll_offset.y) {
         scroll.anchor_child = child_id;
         scroll.anchor_child_y = top;
+        scroll.anchor_generation = child_cmp.laid_out_generation;
         if (auto key = imm::ui_element_key(child_id)) {
           scroll.anchor_item_key = *key;
           scroll.has_anchor_item_key = true;

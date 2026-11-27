@@ -2134,6 +2134,14 @@ struct AutoLayout {
     }
   }
 
+  void stamp_generation(UIComponent &widget, std::uint64_t gen) {
+    widget.laid_out_generation = gen;
+    for (EntityID child : widget.children) {
+      if (has_cmp(child))
+        stamp_generation(cmp(child), gen);
+    }
+  }
+
   void reset_and_calculate_standalone(UIComponent &widget) {
     widget.reset_computed_values();
     calculate_standalone_values(widget);
@@ -2163,6 +2171,8 @@ struct AutoLayout {
     al.solve_violations(widget);
     al.compute_relative_positions(widget);
     al.compute_rect_bounds(widget);
+    laid_out_generation_storage()++;
+    al.stamp_generation(widget, laid_out_generation());
   }
 
   // Re-lay out one widget and its descendants against the parent's current
@@ -2206,6 +2216,7 @@ struct AutoLayout {
     }
     al.compute_relative_positions(widget);
     al.compute_rect_bounds(widget);
+    al.stamp_generation(widget, laid_out_generation());
   }
 
   static Entity &to_ent_static(EntityID id) {
