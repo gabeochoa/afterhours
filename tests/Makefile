@@ -258,6 +258,7 @@ ALL_TESTS := \
 	font_catalog_test \
 	frame_rate_stats_test \
 	tunable_test \
+	tile_grid_test \
 	byte_cache_test \
 model_library_test \
 lighting_zones_test \
