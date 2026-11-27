@@ -45,6 +45,7 @@ inline double g_frame_dt = 0.0;
 inline bool g_on_demand = false;
 
 inline uint64_t g_start_time = 0;
+inline double g_simulated_time = 0.0;
 
 inline FONScontext *g_fons_ctx = nullptr;
 inline std::vector<int> g_font_ids;

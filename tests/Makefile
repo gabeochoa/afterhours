@@ -126,6 +126,7 @@ ALL_TESTS := \
 	appearance_test \
 	frame_loop_test \
 	headless_cadence_test \
+	headless_time_test \
 	file_drop_test \
 	timer_test \
 	jobs_test \
@@ -563,6 +564,7 @@ RAYLIB_TESTS := \
 	label_inset_test \
 	fit_content_test \
 	headless_runconfig_test \
+	headless_time_test \
 	window_state_runconfig_test \
 	harness_spellings_test \
 	fixed_timestep_test \
