@@ -320,6 +320,7 @@ lighting_zones_test \
 	focus_origin_test \
 	tab_order_test \
 	reset_focus_test \
+	focus_cache_test \
 	focus_select_on_focus_test \
 	focus_fallback_test \
 	focus_shortcuts_test \

@@ -114,6 +114,37 @@ enum struct FocusSource {
   Explicit
 };
 
+struct FocusedIdSet {
+  std::vector<EntityID> ids;
+  void insert(EntityID id) {
+    if (!contains(id))
+      ids.push_back(id);
+  }
+  [[nodiscard]] bool contains(EntityID id) const {
+    return std::find(ids.begin(), ids.end(), id) != ids.end();
+  }
+  void clear() { ids.clear(); }
+  [[nodiscard]] bool empty() const { return ids.empty(); }
+  [[nodiscard]] std::size_t size() const { return ids.size(); }
+  [[nodiscard]] std::size_t capacity() const { return ids.capacity(); }
+  auto begin() { return ids.begin(); }
+  auto end() { return ids.end(); }
+  auto begin() const { return ids.begin(); }
+  auto end() const { return ids.end(); }
+  FocusedIdSet &operator=(std::initializer_list<EntityID> init) {
+    ids = init;
+    return *this;
+  }
+  bool operator==(const FocusedIdSet &) const = default;
+};
+
+struct FocusCacheEntry {
+  EntityID id = -1;
+  EntityID parent = -1;
+  std::uint32_t flags = 0;
+  bool operator==(const FocusCacheEntry &) const = default;
+};
+
 // Forward declaration - full type in styling_defaults.h
 namespace imm {
 struct UIStylingDefaults;
@@ -130,12 +161,20 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   EntityID ROOT = -1;
   EntityID FAKE = -2;
 
-  std::set<EntityID> focused_ids;
+  FocusedIdSet focused_ids;
   std::vector<EntityID> focus_order;
 
   EntityID text_selection_entity = ROOT;
   text_selection::Selection label_text_selection;
   int prev_focus_index = -1;
+
+  std::vector<EntityID> focus_order_cache;
+  std::vector<FocusCacheEntry> focus_snapshot_cache;
+  std::vector<FocusCacheEntry> focus_snapshot_scratch;
+  std::size_t focus_gates_gen = 0;
+  std::size_t focus_snapshot_gates_gen = static_cast<std::size_t>(-1);
+  bool focus_cache_valid = false;
+  std::size_t focus_rebuild_count = 0;
 
   EntityID hot_id = ROOT;          // hot means the mouse is over this element
   EntityID prev_hot_id = ROOT;     // previous frame's hot_id (for animations)
@@ -234,14 +273,18 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     // Remove existing gate with same name first to avoid duplicates
     remove_input_gate(name);
     input_gates.emplace_back(name, std::move(gate));
+    ++focus_gates_gen;
   }
 
   // Remove an input gate by name
   void remove_input_gate(const std::string &name) {
-    input_gates.erase(
-        std::remove_if(input_gates.begin(), input_gates.end(),
-                       [&](const auto &pair) { return pair.first == name; }),
-        input_gates.end());
+    const auto it = std::remove_if(
+        input_gates.begin(), input_gates.end(),
+        [&](const auto &pair) { return pair.first == name; });
+    if (it != input_gates.end()) {
+      input_gates.erase(it, input_gates.end());
+      ++focus_gates_gen;
+    }
   }
 
   // Check if all gates allow input for this entity
@@ -504,6 +547,8 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     focus_modality = FocusSource::Grab;
     focused_ids.clear();
     focus_order.clear();
+    focus_cache_valid = false;
+    ++focus_gates_gen;
     prev_focus_index = -1;
     render_cmds.clear();
     input_gates.clear();
