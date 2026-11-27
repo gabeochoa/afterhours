@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <optional>
 #include <vector>
@@ -14,6 +15,7 @@
 #include "animation.h"
 #include "ui/context.h"
 #include "ui/component_config.h"
+#include "ui/entity_management.h"
 #include "ui/components.h"
 
 namespace afterhours {
@@ -63,7 +65,7 @@ enum struct MotionProperty : size_t {
 };
 constexpr size_t kMotionProperties = magic_enum::enum_count<MotionProperty>();
 
-enum struct MotionTrigger { Appear, State, Focus, Hover, Press, Change };
+enum struct MotionTrigger { Appear, State, Focus, Hover, Press, Change, Exit };
 
 struct MotionRule {
   MotionTrigger trigger = MotionTrigger::Hover;
@@ -102,6 +104,12 @@ inline float motion_default_rest(size_t i) {
 
 struct HasMotionState : BaseComponent {
   bool appeared = false;
+  bool has_exit = false;
+  bool exiting = false;
+  bool exit_done = false;
+  MotionProps exit_props;
+  motion::Mode exit_mode = motion::Spring::smooth();
+  float exit_delay = 0.f;
   bool had_state = false;
   bool last_state = false;
   std::vector<std::optional<size_t>> stamps;
@@ -187,6 +195,8 @@ inline MotionTargets resolve_motion(const std::vector<MotionRule> &rules,
   };
 
   for (const MotionRule &r : rules) {
+    if (r.trigger == MotionTrigger::Exit)
+      continue;
     for (size_t i = 0; i < kMotionProperties; ++i)
       mentioned[i] = mentioned[i] || motion_prop(r.props, i).set;
     out.background.mentioned = out.background.mentioned || r.props.background.set;
@@ -302,6 +312,19 @@ inline MotionValues apply_motion(Ctx &ctx, Entity &entity,
     return out;
   auto &st = entity.template addComponentIfMissing<HasMotionState>();
   auto &tracks = entity.template addComponentIfMissing<motion::HasTracks>();
+  for (const MotionRule &r : rules) {
+    if (r.trigger != MotionTrigger::Exit)
+      continue;
+    st.has_exit = true;
+    st.exit_props = r.props;
+    st.exit_mode = r.mode;
+    st.exit_delay = r.delay;
+  }
+  if (st.exiting) {
+    st.exiting = false;
+    st.exit_done = false;
+    entity.template toggleComponent<ui::imm::HasExitPresence>(false);
+  }
   st.rest[static_cast<size_t>(MotionProperty::CornerRadius)] = rests.corner_radius;
   const MotionInputs in{ctx.was_hot(entity.id), ctx.was_active(entity.id),
                         ctx.has_focus(entity.id)};
@@ -377,6 +400,117 @@ inline MotionValues apply_motion(Ctx &ctx, Entity &entity,
   return out;
 }
 
+inline bool exit_retention(Entity &entity) {
+  if (!entity.has<HasMotionState>())
+    return false;
+  auto &st = entity.get<HasMotionState>();
+  if (!st.has_exit || st.exit_done)
+    return false;
+  if (motion::is_instant()) {
+    st.exit_done = true;
+    entity.template toggleComponent<ui::imm::HasExitPresence>(true);
+    return false;
+  }
+  auto &tracks = entity.template addComponentIfMissing<motion::HasTracks>();
+  if (!st.exiting) {
+    st.exiting = true;
+    for (size_t i = 0; i < kMotionProperties; ++i) {
+      const MotionProp &prop = motion_prop(st.exit_props, i);
+      if (!prop.set)
+        continue;
+      auto &tr = tracks.track<float>(i);
+      if (!tr.started())
+        tr.from(st.rest[i]);
+      tr.to(prop.to, st.exit_mode);
+      if (st.exit_delay > 0.f)
+        tr.delay(st.exit_delay);
+    }
+    if (st.exit_props.background.set) {
+      auto &tr = tracks.track<ColorType>(0);
+      if (!tr.started() && st.background_rest.has_value())
+        tr.from(*st.background_rest);
+      tr.to(st.exit_props.background.to, st.exit_mode);
+      if (st.exit_delay > 0.f)
+        tr.delay(st.exit_delay);
+    }
+    return true;
+  }
+  bool active = false;
+  for (size_t i = 0; i < kMotionProperties; ++i)
+    if (motion_prop(st.exit_props, i).set) {
+      auto it = tracks.floats.find(i);
+      active = active || (it != tracks.floats.end() && it->second.active());
+    }
+  if (st.exit_props.background.set) {
+    auto it = tracks.colors.find(0);
+    active = active || (it != tracks.colors.end() && it->second.active());
+  }
+  if (!active) {
+    st.exiting = false;
+    st.exit_done = true;
+  }
+  return active;
+}
+
+inline void apply_exit_frame(Entity &entity) {
+  if (!entity.has<HasMotionState>() || !entity.has<motion::HasTracks>())
+    return;
+  auto &tracks = entity.get<motion::HasTracks>();
+  auto &st = entity.get<HasMotionState>();
+  auto &mods = entity.template addComponentIfMissing<ui::HasUIModifiers>();
+  mods.scale = 1.f;
+  mods.translate_x = 0.f;
+  mods.translate_y = 0.f;
+  mods.rotation = 0.f;
+  auto read = [&](MotionProperty prop, float rest) {
+    auto it = tracks.floats.find(static_cast<size_t>(prop));
+    return it == tracks.floats.end() ? rest : it->second.value();
+  };
+  if (st.exit_props.scale.set)
+    mods.scale = read(MotionProperty::Scale, 1.f);
+  if (st.exit_props.translate_x.set)
+    mods.translate_x = read(MotionProperty::TranslateX, 0.f);
+  if (st.exit_props.translate_y.set)
+    mods.translate_y = read(MotionProperty::TranslateY, 0.f);
+  if (st.exit_props.rotation.set)
+    mods.rotation = read(MotionProperty::Rotation, 0.f);
+  if (st.exit_props.opacity.set)
+    entity.template addComponentIfMissing<ui::HasOpacity>().value =
+        read(MotionProperty::Opacity, 1.f);
+  if (st.exit_props.background.set) {
+    auto it = tracks.colors.find(0);
+    if (it != tracks.colors.end() && entity.has<HasColor>())
+      entity.get<HasColor>().set(it->second.value());
+  }
+}
+
+template <typename Ctx>
+struct PresentExitingWidgets : System<ui::imm::HasExitPresence> {
+  void for_each_with(Entity &entity, ui::imm::HasExitPresence &xp,
+                     float) override {
+    if (!xp.active || xp.parent_id < 0)
+      return;
+    auto parent = ui::UICollectionHolder::getEntityForID(xp.parent_id);
+    if (parent.valid() && parent->template has<ui::UIComponent>())
+      parent->template get<ui::UIComponent>().add_child(entity.id);
+    apply_exit_frame(entity);
+    // Retained widgets are not built this frame, so nothing queued them for
+    // render (apply_render_layer only runs on build). Both renderers draw
+    // exactly the queued commands, so queue the retained widget here or it
+    // fades in state while never reaching pixels.
+    if (auto *ctx = EntityHelper::get_singleton_cmp<Ctx>()) {
+      const bool queued = std::any_of(
+          ctx->render_cmds.begin(), ctx->render_cmds.end(),
+          [&](const ui::RenderInfo &cmd) { return cmd.id == entity.id; });
+      if (!queued)
+        ctx->queue_render(ui::RenderInfo{
+            entity.id, entity.has<ui::UIComponent>()
+                           ? entity.get<ui::UIComponent>().render_layer
+                           : 0});
+    }
+  }
+};
+
 struct MotionExt {
   MotionRule rule;
 };
@@ -403,6 +537,11 @@ inline MotionExt on_state(bool state, MotionProps props,
   MotionRule r{MotionTrigger::State, props, std::move(mode)};
   r.state = state;
   return {r};
+}
+inline MotionExt on_exit(MotionProps props,
+                         motion::Mode mode = motion::Spring::smooth(),
+                         float delay = 0.f) {
+  return {{MotionTrigger::Exit, props, std::move(mode), delay}};
 }
 inline MotionExt on_change(size_t stamp, MotionProps props,
                            motion::Mode mode = motion::Spring::bouncy()) {
@@ -463,6 +602,9 @@ template <typename Ctx> inline void register_bridge() {
     });
     ui::imm::register_ui_extension_system(
         [] { return std::make_unique<motion::AdvanceTracks>(); });
+    ui::imm::ui_exit_retention_hook = [](Entity &e) { return exit_retention(e); };
+    ui::imm::register_ui_post_update_system(
+        [] { return std::make_unique<PresentExitingWidgets<Ctx>>(); });
     return true;
   }();
   (void)once;

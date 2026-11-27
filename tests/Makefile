@@ -286,6 +286,7 @@ lighting_zones_test \
 	scroll_absolute_content_test \
 	measure_config_test \
 	widget_retirement_test \
+	exit_animation_test \
 	scroll_to_test \
 	text_line_edit_test \
 	grapheme_edit_test \

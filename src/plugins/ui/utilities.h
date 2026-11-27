@@ -252,6 +252,8 @@ inline std::vector<std::unique_ptr<SystemBase>> make_layout_systems() {
     systems.push_back(
         std::make_unique<ui::UpdateDropdownOptions<InputAction>>());
     systems.push_back(std::make_unique<ui::ClearVisibity>());
+    for (const auto &factory : imm::ui_post_update_system_factories())
+        systems.push_back(factory());
     systems.push_back(
         std::make_unique<ui::HandleDragGroupsPreLayout<InputAction>>());
     systems.push_back(std::make_unique<ui::BuildUIEntityMapping>());
