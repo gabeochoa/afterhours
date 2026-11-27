@@ -265,6 +265,7 @@ lighting_zones_test \
 	intro_sequence_test \
 	graphics_concepts_pedantic_test \
 	fixed_tick_rate_test \
+	simulation_driver_test \
 	sound_playback_test \
 	headless_runconfig_test \
 	window_state_runconfig_test \
