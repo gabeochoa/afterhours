@@ -5,6 +5,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <vector>
 
 using afterhours::SoundType;
 using afterhours::InitAudioDevice;
@@ -46,6 +47,33 @@ int main() {
   check(afterhours::IsSoundPlaying(tone), "pitch and pan do not stop it");
   afterhours::StopSound(tone);
   check(!afterhours::IsSoundPlaying(tone), "a stopped sound is not playing");
+
+  const char *music_path = "/tmp/afterhours_music_stream_wrappers_test.wav";
+  std::vector<float> music_samples(44100, 0.1f);
+  check(afterhours::export_wav(music_path, music_samples, 44100),
+        "export_wav writes a music fixture");
+  afterhours::MusicType music = afterhours::LoadMusicStream(music_path);
+  afterhours::PlayMusicStream(music);
+  check(afterhours::IsMusicStreamPlaying(music),
+        "a played music stream is playing");
+  afterhours::PauseMusicStream(music);
+  check(!afterhours::IsMusicStreamPlaying(music),
+        "a paused music stream is not playing");
+  afterhours::ResumeMusicStream(music);
+  check(afterhours::IsMusicStreamPlaying(music),
+        "a resumed music stream plays again");
+  afterhours::SetMusicPitch(music, 1.25f);
+  afterhours::SetMusicPan(music, 0.5f);
+  check(afterhours::IsMusicStreamPlaying(music),
+        "music pitch and pan do not stop it");
+  afterhours::SeekMusicStream(music, 0.f);
+  check(afterhours::GetMusicTimePlayed(music) >= 0.f,
+        "music time played is non-negative after seek");
+  afterhours::StopMusicStream(music);
+  check(!afterhours::IsMusicStreamPlaying(music),
+        "a stopped music stream is not playing");
+  afterhours::UnloadMusicStream(music);
+  std::remove(music_path);
 
   afterhours::UnloadSound(tone);
   CloseAudioDevice();

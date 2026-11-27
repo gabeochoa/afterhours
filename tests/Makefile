@@ -156,6 +156,7 @@ ALL_TESTS := \
 	caption_test \
 	audio_plugin_test \
 	audio_stream_test \
+	music_stream_wrappers_test \
 	synth_beep_test \
 	settings_save_test \
 	settings_comment_test \

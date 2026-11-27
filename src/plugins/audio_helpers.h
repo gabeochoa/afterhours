@@ -79,6 +79,31 @@ inline void UpdateMusicStream(raylib::Music music) {
 inline void SetMusicVolume(raylib::Music music, float volume) {
   raylib::SetMusicVolume(music, volume);
 }
+
+inline void PauseMusicStream(raylib::Music music) {
+  raylib::PauseMusicStream(music);
+}
+
+inline void ResumeMusicStream(raylib::Music music) {
+  raylib::ResumeMusicStream(music);
+}
+
+inline void SetMusicPitch(raylib::Music music, float pitch) {
+  raylib::SetMusicPitch(music, pitch);
+}
+
+inline void SetMusicPan(raylib::Music music, float pan) {
+  raylib::SetMusicPan(music, pan);
+}
+
+inline float GetMusicTimePlayed(raylib::Music music) {
+  return raylib::GetMusicTimePlayed(music);
+}
+
+inline void SeekMusicStream(raylib::Music music, float position) {
+  raylib::SeekMusicStream(music, position);
+}
+
 inline void UnloadMusicStream(raylib::Music music) {
   raylib::UnloadMusicStream(music);
 }
@@ -207,6 +232,40 @@ struct WaveStub {
 using SoundType = SoundStub;
 using MusicType = MusicStub;
 using WaveType = WaveStub;
+
+inline void PauseMusicStream(MusicType music) {
+  (void)music;
+  warn_once(0, "@notimplemented PauseMusicStream on this backend");
+}
+
+inline void ResumeMusicStream(MusicType music) {
+  (void)music;
+  warn_once(0, "@notimplemented ResumeMusicStream on this backend");
+}
+
+inline void SetMusicPitch(MusicType music, float pitch) {
+  (void)music;
+  (void)pitch;
+  warn_once(0, "@notimplemented SetMusicPitch on this backend");
+}
+
+inline void SetMusicPan(MusicType music, float pan) {
+  (void)music;
+  (void)pan;
+  warn_once(0, "@notimplemented SetMusicPan on this backend");
+}
+
+inline float GetMusicTimePlayed(MusicType music) {
+  (void)music;
+  warn_once(0, "@notimplemented GetMusicTimePlayed on this backend");
+  return 0.f;
+}
+
+inline void SeekMusicStream(MusicType music, float position) {
+  (void)music;
+  (void)position;
+  warn_once(0, "@notimplemented SeekMusicStream on this backend");
+}
 #endif
 
 inline SoundType load_sound_from_samples(std::span<const float> samples,
