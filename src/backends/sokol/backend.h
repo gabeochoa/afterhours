@@ -586,6 +586,7 @@ struct MetalPlatformAPI {
   static constexpr int SHADER_UNIFORM_FLOAT = 0;
   static constexpr int SHADER_UNIFORM_VEC4 = 3;
   static constexpr int SHADER_UNIFORM_VEC3 = 2;
+  static constexpr int SHADER_UNIFORM_INT = 4;
 
   // ── Window lifecycle (legacy API -- prefer run()) ──
   static void init_window(int, int, const char *) {
@@ -835,6 +836,12 @@ struct MetalPlatformAPI {
     metal_detail::g_shaders[id] = rec;
     shader.id = id;
     return shader;
+  }
+  static ShaderType load_shader_from_memory(const char *, const char *) {
+    log_error("load_shader_from_memory: custom GLSL shaders are not supported on the sokol backend");
+    return ShaderType{};
+  }
+  static void set_shader_value_matrix(ShaderType &, int, const MatrixType &) {
   }
   static void unload_shader(ShaderType &shader) {
     if (shader.id == 0)

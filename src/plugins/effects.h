@@ -9,6 +9,7 @@
 #include "../drawing_helpers.h"
 #include "../graphics.h"
 #include "files.h"
+#include "transform.h"
 #include "terminal/commands.h"
 
 namespace afterhours {
@@ -42,6 +43,9 @@ inline float texture_height(graphics::RenderTextureType &rt) {
 struct Effect {
   std::string name;
   std::string path;
+  std::string vs_path;
+  std::string vs_source;
+  std::string fs_source;
   graphics::ShaderType shader{};
   bool loaded = false;
   std::unordered_map<std::string, int> locations;
@@ -54,9 +58,25 @@ struct Effect {
   int upload_count = 0;
 
   static Effect load(const std::string &name, const std::string &file = "") {
+    return load(name, file, "");
+  }
+  static Effect load(const std::string &name, const std::string &fs_file,
+                     const std::string &vs_file) {
     Effect e;
     e.name = name;
-    e.path = files::get_resource_path("shaders", file.empty() ? name + ".fs" : file).string();
+    e.path = files::get_resource_path("shaders", fs_file.empty() ? name + ".fs" : fs_file).string();
+    if (!vs_file.empty())
+      e.vs_path = files::get_resource_path("shaders", vs_file).string();
+    e.reload();
+    registry().push_back(&e);
+    return e;
+  }
+  static Effect load_from_memory(const std::string &name, const char *vs_code,
+                                 const char *fs_code) {
+    Effect e;
+    e.name = name;
+    e.vs_source = vs_code ? vs_code : "";
+    e.fs_source = fs_code ? fs_code : "";
     e.reload();
     registry().push_back(&e);
     return e;
@@ -80,6 +100,9 @@ struct Effect {
     std::erase(r, this);
     name = std::move(other.name);
     path = std::move(other.path);
+    vs_path = std::move(other.vs_path);
+    vs_source = std::move(other.vs_source);
+    fs_source = std::move(other.fs_source);
     shader = other.shader;
     loaded = other.loaded;
     locations = std::move(other.locations);
@@ -96,7 +119,10 @@ struct Effect {
       graphics::unload_shader(shader);
     locations.clear();
     last_values.clear();
-    shader = graphics::load_shader(nullptr, path.c_str());
+    shader = !fs_source.empty() || !vs_source.empty()
+                 ? graphics::load_shader_from_memory(vs_source.empty() ? nullptr : vs_source.c_str(),
+                                                     fs_source.c_str())
+                 : graphics::load_shader(vs_path.empty() ? nullptr : vs_path.c_str(), path.c_str());
     loaded = shader.id != 0;
     if (!loaded)
       log_error("effects: could not load shader '{}' from {}", name, path);
@@ -138,6 +164,19 @@ struct Effect {
     const float arr[3] = {v.x, v.y, v.z};
     if (loaded)
       graphics::set_shader_value(shader, location(uniform), arr, graphics::SHADER_UNIFORM_VEC3);
+  }
+  void set(const char *uniform, Vector4Type v) {
+    const float arr[4] = {v.x, v.y, v.z, v.w};
+    if (loaded)
+      graphics::set_shader_value(shader, location(uniform), arr, graphics::SHADER_UNIFORM_VEC4);
+  }
+  void set(const char *uniform, int v) {
+    if (loaded)
+      graphics::set_shader_value(shader, location(uniform), &v, graphics::SHADER_UNIFORM_INT);
+  }
+  void set(const char *uniform, const MatrixType &m) {
+    if (loaded)
+      graphics::set_shader_value_matrix(shader, location(uniform), m);
   }
   void set(const char *uniform, ColorType c) {
     const float arr[4] = {c.r / 255.f, c.g / 255.f, c.b / 255.f, c.a / 255.f};

@@ -132,6 +132,7 @@ ALL_TESTS := \
 	frame_phases_test \
 	color_value_test \
 	value_types_test \
+	effect_uniforms_test \
 	value_types_none_test \
 	color_palette_test \
 	color_palette_none_test \
@@ -483,6 +484,7 @@ RAYLIB_TESTS := \
 	skeletal_test \
 	math3d_test \
 	value_types_test \
+	effect_uniforms_test \
 	wrappers_test \
 	window_focus_test \
 	window_state_test \

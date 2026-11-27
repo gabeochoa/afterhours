@@ -38,6 +38,7 @@ inline constexpr int SHADER_UNIFORM_VEC2 = PlatformAPI::SHADER_UNIFORM_VEC2;
 inline constexpr int SHADER_UNIFORM_FLOAT = PlatformAPI::SHADER_UNIFORM_FLOAT;
 inline constexpr int SHADER_UNIFORM_VEC4 = PlatformAPI::SHADER_UNIFORM_VEC4;
 inline constexpr int SHADER_UNIFORM_VEC3 = PlatformAPI::SHADER_UNIFORM_VEC3;
+inline constexpr int SHADER_UNIFORM_INT = PlatformAPI::SHADER_UNIFORM_INT;
 
 inline void init_window(int w, int h, const char *title) {
   PlatformAPI::init_window(w, h, title);
@@ -99,6 +100,13 @@ inline void set_render_texture_filter(RenderTextureType &rt, int filter) {
 }
 inline ShaderType load_shader(const char *vsFileName, const char *fsFileName) {
   return PlatformAPI::load_shader(vsFileName, fsFileName);
+}
+inline ShaderType load_shader_from_memory(const char *vsCode, const char *fsCode) {
+  return PlatformAPI::load_shader_from_memory(vsCode, fsCode);
+}
+
+inline void set_shader_value_matrix(ShaderType &shader, int locIndex, const MatrixType &m) {
+  PlatformAPI::set_shader_value_matrix(shader, locIndex, m);
 }
 inline void unload_shader(ShaderType &shader) {
   PlatformAPI::unload_shader(shader);
