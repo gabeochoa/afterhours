@@ -12,6 +12,7 @@
 #include "../autolayout.h"
 #include "../color.h"
 #include "../texture_manager.h"
+#include "access_key.h"
 #include "accessibility.h"
 #include "components.h"
 #include "extension.h"
@@ -71,6 +72,7 @@ struct ComponentConfig {
   bool padding_explicitly_set = false;
   Margin margin;
   std::string label;
+  int label_underline_index = -1;
   bool is_absolute = false;
   FlexDirection flex_direction = FlexDirection::Column;
   JustifyContent justify_content = JustifyContent::FlexStart;
@@ -295,6 +297,13 @@ struct ComponentConfig {
 
   ComponentConfig &with_label(const std::string &lbl) {
     label = lbl;
+    return *this;
+  }
+
+  ComponentConfig &with_access_label(const std::string &lbl) {
+    const auto parsed = parse_access_key(lbl);
+    label = parsed.display;
+    label_underline_index = parsed.underline_index;
     return *this;
   }
   ComponentConfig &with_size(const ComponentSize &sz) {
@@ -995,6 +1004,7 @@ struct ComponentConfig {
   ComponentConfig &with_styled_label(std::vector<TextSpan> spans) {
     styled_label = std::move(spans);
     label.clear();
+    label_underline_index = -1;
     for (const auto &s : styled_label)
       label += s.text;
     return *this;
@@ -1342,6 +1352,8 @@ struct ComponentConfig {
 
     if (!overrides.label.empty())
       if (merged.label != overrides.label) merged.label = overrides.label;
+    if (overrides.label_underline_index != -1)
+      merged.label_underline_index = overrides.label_underline_index;
 
     if (overrides.has_any_rounded_corners())
       merged.rounded_corners = overrides.rounded_corners;

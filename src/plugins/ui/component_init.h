@@ -353,6 +353,7 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
       .set_letter_spacing(config.letter_spacing.value_or(0.f))
       .set_text_inset(config.text_inset)
       .set_line_height(config.text_area_line_height)
+      .set_underline_index(config.label_underline_index)
       .set_spans(pseudo_localize_spans(config.styled_label, pseudo));
   lbl.text_x_offset = config.text_x_offset;
   lbl.text_y_offset = config.text_y_offset;

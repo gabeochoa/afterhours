@@ -884,6 +884,12 @@ static inline RectangleType position_text(const ui::FontManager &fm,
   return position_text_ex(fm, text, container, alignment, margin_px).rect;
 }
 
+inline RectangleType access_underline_rect(float text_x, float text_y,
+                                           float text_h, float prefix_w,
+                                           float glyph_w) {
+  return RectangleType{text_x + prefix_w, text_y + text_h - 1.f, glyph_w, 1.f};
+}
+
 // Internal helper to draw text at a specific position (used by stroke, shadow,
 // and main text) The 'sizing' rect contains any offset (shadow/stroke) that
 // should be applied
@@ -1104,7 +1110,8 @@ static inline bool draw_text_in_rect(
     Vector2Type inset = default_text_inset(),
     bool register_text = true,
     // Pinned row height for the multiline split; 0 means the measured one.
-    float line_height_px = 0.0f) {
+    float line_height_px = 0.0f,
+    int underline_index = -1) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
   // Register text for E2E testing assertions (only visible-in-viewport text)
   if (register_text && testing::test_input::detail::test_mode) {
@@ -1289,6 +1296,23 @@ static inline bool draw_text_in_rect(
   detail::draw_text_at_position(fm, render_text, rect, alignment, sizing, color,
                                 rotation, rot_center_x, rot_center_y,
                                 letter_spacing);
+
+  if (underline_index >= 0 && rotation == 0.f && render_text == text) {
+    const Font font = fm.get_active_font();
+    const float spacing = 1.f + letter_spacing;
+    const std::string prefix =
+        render_text.substr(0, static_cast<size_t>(underline_index));
+    const std::string marked =
+        prefix + render_text.substr(static_cast<size_t>(underline_index), 1);
+    const float prefix_w =
+        measure_text(font, prefix.c_str(), sizing.height, spacing).x;
+    const float glyph_w =
+        measure_text(font, marked.c_str(), sizing.height, spacing).x - prefix_w;
+    draw_rectangle(access_underline_rect(sizing.x, sizing.y,
+                                          sizing.height, prefix_w,
+                                          glyph_w),
+                   color);
+  }
   return truncated;
 }
 
@@ -2221,11 +2245,12 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
             hasLabel.label, immediate_inset, false, label_line_h);
       } else {
         entity.get<HasLabel>().truncated = draw_text_in_rect(
-            font_manager, hasLabel.label.c_str(), label_rect, hasLabel.alignment,
-            font_col, SHOW_TEXT_OVERFLOW_DEBUG, stroke, shadow, rotation,
-            centerX, centerY, hasLabel.text_overflow, hasLabel.letter_spacing,
-            explicit_fs, true, immediate_inset, false,
-            label_line_h);
+            font_manager, hasLabel.label.c_str(), label_rect,
+            hasLabel.alignment, font_col, SHOW_TEXT_OVERFLOW_DEBUG, stroke,
+            shadow, rotation, centerX, centerY, hasLabel.text_overflow,
+            hasLabel.letter_spacing, explicit_fs,
+            /*report_overflow=*/true, immediate_inset, false, label_line_h,
+            hasLabel.underline_index);
       }
       if (clip_label) {
         if (ancestor_clip)

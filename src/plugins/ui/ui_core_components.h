@@ -625,6 +625,7 @@ struct HasLabel : BaseComponent {
   // its own color) instead of the single `label` string. `label` still holds the
   // concatenated text so layout/measurement/overflow work unchanged.
   std::vector<TextSpan> spans;
+  int underline_index = -1;
   bool is_disabled = false;
 
   // For auto-contrast text color calculation
@@ -690,6 +691,11 @@ struct HasLabel : BaseComponent {
 
   auto &set_spans(const std::vector<TextSpan> &s) {
     spans = s;
+    return *this;
+  }
+
+  auto &set_underline_index(int index) {
+    underline_index = index;
     return *this;
   }
 
