@@ -271,6 +271,31 @@ struct HandleMiddleUpCommand : System<PendingE2ECommand> {
     }
 };
 
+struct HandleRightDownCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed() || !cmd.is("right_down")) return;
+        if (!cmd.has_args(2)) {
+            cmd.fail("right_down requires x y arguments");
+            return;
+        }
+
+        auto [sw, sh] = e2e_screen_size();
+        test_input::simulate_right_press(cmd.coord_arg(0, sw),
+                                         cmd.coord_arg(1, sh));
+        cmd.consume();
+    }
+};
+
+struct HandleRightUpCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed() || !cmd.is("right_up")) return;
+        test_input::simulate_right_release();
+        cmd.consume();
+    }
+};
+
 // Handle 'double_click x y' command — two clicks with frame delay for
 // multi-click detection. Uses a phase counter so the command stays pending
 // across frames while the first click's auto-release completes.

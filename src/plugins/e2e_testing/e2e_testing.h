@@ -65,6 +65,8 @@ inline void register_builtin_handlers(SystemManager &sm) {
   sm.register_update_system(std::make_unique<HandleMiddleClickCommand>());
   sm.register_update_system(std::make_unique<HandleMiddleDownCommand>());
   sm.register_update_system(std::make_unique<HandleMiddleUpCommand>());
+  sm.register_update_system(std::make_unique<HandleRightDownCommand>());
+  sm.register_update_system(std::make_unique<HandleRightUpCommand>());
   sm.register_update_system(std::make_unique<HandlePinchCommand>());
   sm.register_update_system(std::make_unique<HandleAnimationModeCommand>());
   sm.register_update_system(std::make_unique<HandleDoubleClickCommand>());
