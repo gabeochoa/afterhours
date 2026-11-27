@@ -1,6 +1,9 @@
 
 #pragma once
 
+#include <algorithm>
+#include <bitset>
+
 #include "config.h"
 
 // Rect geometry lives beside the draw calls that consume it.
@@ -62,6 +65,32 @@ inline void draw_text_with_shadow(const Font font, const char *text,
                Vector2Type{x + shadow_offset_x, y + shadow_offset_y}, size,
                spacing, shadow_color);
   draw_text_ex(font, text, Vector2Type{x, y}, size, spacing, color);
+}
+
+// Rounded rects sized in pixels, not in `with_roundness` fractions of the
+// short side: the same `px` radius on a row and on a panel. `roundness` in
+// the backend calls is a fraction of half the short side, and the default
+// corner mask is empty (a square fill that silently discards the radius),
+// so these convert and always pass the all-corners mask.
+inline float roundness_for_px(const RectangleType rect, const float px) {
+  const float s = std::min(rect.width, rect.height);
+  return s <= 0.f ? 0.f : std::min(0.5f, px * 2.f / s);
+}
+
+inline void draw_rectangle_rounded_px(const RectangleType rect,
+                                        const float px, const Color color,
+                                        const int segments = 8) {
+  draw_rectangle_rounded(rect, roundness_for_px(rect, px), segments, color,
+                         std::bitset<4>().set());
+}
+
+inline void draw_rectangle_rounded_lines_px(const RectangleType rect,
+                                              const float px,
+                                              const float thickness,
+                                              const Color color,
+                                              const int segments = 8) {
+  draw_rectangle_rounded_lines_ex(rect, roundness_for_px(rect, px), segments,
+                                  thickness, color);
 }
 
 } // namespace afterhours
