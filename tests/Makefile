@@ -441,6 +441,7 @@ lighting_zones_test \
 	translation_test \
 	layout_inspector_test \
 	letter_spacing_zero_test \
+	imm_instance_test \
 	padding_empty_test \
 	mouse_pre_event_test
 

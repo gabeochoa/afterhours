@@ -86,6 +86,22 @@ inline EntityParent
 mk(Entity &parent, EntityID otherID = -1,
    const std::source_location location = std::source_location::current());
 
+inline std::vector<EntityID> imm_instance_stack;
+
+struct ImmScope {
+  explicit ImmScope(EntityID instance_key) {
+    imm_instance_stack.push_back(instance_key);
+  }
+  ~ImmScope() { imm_instance_stack.pop_back(); }
+  ImmScope(const ImmScope &) = delete;
+  ImmScope &operator=(const ImmScope &) = delete;
+};
+
+inline EntityParent
+mk_instance(Entity &parent, EntityID instance_key,
+            const std::source_location location =
+                std::source_location::current());
+
 // A recycled list row reuses one entity for a position in the visible window
 // rather than creating one per item. `otherID` is that position and `key` is
 // the item currently in it, so *key_changed_out reports the position has moved
@@ -120,6 +136,9 @@ inline UI_UUID hash_call_site(EntityID parent_id, EntityID otherID,
   };
   mix_int(parent_id);
   mix_int(otherID);
+  mix_int(static_cast<long long>(imm_instance_stack.size()));
+  for (EntityID k : imm_instance_stack)
+    mix_int(k);
   mix_str(loc.file_name());
   mix_int(loc.line());
   mix_int(loc.column());
@@ -182,6 +201,12 @@ inline EntityParent
 mk(Entity &parent, EntityID otherID,
    const std::source_location location) {
   return mk_impl(parent, otherID, 0, false, nullptr, location);
+}
+
+inline EntityParent mk_instance(Entity &parent, EntityID instance_key,
+                                const std::source_location location) {
+  ImmScope scope(instance_key);
+  return mk_impl(parent, -1, 0, false, nullptr, location);
 }
 
 inline EntityParent mk_keyed(Entity &parent, EntityID otherID, size_t key,
