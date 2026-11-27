@@ -14,6 +14,8 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <thread>
+#include <vector>
 
 #include <afterhours/src/log_file.h>
 
@@ -132,6 +134,51 @@ int main() {
   afterhours::log_file::open("/definitely/not/a/directory/log.txt");
   log_info("still alive");
   check(true, "an unopenable path is survivable");
+
+  afterhours::log_file::close();
+
+  // Concurrent writers, before and after open: every line lands intact.
+  const auto conc_path = temp_log("afh_log_file_conc_test.txt");
+  std::filesystem::remove(conc_path);
+  constexpr int threads = 8;
+  constexpr int per_thread = 50;
+  auto run_threads = [](const char *tag) {
+    std::vector<std::thread> pool;
+    for (int t = 0; t < threads; t++)
+      pool.emplace_back([tag, t] {
+        for (int i = 0; i < per_thread; i++)
+          log_info("{}-{}-{}", tag, t, i);
+      });
+    for (auto &th : pool)
+      th.join();
+  };
+  run_threads("pre");
+  afterhours::log_file::open(conc_path.string().c_str());
+  run_threads("post");
+  afterhours::log_file::close();
+  {
+    std::istringstream in(read_all(conc_path));
+    std::string line;
+    std::vector<std::string> lines;
+    while (std::getline(in, line))
+      lines.push_back(line);
+    auto expect = [&](const char *tag) {
+      for (int t = 0; t < threads; t++)
+        for (int i = 0; i < per_thread; i++) {
+          const std::string want =
+              "[INFO] " + std::string(tag) + "-" + std::to_string(t) + "-" +
+              std::to_string(i);
+          bool found = false;
+          for (const auto &got : lines)
+            if (got == want)
+              found = true;
+          check(found, "every concurrent line present and intact");
+        }
+    };
+    expect("pre");
+    expect("post");
+  }
+  std::filesystem::remove(conc_path);
 
   std::filesystem::remove(path);
 
