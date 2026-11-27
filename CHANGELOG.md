@@ -6,6 +6,7 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+- **Screen transitions (`src/plugins/screen_transition.h`).** `ScreenTransition` snapshots the outgoing frame into an offscreen target on `begin(texture)` and draws `CrossDissolve`, `FadeToBlack` or `WipeLeft` over the incoming frame; `tick(dt, snap)` advances it and any fresh press snaps it to done. The caller owns which edges dissolve and skips it in deterministic test mode.
 - **Pixel-radius rounded rects (`draw_rectangle_rounded_px` / `draw_rectangle_rounded_lines_px` in `drawing_helpers.h`).** `px` is an absolute radius (same value on a row and a panel), converted from the backend `roundness` fraction of the short side, always with the all-corners mask — the empty default mask silently drew a square fill. `roundness_for_px(rect, px)` is the conversion for callers with their own draw path.
 - **Letterboxed present helper (`src/plugins/present.h`).** `present_render_texture(shader)` blits the engine render texture into the window at the `window_manager::content_viewport` dest (the same transform input mapping uses), with the stored bottom-up flip baked in; `letterbox_dest()` exposes that dest and `present_render_texture(dest, shader)` blits into an explicit one. No-op on backends with no render texture.
 
