@@ -366,6 +366,7 @@ lighting_zones_test \
 	psx_backend_test \
 	pagination_test \
 	random_engine_test \
+	math_noise_helpers_test \
 	render_order_test \
 	draw_over_test \
 	imm_draw_order_test \

@@ -140,4 +140,30 @@ private:
   RNGStream rng;
 };
 
+namespace random {
+
+inline float hash01(int x, int y, std::uint32_t salt = 0) {
+  std::uint32_t h = static_cast<std::uint32_t>(x) * 374761393u +
+                    static_cast<std::uint32_t>(y) * 668265263u +
+                    salt * 2246822519u;
+  h = (h ^ (h >> 13)) * 1274126177u;
+  h ^= h >> 16;
+  return static_cast<float>(h >> 8) * (1.0f / 16777216.0f);
+}
+
+inline float value_noise(float x, float y, std::uint32_t salt = 0) {
+  const int xi = static_cast<int>(std::floor(x));
+  const int yi = static_cast<int>(std::floor(y));
+  const float xf = x - static_cast<float>(xi);
+  const float yf = y - static_cast<float>(yi);
+  const float u = xf * xf * (3.0f - 2.0f * xf);
+  const float v = yf * yf * (3.0f - 2.0f * yf);
+  const float lo = hash01(xi, yi, salt) + u * (hash01(xi + 1, yi, salt) - hash01(xi, yi, salt));
+  const float hi = hash01(xi, yi + 1, salt) +
+                   u * (hash01(xi + 1, yi + 1, salt) - hash01(xi, yi + 1, salt));
+  return lo + v * (hi - lo);
+}
+
+} // namespace random
+
 } // namespace afterhours
