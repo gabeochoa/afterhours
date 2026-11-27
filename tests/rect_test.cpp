@@ -33,6 +33,21 @@ TEST(sides_are_top_left_bottom_right_not_css_order) {
   CHECK(same(pad(r, Sides{.right = 10}), RectangleType{0, 0, 90, 100}));
 }
 
+// Sides::css takes CSS order {top, right, bottom, left}, so a verbatim move
+// from puzzle keeps its meaning: css(1,2,3,4) is top 1, right 2, bottom 3,
+// left 4 -- the designated-initialiser Sides below (in field order) and the
+// pad/expand results pin that down.
+TEST(sides_css_factory_takes_css_order) {
+  const RectangleType r{0, 0, 100, 100};
+  const auto viaCss = Sides::css(1, 2, 3, 4);
+  const Sides designated{.top = 1, .left = 4, .bottom = 3, .right = 2};
+  CHECK(viaCss.top == designated.top && viaCss.left == designated.left &&
+        viaCss.bottom == designated.bottom && viaCss.right == designated.right);
+  CHECK(same(pad(r, viaCss), pad(r, designated)));
+  CHECK(same(pad(r, viaCss), RectangleType{4, 1, 94, 96}));
+  CHECK(same(expand(r, viaCss), expand(r, designated)));
+}
+
 TEST(pad_shrinks_and_expand_grows) {
   const RectangleType r{10, 20, 100, 50};
   CHECK(same(pad(r, 5.f), RectangleType{15, 25, 90, 40}));

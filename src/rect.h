@@ -31,8 +31,9 @@ namespace rect {
 
 // NOTE: {top, left, bottom, right}, matching Padding and Margin. That is NOT
 // CSS order -- puzzle's original is {top, right, bottom, left} -- so a file
-// moved here verbatim will silently swap left and right. Designated
-// initialisers (`{.top = 4}`) are immune and are the recommended spelling.
+// moved here verbatim will silently swap left and right. Use Sides::css for
+// CSS-ordered values, or designated initialisers (`{.top = 4}`) which are
+// immune and the recommended spelling.
 struct Sides {
   float top = 0.f;
   float left = 0.f;
@@ -42,6 +43,10 @@ struct Sides {
   static constexpr Sides all(float v) { return {v, v, v, v}; }
   static constexpr Sides vertical(float v) { return {v, 0.f, v, 0.f}; }
   static constexpr Sides horizontal(float v) { return {0.f, v, 0.f, v}; }
+  static constexpr Sides css(float top, float right, float bottom,
+                             float left) {
+    return {top, left, bottom, right};
+  }
 };
 
 // A strip and what is left, always in spatial order: for cut_top the strip is
