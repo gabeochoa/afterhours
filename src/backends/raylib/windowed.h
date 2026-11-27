@@ -36,6 +36,9 @@ struct RaylibWindowed {
     logical_w_ = cfg.width;
     logical_h_ = cfg.height;
     unsigned int flags = raylib::FLAG_WINDOW_RESIZABLE | cfg.config_flags;
+    if (cfg.start_hidden)
+      flags |= raylib::FLAG_WINDOW_HIDDEN;
+    note_window_hidden(cfg.start_hidden);
     if (cfg.enable_msaa) {
       flags |= raylib::FLAG_MSAA_4X_HINT;
     }

@@ -135,7 +135,19 @@ struct Config {
   // Supersample factor used when hidpi is set and there is no display to query
   // (headless capture). 2 matches a typical Retina window.
   int hidpi_scale = 2;
+  bool start_hidden = false;
 };
+
+namespace detail {
+inline bool &window_hidden_storage() {
+  static bool hidden = false;
+  return hidden;
+}
+}
+inline bool window_is_hidden() { return detail::window_hidden_storage(); }
+inline void note_window_hidden(bool hidden) {
+  detail::window_hidden_storage() = hidden;
+}
 
 template <typename T>
 concept GraphicsBackend =
@@ -164,6 +176,8 @@ concept PlatformBackend = requires {
   { T::set_window_size(int{}, int{}) } -> std::same_as<void>;
   { T::set_window_min_size(int{}, int{}) } -> std::same_as<void>;
   { T::window_resize_pending() } -> std::same_as<bool>;
+  { T::show_window() } -> std::same_as<void>;
+  { T::hide_window() } -> std::same_as<void>;
   { T::set_window_state(unsigned{}) } -> std::same_as<void>;
   { T::clear_window_state(unsigned{}) } -> std::same_as<void>;
   { T::window_state() } -> std::same_as<unsigned>;
@@ -256,6 +270,7 @@ struct RunConfig {
 
   bool enable_file_drop = false;
   bool macos_forward_cmd_chords = false;
+  bool start_hidden = false;
 
   float fixed_dt = 0.f;
   int sim_steps = 1;
