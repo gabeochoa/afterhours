@@ -290,6 +290,7 @@ lighting_zones_test \
 	text_line_edit_test \
 	grapheme_edit_test \
 	entity_mapping_test \
+	staged_restore_test \
 	collection_binding_test \
 	files_atomic_write_test \
 	files_confined_path_test \

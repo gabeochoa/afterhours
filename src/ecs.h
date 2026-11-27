@@ -6,4 +6,5 @@
 #include "core/entity_query.h"
 #include "core/event_queue.h"
 #include "core/system.h"
+#include "core/staged_restore.h"
 #include "core/typed_entity_handle.h"

@@ -762,6 +762,25 @@ struct EntityCollection {
     }
   }
 
+  void swap_contents(EntityCollection &other) {
+    using std::swap;
+    swap(entities_DO_NOT_USE, other.entities_DO_NOT_USE);
+    swap(temp_entities, other.temp_entities);
+    swap(permanent_ids, other.permanent_ids);
+    swap(singletonMap, other.singletonMap);
+    swap(slots, other.slots);
+    swap(free_slots, other.free_slots);
+    swap(id_to_slot, other.id_to_slot);
+    swap(entity_pool_, other.entity_pool_);
+    swap(max_pool_size_, other.max_pool_size_);
+    swap(free_ids_, other.free_ids_);
+    swap(version, other.version);
+    swap(indexes, other.indexes);
+    swap(indexed_version, other.indexed_version);
+    ++version;
+    invalidate_indexes();
+  }
+
   // Rebuild the handle store (slots/free list/id mapping) from the current
   // `entities_DO_NOT_USE` contents. This is intended for integration points
   // that bulk-replace the entity list (e.g., loading a snapshot).
