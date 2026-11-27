@@ -398,6 +398,7 @@ lighting_zones_test \
 	eye_position_test \
 	instance_batcher_test \
 	instance_batcher_persist_test \
+	time_of_day_test \
 	lod_test \
 	blob_shadow_test \
 	world_label_test \
@@ -532,6 +533,7 @@ RAYLIB_TESTS := \
 	eye_position_test \
 	instance_batcher_test \
 	instance_batcher_persist_test \
+	time_of_day_test \
 	dialog_test \
 	escape_owner_test \
 	modal_centering_test \
