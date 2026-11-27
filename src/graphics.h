@@ -75,6 +75,17 @@ inline void set_trace_log_level(int level) {
   PlatformAPI::set_trace_log_level(level);
 }
 
+#if !defined(AFTER_HOURS_USE_RAYLIB)
+inline void route_backend_logs(
+    LogLevel min_level = LogLevel::LOG_INFO,
+    std::function<bool(LogLevel, std::string_view)> filter = {}) {
+  (void)min_level;
+  (void)filter;
+}
+
+inline void clear_backend_log_route() {}
+#endif
+
 inline void begin_drawing() { PlatformAPI::begin_drawing(); }
 inline void end_drawing() { PlatformAPI::end_drawing(); }
 inline void clear_background(::afterhours::ColorLike auto c) {

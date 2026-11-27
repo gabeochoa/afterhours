@@ -15,6 +15,11 @@
 #include "headless.h"
 #include "windowed.h"
 
+#include <cstdarg>
+#include <cstdio>
+#include <functional>
+#include <string_view>
+#include <utility>
 #include <variant>
 
 namespace afterhours::graphics {
@@ -475,6 +480,76 @@ struct RaylibPlatformAPI {
     file_drop::set_enabled(false);
   }
 };
+
+namespace backend_log_detail {
+
+inline LogLevel &route_min_level() {
+  static LogLevel level = LogLevel::LOG_INFO;
+  return level;
+}
+
+inline std::function<bool(LogLevel, std::string_view)> &route_filter() {
+  static std::function<bool(LogLevel, std::string_view)> filter;
+  return filter;
+}
+
+inline void trace_log_callback(int raylib_level, const char *text,
+                               va_list args) {
+  char buffer[1024];
+  std::vsnprintf(buffer, sizeof(buffer), text, args);
+  LogLevel level = LogLevel::LOG_INFO;
+  switch (raylib_level) {
+  case raylib::LOG_TRACE:
+    level = LogLevel::LOG_TRACE;
+    break;
+  case raylib::LOG_DEBUG:
+    level = LogLevel::LOG_DEBUG;
+    break;
+  case raylib::LOG_INFO:
+    level = LogLevel::LOG_INFO;
+    break;
+  case raylib::LOG_WARNING:
+    level = LogLevel::LOG_WARN;
+    break;
+  case raylib::LOG_ERROR:
+  case raylib::LOG_FATAL:
+    level = LogLevel::LOG_ERROR;
+    break;
+  default:
+    level = LogLevel::LOG_INFO;
+    break;
+  }
+  if (level < route_min_level())
+    return;
+  const std::string_view message{buffer};
+  if (route_filter() && !route_filter()(level, message))
+    return;
+  afterhours::log_v(level, message);
+}
+
+} // namespace backend_log_detail
+
+inline void route_backend_logs(
+    LogLevel min_level = LogLevel::LOG_INFO,
+    std::function<bool(LogLevel, std::string_view)> filter = {}) {
+#if defined(AFTER_HOURS_HAS_FORMAT) && AFTER_HOURS_HAS_FORMAT &&               \
+    !defined(AFTER_HOURS_LEAN_LOGGING) && !defined(AFTER_HOURS_REPLACE_LOGGING)
+  backend_log_detail::route_min_level() = min_level;
+  backend_log_detail::route_filter() = std::move(filter);
+  raylib::SetTraceLogCallback(&backend_log_detail::trace_log_callback);
+#else
+  (void)min_level;
+  (void)filter;
+#endif
+}
+
+inline void clear_backend_log_route() {
+#if defined(AFTER_HOURS_HAS_FORMAT) && AFTER_HOURS_HAS_FORMAT &&               \
+    !defined(AFTER_HOURS_LEAN_LOGGING) && !defined(AFTER_HOURS_REPLACE_LOGGING)
+  raylib::SetTraceLogCallback(nullptr);
+  backend_log_detail::route_filter() = nullptr;
+#endif
+}
 
 static_assert(PlatformBackend<RaylibPlatformAPI>,
               "RaylibPlatformAPI must satisfy PlatformBackend concept");
