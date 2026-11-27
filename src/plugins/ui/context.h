@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <bitset>
 #include <cmath>
+#include <cstdint>
 #include <functional>
 #if __has_include(<magic_enum/magic_enum.hpp>)
 #include <magic_enum/magic_enum.hpp>
@@ -246,6 +247,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
 
   // Check if all gates allow input for this entity
   [[nodiscard]] bool is_input_allowed(EntityID id) const {
+    if (!input_gate_stack.empty()) return input_gate_stack.back().gate(id);
     return std::all_of(input_gates.begin(), input_gates.end(),
                        [id](const auto &pair) { return pair.second(id); });
   }
@@ -278,6 +280,93 @@ template <typename InputAction> struct UIContext final : BaseComponent {
       return "";
     return std::string_view(label).substr(
         r.start, std::min(r.length(), label.size() - r.start));
+  }
+
+  using InputGateToken = std::uint64_t;
+
+  struct InputGateEntry {
+    InputGateToken token;
+    std::string name;
+    InputGate gate;
+  };
+
+  std::vector<InputGateEntry> input_gate_stack;
+  InputGateToken next_token = 1;
+
+  struct ScopedInputGate {
+    UIContext *owner = nullptr;
+    InputGateToken token = 0;
+
+    ScopedInputGate() = default;
+    ScopedInputGate(UIContext *o, InputGateToken t) : owner(o), token(t) {}
+    ~ScopedInputGate() { reset(); }
+
+    ScopedInputGate(const ScopedInputGate &) = delete;
+    ScopedInputGate &operator=(const ScopedInputGate &) = delete;
+
+    ScopedInputGate(ScopedInputGate &&o) noexcept
+        : owner(std::exchange(o.owner, nullptr)),
+          token(std::exchange(o.token, 0)) {}
+
+    ScopedInputGate &operator=(ScopedInputGate &&o) noexcept {
+      if (this != &o) {
+        reset();
+        owner = std::exchange(o.owner, nullptr);
+        token = std::exchange(o.token, 0);
+      }
+      return *this;
+    }
+
+    void reset() {
+      if (owner && token) owner->pop_input_gate(token);
+      owner = nullptr;
+      token = 0;
+    }
+
+    explicit operator bool() const { return owner && token; }
+  };
+
+  InputGateToken push_input_gate(std::string name, InputGate gate) {
+    auto token = next_token++;
+    input_gate_stack.push_back({token, std::move(name), std::move(gate)});
+    return token;
+  }
+
+  InputGateToken push_input_gate(std::string name, EntityID root) {
+    return push_input_gate(std::move(name), [this, root](EntityID id) {
+      return id == ROOT || contains_in_subtree(root, id);
+    });
+  }
+
+  ScopedInputGate scoped_input_gate(std::string name, InputGate gate) {
+    return {this, push_input_gate(std::move(name), std::move(gate))};
+  }
+
+  ScopedInputGate scoped_input_gate(std::string name, EntityID root) {
+    return {this, push_input_gate(std::move(name), root)};
+  }
+
+  bool pop_input_gate(InputGateToken token) {
+    auto it = std::find_if(input_gate_stack.begin(), input_gate_stack.end(),
+                           [&](const auto &e) { return e.token == token; });
+    if (it == input_gate_stack.end()) return false;
+    input_gate_stack.erase(it);
+    return true;
+  }
+
+  bool pop_input_gate() {
+    if (input_gate_stack.empty()) return false;
+    input_gate_stack.pop_back();
+    return true;
+  }
+
+  [[nodiscard]] size_t input_gate_depth() const {
+    return input_gate_stack.size();
+  }
+
+  [[nodiscard]] std::string top_input_gate_name() const {
+    return input_gate_stack.empty() ? std::string{}
+                                     : input_gate_stack.back().name;
   }
 
   [[nodiscard]] bool is_hot(EntityID id) const { return hot_id == id; };
@@ -507,6 +596,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     prev_focus_index = -1;
     render_cmds.clear();
     input_gates.clear();
+    input_gate_stack.clear();
     last_action = InputAction::None;
     last_action_modifiers = 0;
     all_actions.reset();
