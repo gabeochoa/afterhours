@@ -6,7 +6,9 @@
 #include <utility>
 #include <vector>
 
+#ifdef AFTER_HOURS_ENTITY_ALLOC_DEBUG
 #include "../debug_allocator.h"
+#endif
 #include "../singleton.h"
 #include "entity.h"
 

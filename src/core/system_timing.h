@@ -4,6 +4,22 @@
 #define AFTERHOURS_ENABLE_PROFILING 0
 #endif
 
+namespace afterhours {
+namespace crash {
+namespace detail {
+// Which system is running. SystemManager sets it; crash reports read it.
+inline const char *&running_system() {
+  static const char *name = nullptr;
+  return name;
+}
+} // namespace detail
+inline void set_running_system(const char *name) {
+  detail::running_system() = name;
+}
+inline const char *running_system() { return detail::running_system(); }
+} // namespace crash
+} // namespace afterhours
+
 #if AFTERHOURS_ENABLE_PROFILING
 #include <array>
 #include <chrono>

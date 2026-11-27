@@ -19,7 +19,6 @@
 #define AFTER_HOURS_HAS_CXXABI 1
 #endif
 
-#include "../crash_handler.h"
 #include "../logging.h"
 #include "base_component.h"
 #include "entity.h"
