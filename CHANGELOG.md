@@ -6,6 +6,8 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+- **Letterboxed present helper (`src/plugins/present.h`).** `present_render_texture(shader)` blits the engine render texture into the window at the `window_manager::content_viewport` dest (the same transform input mapping uses), with the stored bottom-up flip baked in; `letterbox_dest()` exposes that dest and `present_render_texture(dest, shader)` blits into an explicit one. No-op on backends with no render texture.
+
 - **`imm::prompt_bar` and `imm::keycap` widgets.** A row of `[key] label` prompts built from `PromptItem{key, label, on_press}`; interactive items are buttons, the rest are inert, with caller-overridable bar/keycap/label configs. Covered by `prompt_bar_test`.
 - **Subtree rotation inheritance.** A rotated container now rotates its whole subtree: rendering, images, focus rings, and hit-testing compose own plus ancestor rotations through `detail::resolve_world_transform`. Covered by `subtree_rotation_test`.
 - **Window exposure and backing-scale events (`afterhours::window_events`).** Raylib and Sokol push `Resized`, `ScaleChanged`, `Minimized`, `Restored`, `FocusGained`, and `FocusLost` into a backend-agnostic queue. Covered by `window_events_test`.
