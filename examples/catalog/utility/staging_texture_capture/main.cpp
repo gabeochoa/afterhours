@@ -1,18 +1,17 @@
 #if !defined(AFTER_HOURS_USE_RAYLIB) && !defined(AFTER_HOURS_USE_VULKAN) && !defined(AFTER_HOURS_USE_SOKOL)
 #define AFTER_HOURS_USE_SOKOL
 #endif
-#include <afterhours/src/graphics.h>
+#define AFTER_HOURS_EXAMPLE_GRAPHICS
+#include "../../../example_helper.h"
 #include <afterhours/src/drawing_helpers.h>
 #include <cassert>
 #include <cstdio>
 
 int main() {
   using namespace afterhours;
-  graphics::Config config;
-  config.display = graphics::DisplayMode::Headless;
-  config.width = 128;
-  config.height = 128;
-  if (!graphics::init(config)) {
+  using namespace afterhours::examples;
+  Graphics gfx(Graphics::headless(128, 128));
+  if (!gfx.ok()) {
     printf("SKIP: headless Metal init failed (no GPU available)\n");
     return 0;
   }
@@ -37,6 +36,5 @@ int main() {
   }
   printf("50 repeated captures completed without accumulating staging "
          "textures\n");
-  graphics::shutdown();
   return 0;
 }
