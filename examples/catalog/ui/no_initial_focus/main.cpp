@@ -1,12 +1,12 @@
 #include <cstdio>
 
-#include "../../../../ah.h"
-#include "../../../../src/graphics.h"
-#define AFTER_HOURS_IMM_UI
-#include "../../../../src/plugins/e2e_testing/platform_test_input.h"
-#include "../../../../src/plugins/ui.h"
+#define AFTER_HOURS_EXAMPLE_UI
+#define AFTER_HOURS_EXAMPLE_GRAPHICS
+#define AFTER_HOURS_EXAMPLE_TEST_INPUT
+#include "../../../example_helper.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
@@ -20,37 +20,29 @@ struct MainMenu : System<DefaultUIContext> {
 };
 
 int main() {
-  graphics::Config config;
-  config.display = graphics::DisplayMode::Headless;
-  config.width = 400;
-  config.height = 200;
-  if (!graphics::init(config))
-    return 1;
-
+  Checks checks;
   input::add_singleton_components(EntityHelper::createEntity(),
                                   ui::default_keymap<DefaultAction>());
-  SystemManager systems;
-  input::register_update_systems(systems);
-  auto menu = std::make_unique<MainMenu>();
-  MainMenu &screen = *menu;
-  ui::setup_with_resolution<>(systems, {400, 200}, std::move(menu));
-  auto &ctx = *EntityHelper::get_singleton_cmp<DefaultUIContext>();
+  HeadlessUI<MainMenu> app(400, 200, std::make_unique<MainMenu>(),
+                           std::make_unique<input::InputSystem>());
+  if (!app.ok())
+    return 1;
+  auto &ctx = app.ui.context();
   ctx.grab_initial_focus = false;
-  testing::platform_input::set_test_mode(true);
 
-  for (int frame = 0; frame < 3; ++frame)
-    systems.run(1.f / 60.f);
+  app.run(3);
   const bool focused_on_load = ctx.focus_id != ctx.ROOT;
 
   testing::test_input::push_key(keys::TAB);
   for (int frame = 0; frame < 3; ++frame) {
-    systems.run(1.f / 60.f);
+    app.run(1);
     testing::test_input::reset_frame();
   }
-  const bool tab_focused_first = ctx.has_focus(screen.new_game);
+  const bool tab_focused_first = ctx.has_focus(app.screen().new_game);
 
   std::printf("focused on load: %s; after Tab, New game focused: %s\n",
               focused_on_load ? "yes" : "no", tab_focused_first ? "yes" : "no");
-  graphics::shutdown();
-  return !focused_on_load && tab_focused_first ? 0 : 1;
+  checks.check(!focused_on_load, "nothing is focused on load");
+  checks.check(tab_focused_first, "Tab focuses New game first");
+  return checks.finish("no_initial_focus");
 }

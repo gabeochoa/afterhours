@@ -2,12 +2,12 @@
 #include <string>
 #include <vector>
 
-#include "../../../../ah.h"
-#define AFTER_HOURS_IMM_UI
-#include "../../../../src/plugins/ui.h"
+#define AFTER_HOURS_EXAMPLE_UI
+#include "../../../example_helper.h"
 #include "../../../../src/plugins/ui/tree_view.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
@@ -59,10 +59,11 @@ struct Browser : System<DefaultUIContext> {
 };
 
 int main(int, char **) {
-  SystemManager systems;
-  ui::setup_with_resolution(systems, {1280, 720}, std::make_unique<Browser>());
-  systems.run(1.f / 60.f);
+  Checks checks;
+  auto app = make_logic_ui<Browser>({1280, 720}, std::make_unique<Browser>());
+  app.run(1);
   rows_drawn = 0;
-  systems.run(1.f / 60.f);
-  return rows_drawn == 4 ? 0 : 1;
+  app.run(1);
+  checks.check(rows_drawn == 4, "expanded tree draws all 4 rows");
+  return checks.finish("tree_view_rows");
 }
