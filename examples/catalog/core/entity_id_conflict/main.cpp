@@ -1,7 +1,7 @@
 #include <iostream>
 #include <vector>
 
-#include "../../../../ah.h"
+#include "../../../example_helper.h"
 #include "../../../../src/plugins/autolayout.h"
 #define AFTER_HOURS_IMM_UI
 #include "../../../../src/plugins/ui.h"
@@ -90,6 +90,7 @@ struct EntityIDConflictTest : System<UIContext<InputAction>> {
 
 int main(int, char **) {
     using namespace afterhours;
+    using namespace afterhours::examples;
 
     {
         auto &entity = EntityHelper::createEntity();
@@ -115,17 +116,14 @@ int main(int, char **) {
 
     ui::enforce_singletons<InputAction>(systems);
 
-    systems.register_update_system(
-        std::make_unique<ui::ClearUIComponentChildren>());
-    systems.register_update_system(
-        std::make_unique<ui::BeginUIContextManager<InputAction>>());
-    systems.register_update_system(std::make_unique<EntityIDConflictTest>());
-    systems.register_update_system(
-        std::make_unique<ui::EndUIContextManager<InputAction>>());
+    add_update_systems(systems, std::make_unique<ui::ClearUIComponentChildren>(),
+                       std::make_unique<ui::BeginUIContextManager<InputAction>>(),
+                       std::make_unique<EntityIDConflictTest>(),
+                       std::make_unique<ui::EndUIContextManager<InputAction>>());
 
     // Run a single frame to demonstrate the issue
     std::cout << "\n=== Frame 0 ===" << std::endl;
-    systems.run(1.f);
+    run_frames(systems, 1, 1.f);
 
     return 0;
 }

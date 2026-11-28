@@ -1,12 +1,14 @@
 #include <cstdio>
 
-#include "../../../../ah.h"
+#include "../../../example_helper.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 
 int steps = 0;
 
 int main() {
+  Checks checks;
   SystemManager systems;
   systems.fixed_tick_rate = 1.f / 60.f;
   systems.max_fixed_ticks = 5;
@@ -24,5 +26,7 @@ int main() {
   systems.run(2.f);
   printf("a 2s hitch ran %d steps, not 120\n", steps);
 
-  return normal == 2 && steps == 5 ? 0 : 1;
+  checks.check(normal == 2 && steps == 5,
+               "fixed ticks run twice for 33ms and cap at 5 on a hitch");
+  return checks.finish("fixed_tick_rate");
 }
