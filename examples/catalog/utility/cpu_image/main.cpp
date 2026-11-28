@@ -1,9 +1,11 @@
 #include <cstdio>
 
-#include "../../../../src/graphics.h"
+#define AFTER_HOURS_EXAMPLE_GRAPHICS
+#include "../../../example_helper.h"
 #include "../../../../src/image.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 
 int main(int, char **) {
   auto size = image_size(IMAGE_PATH);
@@ -21,11 +23,8 @@ int main(int, char **) {
   std::printf("pixel(256, 256) = %d %d %d %d\n", middle.r, middle.g, middle.b,
               middle.a);
 
-  graphics::Config config;
-  config.display = graphics::DisplayMode::Headless;
-  config.width = 64;
-  config.height = 64;
-  if (!graphics::init(config))
+  Graphics gfx(Graphics::headless(64, 64));
+  if (!gfx.ok())
     return 1;
 
   TextureType texture =
@@ -45,6 +44,5 @@ int main(int, char **) {
     std::printf("drew it into a %dx%d frame\n", frame->width, frame->height);
 
   unload_texture(texture);
-  graphics::shutdown();
   return frame ? 0 : 1;
 }

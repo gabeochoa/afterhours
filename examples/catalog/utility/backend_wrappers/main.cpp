@@ -1,4 +1,5 @@
-#include "../../../../src/graphics.h"
+#define AFTER_HOURS_EXAMPLE_GRAPHICS
+#include "../../../example_helper.h"
 #include "../../../../src/backends/sokol/drawing_helpers.h"
 #include "../../../../src/core/key_codes.h"
 
@@ -6,13 +7,11 @@
 
 namespace g = afterhours::graphics;
 using namespace afterhours;
+using namespace afterhours::examples;
 
 int main() {
-  g::Config cfg;
-  cfg.display = g::DisplayMode::Headless;
-  cfg.width = 320;
-  cfg.height = 180;
-  if (!g::init(cfg)) {
+  Graphics gfx(Graphics::headless(320, 180));
+  if (!gfx.ok()) {
     std::printf("no GPU, nothing to show\n");
     return 0;
   }
