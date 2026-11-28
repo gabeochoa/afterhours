@@ -17,26 +17,21 @@
 // Run:
 //   ./graphics_example
 
-#include <afterhours/src/graphics.h>
-#include <iostream>
 #include <filesystem>
+#include <iostream>
+
+#define AFTER_HOURS_EXAMPLE_GRAPHICS
+#include "example_helper.h"
 
 namespace graphics = afterhours::graphics;
+using afterhours::examples::Graphics;
 
 int main() {
     std::cout << "=== Afterhours Graphics Module Example ===\n\n";
 
-    // Configure for headless rendering
-    graphics::Config config{};
-    config.display = graphics::DisplayMode::Headless;
-    config.width = 800;
-    config.height = 600;
-    config.title = "Graphics Example";
-    config.target_fps = 60;
-    config.time_scale = 1.0f;
-
     std::cout << "1. Initializing headless graphics backend...\n";
-    if (!graphics::init(config)) {
+    Graphics gfx(Graphics::headless(800, 600, "Graphics Example"));
+    if (!gfx.ok()) {
         std::cerr << "   FAILED to initialize graphics backend\n";
         return 1;
     }
@@ -95,9 +90,7 @@ int main() {
     std::cout << "   Render texture ID: " << rt.id << "\n";
     std::cout << "   Texture size: " << rt.texture.width << "x" << rt.texture.height << "\n";
 
-    // Cleanup
     std::cout << "\n7. Shutting down...\n";
-    graphics::shutdown();
     std::cout << "   OK - Graphics backend shut down\n";
 
     std::cout << "\n=== Example Complete ===\n";

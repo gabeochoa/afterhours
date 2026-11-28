@@ -47,21 +47,20 @@
 #include <fmt/format.h>
 
 #include <afterhours/src/plugins/ui/text_input/utils.h>
+#include "example_helper.h"
 
 #include <cstdio>
 #include <string>
 
+using afterhours::examples::Checks;
 using afterhours::text_input::HasTextInputState;
 using afterhours::text_input::insert_char;
 
 namespace {
 
-int g_failures = 0;
+Checks checks;
 
-void check(bool ok, const std::string &what) {
-  std::printf("  %-58s %s\n", what.c_str(), ok ? "ok" : "FAILED");
-  if (!ok) ++g_failures;
-}
+void check(bool ok, const std::string &what) { checks.check(ok, what.c_str()); }
 
 // The exact sequence from the bug report: an empty field showing a hint, a
 // click that lands inside the hint, then one keystroke.
@@ -134,7 +133,5 @@ int main() {
   scenario_clamp_lands_at_the_end();
   scenario_normal_typing_is_unaffected();
 
-  std::printf("\n%s\n", g_failures == 0 ? "all scenarios survived"
-                                        : "SOME SCENARIOS MISBEHAVED");
-  return g_failures == 0 ? 0 : 1;
+  return checks.finish("text_input placeholder repro");
 }
