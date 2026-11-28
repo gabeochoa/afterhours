@@ -5,7 +5,7 @@
 #define AFTER_HOURS_ENTITY_HELPER
 #define AFTER_HOURS_ENTITY_QUERY
 #define AFTER_HOURS_SYSTEM
-#include "../../../../ah.h"
+#include "../../../example_helper.h"
 
 using namespace afterhours;
 
@@ -113,6 +113,7 @@ struct RenderSystem : System<Position> {
 };
 
 int main() {
+    using namespace afterhours::examples;
     std::cout << "=== System Example ===" << std::endl;
 
     // Test 1: Basic system with component filtering
@@ -137,9 +138,8 @@ int main() {
 
         EntityHelper::merge_entity_arrays();
 
-        SystemManager systems;
-        systems.register_update_system(std::make_unique<MovementSystem>());
-        systems.run(1.0f);
+        auto systems = update_systems<MovementSystem>();
+        run_frames(systems, 1, 1.f);
 
         std::cout << "  Entities processed: " << movement_updates << " (expected 2)" << std::endl;
         assert(movement_updates == 2);
@@ -173,10 +173,10 @@ int main() {
         auto* sys_ptr = lifecycle_system.get();
 
         SystemManager systems;
-        systems.register_update_system(std::move(lifecycle_system));
+        add_update_systems(systems, std::move(lifecycle_system));
 
         // Run once
-        systems.run(1.0f);
+        run_frames(systems, 1, 1.f);
         std::cout << "  After 1 tick:" << std::endl;
         std::cout << "    once() called: " << sys_ptr->once_count << " time(s)" << std::endl;
         std::cout << "    for_each() called: " << sys_ptr->for_each_count << " time(s)" << std::endl;
@@ -186,7 +186,7 @@ int main() {
         assert(sys_ptr->after_count == 1);
 
         // Run again
-        systems.run(1.0f);
+        run_frames(systems, 1, 1.f);
         std::cout << "  After 2 ticks:" << std::endl;
         std::cout << "    once() total: " << sys_ptr->once_count << std::endl;
         std::cout << "    for_each() total: " << sys_ptr->for_each_count << std::endl;
@@ -209,23 +209,23 @@ int main() {
         auto* sys_ptr = conditional.get();
 
         SystemManager systems;
-        systems.register_update_system(std::move(conditional));
+        add_update_systems(systems, std::move(conditional));
 
         // Run with enabled = true
         sys_ptr->enabled = true;
-        systems.run(1.0f);
+        run_frames(systems, 1, 1.f);
         std::cout << "  Enabled=true, calls: " << sys_ptr->call_count << std::endl;
         assert(sys_ptr->call_count == 1);
 
         // Run with enabled = false
         sys_ptr->enabled = false;
-        systems.run(1.0f);
+        run_frames(systems, 1, 1.f);
         std::cout << "  Enabled=false, calls: " << sys_ptr->call_count << " (unchanged)" << std::endl;
         assert(sys_ptr->call_count == 1);  // Should not have increased
 
         // Re-enable
         sys_ptr->enabled = true;
-        systems.run(1.0f);
+        run_frames(systems, 1, 1.f);
         std::cout << "  Enabled=true again, calls: " << sys_ptr->call_count << std::endl;
         assert(sys_ptr->call_count == 2);
     }
@@ -257,9 +257,8 @@ int main() {
 
         EntityHelper::merge_entity_arrays();
 
-        SystemManager systems;
-        systems.register_update_system(std::make_unique<EnemyOnlySystem>());
-        systems.run(1.0f);
+        auto systems = update_systems<EnemyOnlySystem>();
+        run_frames(systems, 1, 1.f);
 
         std::cout << "  Enemy entities updated: " << enemy_updates << " (expected 2)" << std::endl;
         assert(enemy_updates == 2);  // Only enemies should be processed
@@ -276,13 +275,12 @@ int main() {
         EntityHelper::merge_entity_arrays();
 
         SystemManager systems;
-        systems.register_update_system([](float dt) {
+        add_update_systems(systems, [](float dt) {
             callback_calls++;
             std::cout << "    Lambda callback executed with dt=" << dt << std::endl;
         });
 
-        systems.run(1.0f);
-        systems.run(1.0f);
+        run_frames(systems, 2, 1.f);
 
         std::cout << "  Callback invocations: " << callback_calls << " (expected 2)" << std::endl;
         assert(callback_calls == 2);
@@ -305,7 +303,7 @@ int main() {
         // Fixed tick rate is 1/120 seconds
         // Running with dt=0.1 should trigger multiple fixed updates
         float dt = 0.1f;
-        systems.run(dt);
+        run_frames(systems, 1, dt);
 
         std::cout << "  Fixed updates with dt=" << dt << ": " << fixed_updates << std::endl;
         // Should have multiple fixed updates since dt > FIXED_TICK_RATE (1/120)
@@ -326,7 +324,7 @@ int main() {
 
         SystemManager systems;
         systems.register_render_system(std::make_unique<RenderSystem>());
-        systems.run(1.0f);
+        run_frames(systems, 1, 1.f);
 
         std::cout << "  Render calls: " << render_calls << " (expected 3)" << std::endl;
         assert(render_calls == 3);
@@ -344,17 +342,18 @@ int main() {
         std::vector<int> execution_order;
 
         SystemManager systems;
-        systems.register_update_system([&execution_order](float) {
-            execution_order.push_back(1);
-        });
-        systems.register_update_system([&execution_order](float) {
-            execution_order.push_back(2);
-        });
-        systems.register_update_system([&execution_order](float) {
-            execution_order.push_back(3);
-        });
+        add_update_systems(systems,
+                           [&execution_order](float) {
+                               execution_order.push_back(1);
+                           },
+                           [&execution_order](float) {
+                               execution_order.push_back(2);
+                           },
+                           [&execution_order](float) {
+                               execution_order.push_back(3);
+                           });
 
-        systems.run(1.0f);
+        run_frames(systems, 1, 1.f);
 
         std::cout << "  Execution order: ";
         for (int i : execution_order) std::cout << i << " ";

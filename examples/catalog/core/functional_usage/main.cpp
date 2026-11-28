@@ -5,7 +5,7 @@
 #define AFTER_HOURS_ENTITY_HELPER
 #define AFTER_HOURS_ENTITY_QUERY
 #define AFTER_HOURS_SYSTEM
-#include "../../../../ah.h"
+#include "../../../example_helper.h"
 #include "../../shared/vector.h"
 
 namespace afterhours {
@@ -42,17 +42,15 @@ void make_entities() {
 
 int main(int, char **) {
     using namespace afterhours;
+    using namespace afterhours::examples;
 
     make_entities();
 
     SystemManager systems;
-    systems.register_update_system(
-        [](float) { std::cout << "Anonymous::once" << std::endl; });
-    systems.register_update_system(std::make_unique<OncePerTick>());
+    add_update_systems(systems, [](float) { std::cout << "Anonymous::once" << std::endl; },
+                       std::make_unique<OncePerTick>());
 
-    for (int i = 0; i < 2; i++) {
-        systems.run(1.f);
-    }
+    run_frames(systems, 2, 1.f);
 
     return 0;
 }

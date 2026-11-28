@@ -6,9 +6,10 @@
 #define AFTER_HOURS_ENTITY_HELPER
 #define AFTER_HOURS_ENTITY_QUERY
 #define AFTER_HOURS_SYSTEM
-#include "../../../../ah.h"
+#include "../../../example_helper.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 
 struct PanelSearch : System<> {
     bool panel_open = false;
@@ -34,21 +35,22 @@ struct PanelSearch : System<> {
 };
 
 int main() {
+    Checks checks;
     auto owned = std::make_unique<PanelSearch>();
     PanelSearch *panel = owned.get();
 
     SystemManager systems;
-    systems.register_update_system(std::move(owned));
+    add_update_systems(systems, std::move(owned));
 
     systems.run(1.f / 60.f);
     panel->panel_open = true;
-    systems.run(1.f / 60.f);
-    systems.run(1.f / 60.f);
+    run_frames(systems, 2);
     panel->panel_open = false;
-    systems.run(1.f / 60.f);
-    systems.run(1.f / 60.f);
+    run_frames(systems, 2);
 
     std::printf("ran %d times while open, corpus holds %zu entries now\n",
                 panel->runs, panel->corpus.size());
-    return (panel->runs == 2 && panel->corpus.empty()) ? 0 : 1;
+    checks.check(panel->runs == 2 && panel->corpus.empty(),
+                 "system ran twice while open and released its corpus");
+    return checks.finish("system_deactivate_hook");
 }

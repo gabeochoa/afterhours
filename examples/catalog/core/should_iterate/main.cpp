@@ -4,7 +4,7 @@
 #define AFTER_HOURS_ENTITY_HELPER
 #define AFTER_HOURS_ENTITY_QUERY
 #define AFTER_HOURS_SYSTEM
-#include "../../../../ah.h"
+#include "../../../example_helper.h"
 
 using namespace afterhours;
 
@@ -49,6 +49,7 @@ struct UntaggedSystem : System<Position> {
 };
 
 int main() {
+    using namespace afterhours::examples;
     std::cout << "=== should_iterate() Tests ===" << std::endl;
 
     std::cout << "\n1. System with should_iterate()=false skips entity loop..."
@@ -64,10 +65,8 @@ int main() {
         }
         EntityHelper::merge_entity_arrays();
 
-        SystemManager sm;
-        sm.register_update_system(std::make_unique<OnceOnlySystem>());
-        sm.register_update_system(std::make_unique<IteratingSystem>());
-        sm.run(1.f);
+        auto sm = update_systems<OnceOnlySystem, IteratingSystem>();
+        run_frames(sm, 1, 1.f);
 
         std::cout << "  once_only_count: " << once_only_count << " (expected 1)"
                   << std::endl;
@@ -89,9 +88,8 @@ int main() {
         }
         EntityHelper::merge_entity_arrays();
 
-        SystemManager sm;
-        sm.register_update_system(std::make_unique<DefaultSystem>());
-        sm.run(1.f);
+        auto sm = update_systems<DefaultSystem>();
+        run_frames(sm, 1, 1.f);
 
         std::cout << "  for_each_count: " << for_each_count << " (expected 5)"
                   << std::endl;
@@ -111,9 +109,9 @@ int main() {
         EntityHelper::merge_entity_arrays();
 
         SystemManager sm;
-        sm.register_update_system([](float) { callback_count++; });
-        sm.register_update_system(std::make_unique<DefaultSystem>());
-        sm.run(1.f);
+        add_update_systems(sm, [](float) { callback_count++; },
+                           std::make_unique<DefaultSystem>());
+        run_frames(sm, 1, 1.f);
 
         std::cout << "  callback_count: " << callback_count << " (expected 1)"
                   << std::endl;
@@ -149,10 +147,9 @@ int main() {
         };
 
         SystemManager sm;
-        sm.register_update_system(std::make_unique<FullLifecycleNoIterate>(
-            once_calls, after_calls, fe_calls));
-        sm.run(1.f);
-        sm.run(1.f);
+        add_update_systems(sm, std::make_unique<FullLifecycleNoIterate>(
+                                   once_calls, after_calls, fe_calls));
+        run_frames(sm, 2, 1.f);
 
         std::cout << "  once: " << once_calls << " (expected 2)" << std::endl;
         std::cout << "  after: " << after_calls << " (expected 2)" << std::endl;
@@ -210,10 +207,8 @@ int main() {
 
         EntityHelper::merge_entity_arrays();
 
-        SystemManager sm;
-        sm.register_update_system(std::make_unique<TaggedSystem>());
-        sm.register_update_system(std::make_unique<UntaggedSystem>());
-        sm.run(1.f);
+        auto sm = update_systems<TaggedSystem, UntaggedSystem>();
+        run_frames(sm, 1, 1.f);
 
         std::cout << "  tagged_count (enemy only): " << tagged_count
                   << " (expected 2)" << std::endl;
@@ -265,7 +260,7 @@ int main() {
             std::make_unique<RenderOnceOnly>(render_once, render_fe));
         sm.register_fixed_update_system(
             std::make_unique<FixedOnceOnly>(fixed_once, fixed_fe));
-        sm.run(0.1f);
+        run_frames(sm, 1, 0.1f);
 
         std::cout << "  render once: " << render_once
                   << ", for_each: " << render_fe << std::endl;

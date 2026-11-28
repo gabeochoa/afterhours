@@ -1,8 +1,9 @@
 #include <iostream>
 
-#include "../../../../ah.h"
+#include "../../../example_helper.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 
 // Define a small tag enum for the demo
 enum struct DemoTag : uint8_t { Runner = 0, Chaser = 1, Store = 2 };
@@ -64,9 +65,9 @@ int main() {
     }
 
     SystemManager sm;
-    sm.register_update_system(std::make_unique<MoveRunners>());
-    sm.register_update_system(std::make_unique<HealAnyoneTagged>());
-    sm.register_update_system(std::make_unique<DebugNonStore>());
+    add_update_systems(sm, std::make_unique<MoveRunners>(),
+                       std::make_unique<HealAnyoneTagged>(),
+                       std::make_unique<DebugNonStore>());
 
     // Run two ticks
     sm.tick_all(ents, 0.016f);
