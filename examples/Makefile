@@ -101,7 +101,7 @@ $(OUT)/imm_visual_check: imm_visual_check.cpp
 	@echo "Built: imm_visual_check"
 
 # on_draw example - pedagogical demo of with_on_draw_bg / with_on_draw_fg
-$(OUT)/on_draw_example: on_draw_example.cpp
+$(OUT)/on_draw_example: on_draw_example.cpp example_helper.h
 	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $(filter %.cpp,$^) $(LDFLAGS_RAYLIB) -o $@
 	@echo "Built: on_draw_example"
 

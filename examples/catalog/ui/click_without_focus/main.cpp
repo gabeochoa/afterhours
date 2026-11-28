@@ -1,12 +1,12 @@
 #include <cstdio>
 
-#include "../../../../ah.h"
-#include "../../../../src/graphics.h"
-#define AFTER_HOURS_IMM_UI
-#include "../../../../src/plugins/e2e_testing/platform_test_input.h"
-#include "../../../../src/plugins/ui.h"
+#define AFTER_HOURS_EXAMPLE_UI
+#define AFTER_HOURS_EXAMPLE_GRAPHICS
+#define AFTER_HOURS_EXAMPLE_TEST_INPUT
+#include "../../../example_helper.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
@@ -27,40 +27,24 @@ struct Chat : System<DefaultUIContext> {
   }
 };
 
-static void click_at(SystemManager &systems, float x, float y) {
-  testing::test_input::simulate_click(x, y);
-  for (int frame = 0; frame < 3; ++frame) {
-    systems.run(1.f / 60.f);
-    testing::test_input::reset_frame();
-  }
-}
-
 int main() {
-  graphics::Config config;
-  config.display = graphics::DisplayMode::Headless;
-  config.width = 300;
-  config.height = 100;
-  if (!graphics::init(config))
-    return 1;
+  Checks checks;
+  HeadlessUI<Chat> app(300, 100, std::make_unique<Chat>());
+  if (!app.ok()) return 1;
 
-  SystemManager systems;
-  auto chat = std::make_unique<Chat>();
-  Chat &screen = *chat;
-  ui::setup_with_resolution<>(systems, {300, 100}, std::move(chat));
-  testing::platform_input::set_test_mode(true);
-  systems.run(1.f / 60.f);
-
-  auto &ctx = *EntityHelper::get_singleton_cmp<DefaultUIContext>();
-  click_at(systems, 100, 45);
-  const bool reply_focused = ctx.has_focus(screen.composer);
-  click_at(systems, 100, 15);
+  app.run();
+  app.click_at(100, 45);
+  const bool reply_focused = app.ui.context().has_focus(app.screen().composer);
+  app.click_at(100, 15);
 
   std::printf("clicked Reply (focused: %s), then Show summary: summary %s, "
               "Reply still focused: %s\n",
-              reply_focused ? "yes" : "no", screen.summary_open ? "open" : "closed",
-              ctx.has_focus(screen.composer) ? "yes" : "no");
-  graphics::shutdown();
-  return reply_focused && screen.summary_open && ctx.has_focus(screen.composer)
-             ? 0
-             : 1;
+              reply_focused ? "yes" : "no",
+              app.screen().summary_open ? "open" : "closed",
+              app.ui.context().has_focus(app.screen().composer) ? "yes" : "no");
+  checks.check(reply_focused, "Reply takes focus when clicked");
+  checks.check(app.screen().summary_open, "summary button still activates");
+  checks.check(app.ui.context().has_focus(app.screen().composer),
+               "summary button does not steal focus");
+  return checks.finish("click_without_focus");
 }

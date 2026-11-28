@@ -1,10 +1,10 @@
 #include <cstdio>
 
-#include "../../../../ah.h"
-#define AFTER_HOURS_IMM_UI
-#include "../../../../src/plugins/ui.h"
+#define AFTER_HOURS_EXAMPLE_UI
+#include "../../../example_helper.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
@@ -31,14 +31,15 @@ struct Menu : System<DefaultUIContext> {
 };
 
 int main() {
-  SystemManager systems;
-  ui::setup_with_resolution(systems, {1280, 720}, std::make_unique<Menu>());
-  for (int frame = 0; frame < 2; frame++)
-    systems.run(1.f / 60.f);
+  Checks checks;
+  auto app = make_logic_ui<Menu>({1280, 720}, std::make_unique<Menu>());
+  app.run(2);
 
   const auto rect =
       UICollectionHolder::getEntityForIDEnforce(save_button).get<UIComponent>().rect();
   std::printf("Save button laid out at y=%.0f, %.0fx%.0f, with no window\n",
               rect.y, rect.width, rect.height);
-  return rect.y == 48.f && rect.height == 40.f ? 0 : 1;
+  checks.check(rect.y == 48.f && rect.height == 40.f,
+               "Save button is laid out below New game");
+  return checks.finish("logic_only_ui");
 }
