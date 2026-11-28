@@ -1,11 +1,8 @@
-#include <cstdio>
-#include <format>
-
-#include "../../../../ah.h"
-#include "../../../../src/graphics.h"
-#include "../../../../src/plugins/e2e_testing/e2e_testing.h"
+#define AFTER_HOURS_EXAMPLE_E2E
+#include "../../../example_helper.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::testing;
 
 struct SaveShortcut : System<> {
@@ -22,20 +19,10 @@ struct SaveShortcut : System<> {
   }
 };
 
-int main() {
-  E2ERunner runner;
-  runner.load_script(SCRIPT_PATH);
+int main(int argc, char *argv[]) {
+  E2EHarness harness(argc, argv);
+  if (!harness.has_script()) harness.args.script_path = SCRIPT_PATH;
 
-  SystemManager systems;
-  systems.register_update_system(std::make_unique<SaveShortcut>());
-  register_all_handlers(systems);
-
-  const float dt = 1.f / 60.f;
-  while (!runner.is_finished()) {
-    test_input::reset_frame();
-    runner.tick(dt);
-    systems.run(dt);
-  }
-  runner.print_results();
-  return runner.has_failed() ? 1 : 0;
+  harness.add_systems(std::make_unique<SaveShortcut>());
+  return harness.run([&] { test_input::reset_frame(); });
 }

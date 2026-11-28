@@ -1,13 +1,13 @@
+#define AFTER_HOURS_EXAMPLE_E2E
+#include "../../../example_helper.h"
+
 #include <chrono>
 #include <future>
 #include <optional>
 #include <thread>
 
-#include "../../../../ah.h"
-#include "../../../../src/plugins/e2e_testing/e2e_testing.h"
-#include "../../../../src/plugins/e2e_testing/harness.h"
-
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::testing;
 
 struct Worker {
@@ -58,35 +58,22 @@ struct ExpectWorkDoneCommand : System<PendingE2ECommand> {
 };
 
 int main(int argc, char *argv[]) {
-    const E2EArgs args = parse_e2e_args(argc, argv);
-    if (args.script_path.empty()) {
+    E2EHarness harness(argc, argv);
+    if (!harness.has_script()) {
         log_error("usage: --test-script worker.e2e [--time-scale N]");
         return 2;
     }
 
     Worker worker;
-    SystemManager systems;
-    register_builtin_handlers(systems);
-    systems.register_update_system(std::make_unique<StartWorkCommand>(worker));
-    systems.register_update_system(
-        std::make_unique<ExpectWorkDoneCommand>(worker));
-    register_unknown_handler(systems);
-    register_cleanup(systems);
+    harness.add_systems(std::make_unique<StartWorkCommand>(worker),
+                        std::make_unique<ExpectWorkDoneCommand>(worker));
 
-    E2ERunner runner;
-    configure_runner(runner, args);
-    runner.load_script(args.script_path);
-
-    const float dt = args.time_scale / 60.f;
+    const float dt = harness.args.time_scale / 60.f;
     const auto start = std::chrono::steady_clock::now();
     int frames = 0;
-    while (!runner.is_finished()) {
-        runner.tick(dt);
-        systems.run(dt);
-        ++frames;
-    }
-    const std::chrono::duration<float> real = std::chrono::steady_clock::now() - start;
-    runner.print_results();
+    const int result = harness.run([&] { ++frames; }, dt);
+    const std::chrono::duration<float> real =
+        std::chrono::steady_clock::now() - start;
     log_info("{} frames at dt {:.3f}, {:.2f}s real", frames, dt, real.count());
-    return runner.has_failed() ? 1 : 0;
+    return result;
 }
