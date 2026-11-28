@@ -1,11 +1,10 @@
-#define AFTER_HOURS_IMM_UI
-#include "../../../../src/plugins/ui.h"
-
-#include "../../../../ah.h"
+#define AFTER_HOURS_EXAMPLE_UI
+#include "../../../example_helper.h"
 #include "../../../../src/plugins/autolayout.h"
 #include "../../../../src/plugins/e2e_testing/ui_commands.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
@@ -51,9 +50,10 @@ struct PrintResolvedTree : System<> {
 };
 
 int main() {
-    SystemManager systems;
-    ui::setup_with_resolution<>(systems, {800, 600}, std::make_unique<BuildUI>());
-    systems.register_update_system(std::make_unique<PrintResolvedTree>());
-    systems.run(1.f / 60.f);
+    LogicUI<BuildUI> app(window_manager::Resolution{800, 600},
+                         std::make_unique<BuildUI>());
+    app.systems.register_update_system(
+        std::make_unique<PrintResolvedTree>());
+    app.run(1);
     return 0;
 }

@@ -1,13 +1,13 @@
 #include <cstdio>
 #include <string>
 
-#include "../../../../ah.h"
-#include "../../../../src/graphics.h"
-#define AFTER_HOURS_IMM_UI
-#include "../../../../src/plugins/ui.h"
+#define AFTER_HOURS_EXAMPLE_UI
+#define AFTER_HOURS_EXAMPLE_GRAPHICS
+#include "../../../example_helper.h"
 #include "../../../../src/plugins/ui/text_input/text_input.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
@@ -56,27 +56,23 @@ struct Notes : System<DefaultUIContext> {
 };
 
 int main() {
-  graphics::Config config;
-  config.display = graphics::DisplayMode::Headless;
-  config.width = 400;
-  config.height = 260;
-  if (!graphics::init(config))
+  Checks checks;
+  HeadlessUI<Notes> app(400, 260, std::make_unique<Notes>());
+  if (!app.ok())
     return 1;
-  SystemManager systems;
-  auto notes = std::make_unique<Notes>();
-  Notes &screen = *notes;
-  ui::setup_with_resolution<>(systems, {400, 260}, std::move(notes));
-  for (int i = 0; i < 3; i++)
-    systems.run(1.f / 60.f);
+  app.run(3);
+  auto &screen = app.screen();
   std::printf("editable ok=%d, readonly ok=%d, disabled ok=%d focused=%d\n",
               screen.editable_flag, screen.readonly_flag, screen.disabled_flag,
               screen.disabled_focused);
   std::printf("readonly text: %s, disabled text: %s\n",
               screen.readonly_text.c_str(), screen.disabled_text.c_str());
-  const bool ok = screen.editable_flag && screen.readonly_flag &&
-                  screen.disabled_flag && !screen.disabled_focused &&
-                  screen.readonly_text == "read only" &&
-                  screen.disabled_text == "cannot touch";
-  graphics::shutdown();
-  return ok ? 0 : 1;
+  checks.check(screen.editable_flag, "editable area stays editable");
+  checks.check(screen.readonly_flag, "readonly area is readonly");
+  checks.check(screen.disabled_flag, "disabled area is disabled");
+  checks.check(!screen.disabled_focused, "disabled area never takes focus");
+  checks.check(screen.readonly_text == "read only", "readonly text unchanged");
+  checks.check(screen.disabled_text == "cannot touch",
+               "disabled text unchanged");
+  return checks.finish("text_area_readonly");
 }

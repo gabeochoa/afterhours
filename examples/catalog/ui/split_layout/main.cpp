@@ -21,14 +21,14 @@
 #include <cstdio>
 #include <filesystem>
 
-#include "../../../../ah.h"
+#define AFTER_HOURS_EXAMPLE_UI
+#define AFTER_HOURS_EXAMPLE_GRAPHICS
+#include "../../../example_helper.h"
 #include "../../../../src/drawing_helpers.h"
-#include "../../../../src/graphics.h"
 #include "../../../../src/plugins/autolayout.h"
-#define AFTER_HOURS_IMM_UI
-#include "../../../../src/plugins/ui.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
@@ -118,44 +118,17 @@ static void print_rects() {
 }
 
 int main(int, char **) {
-  graphics::Config cfg{};
-  cfg.display = graphics::DisplayMode::Windowed;
-  cfg.width = SCREEN_W;
-  cfg.height = SCREEN_H;
-  cfg.target_fps = 60;
-  cfg.config_flags = raylib::FLAG_WINDOW_HIDDEN;
-  cfg.enable_msaa = false;
-  if (!graphics::init(cfg)) {
+  ImmScreenshot<DefaultAction> app(SCREEN_W, SCREEN_H, false,
+                                   std::make_unique<BuildShell>());
+  if (!app.ok()) {
     fprintf(stderr, "FATAL: windowed backend init failed\n");
     return 1;
   }
 
-  // The bundled debug-overlay render system reads inputs; give it an empty
-  // collector so it does not hit an empty optional.
-  {
-    auto &in = EntityHelper::createEntity();
-    in.addComponent<input::InputCollector>();
-    EntityHelper::registerSingleton<input::InputCollector>(in);
-  }
-
-  SystemManager systems;
-  // Creates the UI root and every singleton, then registers the pre-bridge,
-  // BuildShell, and the post-bridge in the only order that works. Must run
-  // after graphics::init — loading fonts needs a GL context.
-  ui::setup_with_resolution<>(systems, {SCREEN_W, SCREEN_H},
-                              std::make_unique<BuildShell>());
-  ui::register_render_systems<DefaultAction>(systems);
-
-  graphics::begin_frame();
-  raylib::ClearBackground(raylib::Color{18, 19, 26, 255});
-  systems.run(1.f / 60.f);
-  graphics::end_frame();
-
   std::filesystem::path out = "split_layout.png";
-  bool ok = graphics::capture_frame(out);
+  bool ok = app.capture(out, Color{18, 19, 26, 255});
   printf("screenshot: %s -> %s\n", ok ? "OK" : "FAILED", out.c_str());
 
   print_rects();
-  graphics::shutdown();
   return ok ? 0 : 1;
 }

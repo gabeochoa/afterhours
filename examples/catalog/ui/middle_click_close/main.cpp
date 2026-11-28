@@ -2,13 +2,13 @@
 #include <string>
 #include <vector>
 
-#include "../../../../ah.h"
-#include "../../../../src/graphics.h"
-#define AFTER_HOURS_IMM_UI
-#include "../../../../src/plugins/e2e_testing/platform_test_input.h"
-#include "../../../../src/plugins/ui.h"
+#define AFTER_HOURS_EXAMPLE_UI
+#define AFTER_HOURS_EXAMPLE_GRAPHICS
+#define AFTER_HOURS_EXAMPLE_TEST_INPUT
+#include "../../../example_helper.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
@@ -34,30 +34,23 @@ struct Tabs : System<DefaultUIContext> {
 };
 
 int main() {
-  graphics::Config config;
-  config.display = graphics::DisplayMode::Headless;
-  config.width = 400;
-  config.height = 100;
-  if (!graphics::init(config))
+  Checks checks;
+  HeadlessUI<Tabs> app(400, 100, std::make_unique<Tabs>());
+  if (!app.ok())
     return 1;
-
-  SystemManager systems;
-  auto tabs = std::make_unique<Tabs>();
-  Tabs &strip = *tabs;
-  ui::setup_with_resolution<>(systems, {400, 100}, std::move(tabs));
-  testing::platform_input::set_test_mode(true);
-  systems.run(1.f / 60.f);
+  app.run();
 
   testing::test_input::simulate_middle_click(180.f, 16.f);
   for (int frame = 0; frame < 4; ++frame) {
-    systems.run(1.f / 60.f);
+    app.run(1);
     testing::test_input::reset_frame();
   }
 
   std::string left;
-  for (const auto &name : strip.open)
+  for (const auto &name : app.screen().open)
     left += name + " ";
   std::printf("middle-clicked the second tab; open tabs: %s\n", left.c_str());
-  graphics::shutdown();
-  return strip.open.size() == 2 && strip.open[1] == "todo.txt" ? 0 : 1;
+  checks.check(app.screen().open.size() == 2, "middle click closed one tab");
+  checks.check(app.screen().open[1] == "todo.txt", "second tab was removed");
+  return checks.finish("middle_click_close");
 }
