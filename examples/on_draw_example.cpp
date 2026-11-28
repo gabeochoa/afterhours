@@ -30,42 +30,26 @@
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
 
-#include <cassert>
 #include <cstdio>
 #include <filesystem>
 
-#include <afterhours/ah.h>
+#define AFTER_HOURS_EXAMPLE_UI
+#define AFTER_HOURS_EXAMPLE_GRAPHICS
+#include "example_helper.h"
 #include <afterhours/src/drawing_helpers.h>
-#include <afterhours/src/graphics.h>
-#define AFTER_HOURS_IMM_UI
-#include <afterhours/src/plugins/ui.h>
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
-
-// The imm nav/text systems key off an InputAction enum. We don't wire any real
-// input here, but the vocabulary must exist for the plugin to instantiate.
-enum struct InputAction {
-  None,
-  WidgetMod,
-  WidgetNext,
-  WidgetBack,
-  WidgetPress,
-  WidgetLeft,
-  WidgetRight,
-  WidgetUp,
-  WidgetDown,
-  MenuBack,
-};
 
 static constexpr int RENDER_W = 480;
 static constexpr int RENDER_H = 320;
 
 // Builds the whole scene each frame. In imm UI you (re)declare your widgets
 // every frame; the config carries the on_draw callbacks along for the ride.
-struct BuildScene : System<UIContext<InputAction>> {
-  virtual void for_each_with(Entity &entity, UIContext<InputAction> &context,
+struct BuildScene : System<ExampleUIContext> {
+  virtual void for_each_with(Entity &entity, ExampleUIContext &context,
                              float) override {
     // Root column that fills the window.
     auto root = imm::div(context, mk(entity),
@@ -113,58 +97,14 @@ struct BuildScene : System<UIContext<InputAction>> {
 };
 
 int main() {
-  // 1. Bring up a hidden windowed backend so there's a real GL context to
-  //    render + capture through (no window pops up).
-  graphics::Config cfg{};
-  cfg.display = graphics::DisplayMode::Windowed;
-  cfg.width = RENDER_W;
-  cfg.height = RENDER_H;
-  cfg.target_fps = 60;
-  cfg.config_flags = raylib::FLAG_WINDOW_HIDDEN;
-  cfg.enable_msaa = false;
-  if (!graphics::init(cfg)) {
+  ImmScreenshot<> app(RENDER_W, RENDER_H, false, std::make_unique<BuildScene>());
+  if (!app.ok()) {
     fprintf(stderr, "FATAL: windowed backend init failed\n");
     return 1;
   }
 
-  // 2. Create the imm UI collection + singletons (UIContext, FontManager).
-  //    Must run after graphics::init since fonts need a GL context.
-  Entity &ui_root = ui::init_ui_plugin<InputAction>();
-  ui_root.addComponent<window_manager::ProvidesCurrentResolution>(
-      window_manager::Resolution{RENDER_W, RENDER_H});
-  EntityHelper::registerSingleton<window_manager::ProvidesCurrentResolution>(
-      ui_root);
-  ui::UICollectionHolder::get()
-      .collection.registerSingleton<window_manager::ProvidesCurrentResolution>(
-          ui_root);
-
-  // The bundled debug-overlay system reads inputs; give it an empty collector
-  // so its should_run check doesn't dereference an empty optional.
-  {
-    auto &in = EntityHelper::createEntity();
-    in.addComponent<input::InputCollector>();
-    EntityHelper::registerSingleton<input::InputCollector>(in);
-  }
-
-  // 3. Canonical imm wiring:
-  //    before-bridge (Clear/Begin) -> build -> after-bridge (End) -> render.
-  SystemManager systems;
-  ui::enforce_singletons<InputAction>(systems);
-  ui::register_before_ui_updates<InputAction>(systems);
-  systems.register_update_system(std::make_unique<BuildScene>());
-  ui::register_after_ui_updates<InputAction>(systems);
-  ui::register_render_systems<InputAction>(systems);
-
-  // 4. Render one frame and capture it.
-  graphics::begin_frame();
-  raylib::ClearBackground(raylib::Color{25, 25, 32, 255});
-  systems.run(1.f / 60.f);
-  graphics::end_frame();
-
   std::filesystem::path out = "on_draw_example.png";
-  bool ok = graphics::capture_frame(out);
+  const bool ok = app.capture(out, Color{25, 25, 32, 255});
   printf("screenshot: %s -> %s\n", ok ? "OK" : "FAILED", out.c_str());
-
-  graphics::shutdown();
   return ok ? 0 : 1;
 }

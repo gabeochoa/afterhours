@@ -1,11 +1,11 @@
 #include <cstdio>
 
-#include "../../../../ah.h"
-#define AFTER_HOURS_IMM_UI
-#include "../../../../src/plugins/ui.h"
+#define AFTER_HOURS_EXAMPLE_UI
+#include "../../../example_helper.h"
 #include "../../../../src/plugins/ui/disclosure.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
@@ -28,10 +28,11 @@ struct Panel : System<DefaultUIContext> {
 };
 
 int main(int, char **) {
-  SystemManager systems;
-  ui::setup_with_resolution(systems, {1280, 720}, std::make_unique<Panel>());
-  systems.run(1.f / 60.f);
-  systems.run(1.f / 60.f);
+  Checks checks;
+  auto app = make_logic_ui<Panel>({1280, 720}, std::make_unique<Panel>());
+  app.run(2);
+
   printf("body_builds=%d\n", body_builds);
-  return body_builds > 0 ? 0 : 1;
+  checks.check(body_builds > 0, "expanded disclosure builds its body");
+  return checks.finish("disclosure");
 }

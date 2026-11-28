@@ -1,8 +1,9 @@
 #include <cstdio>
 
-#include "../../../../ah.h"
+#include "../../../example_helper.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 
 struct Position : BaseComponent {
   float x = 0.f;
@@ -18,17 +19,18 @@ struct Move : System<Position, Velocity> {
 };
 
 int main() {
+  Checks checks;
+
   auto &ball = EntityHelper::createEntity();
   ball.addComponent<Position>();
   ball.addComponent<Velocity>().dx = 10.f;
   EntityHelper::merge_entity_arrays();
 
-  SystemManager systems;
-  systems.register_update_system(std::make_unique<Move>());
-  for (int frame = 0; frame < 60; frame++)
-    systems.run(1.f / 60.f);
+  auto systems = update_systems<Move>();
+  run_frames(systems, 60);
 
   const float x = ball.get<Position>().x;
   std::printf("after 1s the ball is at x=%.2f\n", x);
-  return x > 9.9f && x < 10.1f ? 0 : 1;
+  checks.near(x, 10.f, 0.1f, "ball moved for one second");
+  return checks.finish("pure_ecs");
 }
