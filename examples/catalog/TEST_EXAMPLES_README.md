@@ -29,7 +29,9 @@ can focus on the behavior it demonstrates:
   `HeadlessUI`, and one-frame `ImmScreenshot` capture.
 - Add `AFTER_HOURS_EXAMPLE_TEST_INPUT` only when an example needs synthetic
   clicks through `HeadlessUI::click_at`.
+- Define `AFTER_HOURS_EXAMPLE_E2E` for `E2EHarness` (argument parsing,
+  built-in handler registration order, script/dir loading, runner loop).
 
 Migrated so far: `core/simple_system`, `plugins/animation`,
-`builds/pure_ecs`, `builds/logic_only_ui`, `ui/disclosure`,
+`plugins/e2e_register_command`, `builds/pure_ecs`, `builds/logic_only_ui`, `ui/disclosure`,
 `ui/click_without_focus`, and `on_draw_example`.

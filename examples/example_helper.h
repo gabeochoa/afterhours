@@ -6,6 +6,7 @@
 // Define AFTER_HOURS_EXAMPLE_UI before including for the imm-UI harnesses,
 // AFTER_HOURS_EXAMPLE_GRAPHICS for graphics RAII / headless capture, and
 // AFTER_HOURS_EXAMPLE_TEST_INPUT for synthetic clicks in headless UI tests.
+// Define AFTER_HOURS_EXAMPLE_E2E for the script-runner harness.
 // Examples should only opt into the sections they actually demonstrate.
 
 #include <cmath>
@@ -29,6 +30,15 @@
 
 #ifdef AFTER_HOURS_EXAMPLE_TEST_INPUT
 #include "../src/plugins/e2e_testing/platform_test_input.h"
+#endif
+
+#ifdef AFTER_HOURS_EXAMPLE_E2E
+#include <functional>
+#include <set>
+#include <string>
+
+#include "../src/plugins/e2e_testing/e2e_testing.h"
+#include "../src/plugins/e2e_testing/harness.h"
 #endif
 
 namespace afterhours::examples {
@@ -118,9 +128,13 @@ template <typename Screen, typename Action = ui::DefaultAction> struct LogicUI {
   SystemManager systems;
   Screen &screen;
 
-  LogicUI(window_manager::Resolution resolution, std::unique_ptr<Screen> s)
+  template <typename... ExtraSystems>
+  LogicUI(window_manager::Resolution resolution, std::unique_ptr<Screen> s,
+          ExtraSystems &&...extra_systems)
       : screen(*s) {
-    ui::setup_with_resolution<Action>(systems, resolution, std::move(s));
+    ui::setup_with_resolution<Action>(
+        systems, resolution, std::move(s),
+        std::forward<ExtraSystems>(extra_systems)...);
   }
 
   void run(int frames = 1, float dt = 1.f / 60.f) {
@@ -132,10 +146,14 @@ template <typename Screen, typename Action = ui::DefaultAction> struct LogicUI {
   }
 };
 
-template <typename Screen, typename Action = ui::DefaultAction>
+template <typename Screen, typename Action = ui::DefaultAction,
+          typename... ExtraSystems>
 LogicUI<Screen, Action> make_logic_ui(window_manager::Resolution resolution,
-                                      std::unique_ptr<Screen> screen) {
-  return LogicUI<Screen, Action>(resolution, std::move(screen));
+                                      std::unique_ptr<Screen> screen,
+                                      ExtraSystems &&...extra_systems) {
+  return LogicUI<Screen, Action>(
+      resolution, std::move(screen),
+      std::forward<ExtraSystems>(extra_systems)...);
 }
 
 #endif // AFTER_HOURS_EXAMPLE_UI
@@ -190,9 +208,12 @@ template <typename Screen, typename Action = ui::DefaultAction> struct HeadlessU
   Graphics graphics;
   LogicUI<Screen, Action> ui;
 
-  HeadlessUI(int width, int height, std::unique_ptr<Screen> screen)
+  template <typename... ExtraSystems>
+  HeadlessUI(int width, int height, std::unique_ptr<Screen> screen,
+             ExtraSystems &&...extra_systems)
       : graphics(Graphics::headless(width, height)),
-        ui(window_manager::Resolution{width, height}, std::move(screen)) {
+        ui(window_manager::Resolution{width, height}, std::move(screen),
+           std::forward<ExtraSystems>(extra_systems)...) {
 #ifdef AFTER_HOURS_EXAMPLE_TEST_INPUT
     testing::platform_input::set_test_mode(true);
 #endif
@@ -262,5 +283,60 @@ template <typename Action = InputAction> struct ImmScreenshot {
 
 #endif // AFTER_HOURS_EXAMPLE_UI
 #endif // AFTER_HOURS_EXAMPLE_GRAPHICS
+
+#ifdef AFTER_HOURS_EXAMPLE_E2E
+
+struct E2EHarness {
+  testing::E2EArgs args;
+  SystemManager systems;
+  testing::E2ERunner runner;
+  bool handlers_finished = false;
+
+  E2EHarness(int argc, char **argv)
+      : args(testing::parse_e2e_args(argc, argv)) {
+    testing::register_builtin_handlers(systems);
+    testing::configure_runner(runner, args);
+  }
+
+  E2EHarness(const E2EHarness &) = delete;
+  E2EHarness &operator=(const E2EHarness &) = delete;
+
+  template <typename... Systems> void add_systems(Systems &&...user_systems) {
+    add_update_systems(systems, std::forward<Systems>(user_systems)...);
+  }
+
+  bool has_script() const {
+    return !args.script_path.empty() || !args.script_dir.empty();
+  }
+
+  void finish_handlers(std::set<std::string> handled_elsewhere = {}) {
+    if (handlers_finished) return;
+    if (handled_elsewhere.empty())
+      testing::register_unknown_handler(systems);
+    else
+      testing::register_unknown_handler(systems, std::move(handled_elsewhere));
+    testing::register_cleanup(systems);
+    handlers_finished = true;
+  }
+
+  int run(const std::function<void()> &per_frame = nullptr,
+          float dt = 1.f / 60.f) {
+    finish_handlers();
+    if (!args.script_dir.empty())
+      runner.load_scripts_from_directory(args.script_dir);
+    else
+      runner.load_script(args.script_path);
+
+    while (!runner.is_finished()) {
+      runner.tick(dt);
+      if (per_frame) per_frame();
+      systems.run(dt);
+    }
+    runner.print_results();
+    return runner.has_failed() ? 1 : 0;
+  }
+};
+
+#endif // AFTER_HOURS_EXAMPLE_E2E
 
 } // namespace afterhours::examples

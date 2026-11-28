@@ -1,8 +1,8 @@
-#include "../../../../ah.h"
-#include "../../../../src/plugins/e2e_testing/e2e_testing.h"
-#include "../../../../src/plugins/e2e_testing/harness.h"
+#define AFTER_HOURS_EXAMPLE_E2E
+#include "../../../example_helper.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::testing;
 
 struct Match {
@@ -48,27 +48,15 @@ void register_match_commands(SystemManager &systems, Match &match) {
 }
 
 int main(int argc, char *argv[]) {
-    const E2EArgs args = parse_e2e_args(argc, argv);
-    if (args.script_path.empty()) {
+    E2EHarness harness(argc, argv);
+    if (!harness.has_script()) {
         log_error("usage: --test-script match.e2e");
         return 2;
     }
 
     Match match;
-    SystemManager systems;
-    register_builtin_handlers(systems);
-    register_match_commands(systems, match);
-    register_unknown_handler(systems);
-    register_cleanup(systems);
-
-    E2ERunner runner;
-    configure_runner(runner, args);
-    runner.load_script(args.script_path);
-    while (!runner.is_finished()) {
-        runner.tick(1.f / 60.f);
-        systems.run(1.f / 60.f);
-    }
-    runner.print_results();
+    register_match_commands(harness.systems, match);
+    const int result = harness.run();
     log_info("mode {} score {}:{}", match.mode, match.left, match.right);
-    return runner.has_failed() ? 1 : 0;
+    return result;
 }
