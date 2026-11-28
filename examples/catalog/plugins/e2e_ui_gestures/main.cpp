@@ -1,13 +1,14 @@
 #define AFTER_HOURS_IMM_UI
 #define AFTER_HOURS_ENABLE_E2E_TESTING
-#include "../../../../src/plugins/ui.h"
+#define AFTER_HOURS_EXAMPLE_E2E
+#include "../../../example_helper.h"
 
-#include "../../../../ah.h"
+#include "../../../../src/plugins/ui.h"
 #include "../../../../src/plugins/autolayout.h"
-#include "../../../../src/plugins/e2e_testing/harness.h"
 #include "../../../../src/plugins/e2e_testing/ui_commands.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 using namespace afterhours::testing;
@@ -53,26 +54,12 @@ struct ScrubCommands : System<PendingE2ECommand> {
 };
 
 int main(int argc, char *argv[]) {
-    const E2EArgs args = parse_e2e_args(argc, argv);
+    E2EHarness harness(argc, argv);
     test_input::detail::test_mode = true;
     Scrub scrub;
-    SystemManager systems;
-    ui::setup_with_resolution<>(systems, {800, 600},
-                                std::make_unique<BuildRail>(scrub));
-    register_builtin_handlers(systems);
-    ui_commands::register_ui_commands<DefaultAction>(systems);
-    systems.register_update_system(std::make_unique<ScrubCommands>(scrub));
-    register_unknown_handler(systems);
-    register_cleanup(systems);
-
-    E2ERunner runner;
-    configure_runner(runner, args);
-    runner.load_script(args.script_path);
-    while (!runner.is_finished()) {
-        runner.tick(1.f / 60.f);
-        systems.run(1.f / 60.f);
-        test_input::reset_frame();
-    }
-    runner.print_results();
-    return runner.has_failed() ? 1 : 0;
+    ui::setup_with_resolution<DefaultAction>(
+        harness.systems, {800, 600}, std::make_unique<BuildRail>(scrub));
+    ui_commands::register_ui_commands<DefaultAction>(harness.systems);
+    harness.add_systems(std::make_unique<ScrubCommands>(scrub));
+    return harness.run([&] { test_input::reset_frame(); });
 }

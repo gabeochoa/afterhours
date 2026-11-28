@@ -1,8 +1,8 @@
-#include "../../../../ah.h"
-#include "../../../../src/plugins/e2e_testing/e2e_testing.h"
-#include "../../../../src/plugins/e2e_testing/harness.h"
+#define AFTER_HOURS_EXAMPLE_E2E
+#include "../../../example_helper.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::testing;
 
 static std::string hud_text(int score, int fps) {
@@ -24,28 +24,15 @@ struct ExpectHud : System<PendingE2ECommand> {
 };
 
 int main(int argc, char *argv[]) {
-    const E2EArgs args = parse_e2e_args(argc, argv);
+    E2EHarness harness(argc, argv);
     std::string hud = hud_text(0, 144);
-    if (args.script_path.empty()) {
+    if (!harness.has_script()) {
         log_info("player sees: {}", hud);
         return 0;
     }
 
-    SystemManager systems;
-    register_builtin_handlers(systems);
-    systems.register_update_system(std::make_unique<ExpectHud>(hud));
-    register_unknown_handler(systems);
-    register_cleanup(systems);
-
-    E2ERunner runner;
-    configure_runner(runner, args);
-    runner.load_script(args.script_path);
-    while (!runner.is_finished()) {
-        hud = hud_text(0, 144);
-        runner.tick(1.f / 60.f);
-        systems.run(1.f / 60.f);
-    }
-    runner.print_results();
+    harness.add_systems(std::make_unique<ExpectHud>(hud));
+    const int result = harness.run([&] { hud = hud_text(0, 144); });
     log_info("under e2e the hud is: {}", hud);
-    return runner.has_failed() ? 1 : 0;
+    return result;
 }

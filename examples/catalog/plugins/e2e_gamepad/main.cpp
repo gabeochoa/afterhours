@@ -1,12 +1,10 @@
-#include <algorithm>
-#include <cstdio>
-#include <format>
+#define AFTER_HOURS_EXAMPLE_E2E
+#include "../../../example_helper.h"
 
-#include "../../../../ah.h"
-#include "../../../../src/plugins/e2e_testing/e2e_testing.h"
 #include "../../../../src/plugins/input_system.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::testing;
 
 enum Action { Left, Right, Jump };
@@ -32,7 +30,10 @@ struct Walker : System<> {
   }
 };
 
-int main() {
+int main(int argc, char *argv[]) {
+  E2EHarness harness(argc, argv);
+  if (!harness.has_script()) harness.args.script_path = SCRIPT_PATH;
+
   const auto stick = static_cast<input::GamepadAxis>(gamepad_axes::LEFT_X);
   input::add_singleton_components(
       EntityHelper::createEntity(),
@@ -43,20 +44,7 @@ int main() {
                      gamepad_buttons::RIGHT_FACE_DOWN)}},
       });
 
-  E2ERunner runner;
-  runner.load_script(SCRIPT_PATH);
-
-  SystemManager systems;
-  systems.register_update_system(std::make_unique<input::InputSystem>());
-  systems.register_update_system(std::make_unique<Walker>());
-  register_all_handlers(systems);
-
-  const float dt = 1.f / 60.f;
-  while (!runner.is_finished()) {
-    test_input::reset_frame();
-    runner.tick(dt);
-    systems.run(dt);
-  }
-  runner.print_results();
-  return runner.has_failed() ? 1 : 0;
+  harness.add_systems(std::make_unique<input::InputSystem>(),
+                      std::make_unique<Walker>());
+  return harness.run([&] { test_input::reset_frame(); });
 }
