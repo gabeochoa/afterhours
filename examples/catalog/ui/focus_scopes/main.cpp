@@ -1,12 +1,12 @@
 #include <cstdio>
 
-#include "../../../../ah.h"
-#include "../../../../src/graphics.h"
-#define AFTER_HOURS_IMM_UI
-#include "../../../../src/plugins/e2e_testing/platform_test_input.h"
-#include "../../../../src/plugins/ui.h"
+#define AFTER_HOURS_EXAMPLE_UI
+#define AFTER_HOURS_EXAMPLE_GRAPHICS
+#define AFTER_HOURS_EXAMPLE_TEST_INPUT
+#include "../../../example_helper.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
@@ -28,30 +28,21 @@ struct TwoPanes : System<DefaultUIContext> {
 };
 
 int main() {
-  graphics::Config config;
-  config.display = graphics::DisplayMode::Headless;
-  config.width = 400;
-  config.height = 200;
-  if (!graphics::init(config))
-    return 1;
-
+  Checks checks;
   input::add_singleton_components(EntityHelper::createEntity(),
                                   ui::default_keymap<DefaultAction>());
-  SystemManager systems;
-  input::register_update_systems(systems);
-  auto panes = std::make_unique<TwoPanes>();
-  TwoPanes &screen = *panes;
-  ui::setup_with_resolution<>(systems, {400, 200}, std::move(panes));
-  auto &ctx = *EntityHelper::get_singleton_cmp<DefaultUIContext>();
-  testing::platform_input::set_test_mode(true);
+  HeadlessUI<TwoPanes> app(400, 200, std::make_unique<TwoPanes>(),
+                           std::make_unique<input::InputSystem>());
+  if (!app.ok()) return 1;
+  auto &ctx = app.ui.context();
+  auto &screen = app.screen();
 
-  for (int frame = 0; frame < 3; ++frame)
-    systems.run(1.f / 60.f);
+  app.run(3);
 
   auto tab = [&] {
     testing::test_input::push_key(keys::TAB);
     for (int frame = 0; frame < 3; ++frame) {
-      systems.run(1.f / 60.f);
+      app.run();
       testing::test_input::reset_frame();
     }
   };
@@ -67,6 +58,9 @@ int main() {
               "Left 1: %s; Right 1 never focused: %s\n",
               starts_left ? "yes" : "no", to_second ? "yes" : "no",
               wrapped ? "yes" : "no", never_right ? "yes" : "no");
-  graphics::shutdown();
-  return starts_left && to_second && wrapped && never_right ? 0 : 1;
+  checks.check(starts_left, "starts on Left 1");
+  checks.check(to_second, "Tab moves to Left 2");
+  checks.check(wrapped, "Tab wraps to Left 1");
+  checks.check(never_right, "Right pane never focused");
+  return checks.finish("focus_scopes");
 }

@@ -2,14 +2,14 @@
 #include <string>
 #include <vector>
 
-#include "../../../../ah.h"
-#include "../../../../src/graphics.h"
-#define AFTER_HOURS_IMM_UI
+#define AFTER_HOURS_EXAMPLE_UI
+#define AFTER_HOURS_EXAMPLE_GRAPHICS
+#define AFTER_HOURS_EXAMPLE_TEST_INPUT
+#include "../../../example_helper.h"
 #include "../../../../src/plugins/e2e_testing/e2e_testing.h"
-#include "../../../../src/plugins/e2e_testing/platform_test_input.h"
-#include "../../../../src/plugins/ui.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
@@ -43,32 +43,25 @@ struct TabStrip : System<DefaultUIContext> {
 };
 
 int main() {
-  graphics::Config config;
-  config.display = graphics::DisplayMode::Headless;
-  config.width = 400;
-  config.height = 200;
-  if (!graphics::init(config))
-    return 1;
+  Checks checks;
+  HeadlessUI<TabStrip> app(400, 200, std::make_unique<TabStrip>());
+  if (!app.ok()) return 1;
+  testing::register_all_handlers(app.ui.systems);
 
-  SystemManager systems;
-  auto strip = std::make_unique<TabStrip>();
-  TabStrip &tabs = *strip;
-  ui::setup_with_resolution<>(systems, {400, 200}, std::move(strip));
-  testing::register_all_handlers(systems);
-
-  testing::platform_input::set_test_mode(true);
   testing::E2ERunner runner;
   runner.load_script(SCRIPT_PATH);
   while (!runner.is_finished()) {
     testing::test_input::reset_frame();
     runner.tick(1.f / 60.f);
-    systems.run(1.f / 60.f);
+    app.run();
   }
 
   std::string order;
-  for (const auto &t : tabs.tabs)
+  for (const auto &t : app.screen().tabs)
     order += t;
-  std::printf("dragged the tab drawn at x=150 (C) left: order %s\n", order.c_str());
-  graphics::shutdown();
-  return runner.has_failed() || order != "ACBD" ? 1 : 0;
+  std::printf("dragged the tab drawn at x=150 (C) left: order %s\n",
+              order.c_str());
+  checks.check(!runner.has_failed(), "e2e script passes");
+  checks.check(order == "ACBD", "drag reorders the strip");
+  return checks.finish("drag_scrolled_strip");
 }

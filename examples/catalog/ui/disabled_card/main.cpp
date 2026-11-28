@@ -1,12 +1,12 @@
 #include <cstdio>
 
-#include "../../../../ah.h"
-#include "../../../../src/graphics.h"
-#define AFTER_HOURS_IMM_UI
-#include "../../../../src/plugins/e2e_testing/platform_test_input.h"
-#include "../../../../src/plugins/ui.h"
+#define AFTER_HOURS_EXAMPLE_UI
+#define AFTER_HOURS_EXAMPLE_GRAPHICS
+#define AFTER_HOURS_EXAMPLE_TEST_INPUT
+#include "../../../example_helper.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
@@ -28,37 +28,21 @@ struct ExportCard : System<DefaultUIContext> {
   }
 };
 
-static void click_card(SystemManager &systems) {
-  testing::test_input::simulate_click(120.f, 32.f);
-  for (int frame = 0; frame < 3; ++frame) {
-    testing::test_input::reset_frame();
-    systems.run(1.f / 60.f);
-  }
-}
-
 int main() {
-  graphics::Config config;
-  config.display = graphics::DisplayMode::Headless;
-  config.width = 400;
-  config.height = 200;
-  if (!graphics::init(config))
-    return 1;
+  Checks checks;
+  HeadlessUI<ExportCard> app(400, 200, std::make_unique<ExportCard>());
+  if (!app.ok()) return 1;
 
-  SystemManager systems;
-  auto card = std::make_unique<ExportCard>();
-  ExportCard &screen = *card;
-  ui::setup_with_resolution<>(systems, {400, 200}, std::move(card));
-  testing::platform_input::set_test_mode(true);
-  systems.run(1.f / 60.f);
-
-  click_card(systems);
-  const int while_disabled = screen.exports;
-  screen.has_document = true;
-  systems.run(1.f / 60.f);
-  click_card(systems);
+  app.run();
+  app.click_at(120.f, 32.f);
+  const int while_disabled = app.screen().exports;
+  app.screen().has_document = true;
+  app.run();
+  app.click_at(120.f, 32.f);
 
   std::printf("clicks while disabled: %d, after enabling: %d\n", while_disabled,
-              screen.exports - while_disabled);
-  graphics::shutdown();
-  return while_disabled == 0 && screen.exports == 1 ? 0 : 1;
+              app.screen().exports - while_disabled);
+  checks.check(while_disabled == 0, "disabled card ignores clicks");
+  checks.check(app.screen().exports == 1, "enabled card counts one click");
+  return checks.finish("disabled_card");
 }

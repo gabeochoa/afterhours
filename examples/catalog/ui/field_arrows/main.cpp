@@ -1,14 +1,14 @@
 #include <cstdio>
 #include <string>
 
-#include "../../../../ah.h"
-#include "../../../../src/graphics.h"
-#define AFTER_HOURS_IMM_UI
-#include "../../../../src/plugins/e2e_testing/platform_test_input.h"
-#include "../../../../src/plugins/ui.h"
+#define AFTER_HOURS_EXAMPLE_UI
+#define AFTER_HOURS_EXAMPLE_GRAPHICS
+#define AFTER_HOURS_EXAMPLE_TEST_INPUT
+#include "../../../example_helper.h"
 #include "../../../../src/plugins/ui/text_input/component.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
@@ -26,41 +26,28 @@ struct FileFilter : System<DefaultUIContext> {
 };
 
 int main() {
-  graphics::Config config;
-  config.display = graphics::DisplayMode::Headless;
-  config.width = 300;
-  config.height = 120;
-  if (!graphics::init(config))
-    return 1;
-
+  Checks checks;
   input::add_singleton_components(EntityHelper::createEntity(),
                                   ui::default_keymap<DefaultAction>());
-  SystemManager systems;
-  input::register_update_systems(systems);
-  auto view = std::make_unique<FileFilter>();
-  FileFilter &filter = *view;
-  ui::setup_with_resolution<>(systems, {300, 120}, std::move(view));
-  testing::platform_input::set_test_mode(true);
-  for (int frame = 0; frame < 3; ++frame)
-    systems.run(1.f / 60.f);
+  HeadlessUI<FileFilter> app(300, 120, std::make_unique<FileFilter>(),
+                             std::make_unique<input::InputSystem>());
+  if (!app.ok()) return 1;
+  app.run(3);
 
-  auto &ctx = *EntityHelper::get_singleton_cmp<DefaultUIContext>();
-  testing::test_input::simulate_click(120.f, 16.f);
-  for (int frame = 0; frame < 3; ++frame) {
-    systems.run(1.f / 60.f);
-    testing::test_input::reset_frame();
-  }
-  const bool editing = ctx.focus_in_subtree(filter.filter_box);
+  auto &ctx = app.ui.context();
+  app.click_at(120.f, 16.f);
+  const bool editing = ctx.focus_in_subtree(app.screen().filter_box);
 
   testing::test_input::push_key(keys::DOWN);
   for (int frame = 0; frame < 3; ++frame) {
-    systems.run(1.f / 60.f);
+    app.run();
     testing::test_input::reset_frame();
   }
 
-  const bool still_editing = editing && ctx.focus_in_subtree(filter.filter_box);
+  const bool still_editing =
+      editing && ctx.focus_in_subtree(app.screen().filter_box);
   std::printf("pressed Down in the filter box: focus %s\n",
               still_editing ? "stayed in the box" : "moved to the file row");
-  graphics::shutdown();
-  return still_editing ? 0 : 1;
+  checks.check(still_editing, "Down stays in the text box");
+  return checks.finish("field_arrows");
 }

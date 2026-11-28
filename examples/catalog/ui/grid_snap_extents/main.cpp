@@ -1,11 +1,11 @@
 #include <cstdio>
 #include <string>
 
-#include "../../../../ah.h"
-#define AFTER_HOURS_IMM_UI
-#include "../../../../src/plugins/ui.h"
+#define AFTER_HOURS_EXAMPLE_UI
+#include "../../../example_helper.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
@@ -42,11 +42,10 @@ struct Screen : System<DefaultUIContext> {
 };
 
 int main(int, char **) {
+  Checks checks;
   UIStylingDefaults::get().set_grid_snapping(true);
-  SystemManager systems;
-  ui::setup_with_resolution(systems, {1920, 1080}, std::make_unique<Screen>());
-  for (int frame = 0; frame < 2; ++frame)
-    systems.run(1.f / 60.f);
+  auto app = make_logic_ui<Screen>({1920, 1080}, std::make_unique<Screen>());
+  app.run(2);
 
   const auto rect = [](EntityID id) {
     return UICollectionHolder::getEntityForIDEnforce(id).get<UIComponent>().rect();
@@ -62,5 +61,8 @@ int main(int, char **) {
   printf("scroll content %.1f, last line ends at %.1f\n",
          scroll.content_size.y, line_end);
 
-  return row_end <= column_end && scroll.content_size.y >= line_end ? 0 : 1;
+  checks.check(row_end <= column_end, "column contains its last row");
+  checks.check(scroll.content_size.y >= line_end,
+               "scroll content covers last line");
+  return checks.finish("grid_snap_extents");
 }

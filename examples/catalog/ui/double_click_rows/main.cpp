@@ -2,13 +2,13 @@
 #include <string>
 #include <vector>
 
-#include "../../../../ah.h"
-#include "../../../../src/graphics.h"
-#define AFTER_HOURS_IMM_UI
-#include "../../../../src/plugins/e2e_testing/platform_test_input.h"
-#include "../../../../src/plugins/ui.h"
+#define AFTER_HOURS_EXAMPLE_UI
+#define AFTER_HOURS_EXAMPLE_GRAPHICS
+#define AFTER_HOURS_EXAMPLE_TEST_INPUT
+#include "../../../example_helper.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
@@ -33,30 +33,17 @@ struct Rows : System<DefaultUIContext> {
 };
 
 int main() {
-  graphics::Config config;
-  config.display = graphics::DisplayMode::Headless;
-  config.width = 400;
-  config.height = 120;
-  if (!graphics::init(config))
-    return 1;
+  Checks checks;
+  HeadlessUI<Rows> app(400, 120, std::make_unique<Rows>());
+  if (!app.ok()) return 1;
 
-  SystemManager systems;
-  auto rows_sys = std::make_unique<Rows>();
-  Rows &rows = *rows_sys;
-  ui::setup_with_resolution<>(systems, {400, 120}, std::move(rows_sys));
-  testing::platform_input::set_test_mode(true);
-  systems.run(1.f / 60.f);
-
-  for (int click = 0; click < 2; ++click) {
-    testing::test_input::simulate_click(180.f, 48.f);
-    for (int frame = 0; frame < 4; ++frame) {
-      systems.run(1.f / 60.f);
-      testing::test_input::reset_frame();
-    }
-  }
+  app.run();
+  app.click_at(180.f, 48.f);
+  app.click_at(180.f, 48.f);
 
   std::printf("double-clicked the second row; opened: %s\n",
-              rows.opened.c_str());
-  graphics::shutdown();
-  return rows.opened == "beta.txt" ? 0 : 1;
+              app.screen().opened.c_str());
+  checks.check(app.screen().opened == "beta.txt",
+               "double-click opens second row");
+  return checks.finish("double_click_rows");
 }

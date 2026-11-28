@@ -1,13 +1,13 @@
 #include <algorithm>
 #include <cstdio>
 
-#include "../../../../ah.h"
-#include "../../../../src/graphics.h"
-#define AFTER_HOURS_IMM_UI
-#include "../../../../src/plugins/e2e_testing/platform_test_input.h"
-#include "../../../../src/plugins/ui.h"
+#define AFTER_HOURS_EXAMPLE_UI
+#define AFTER_HOURS_EXAMPLE_GRAPHICS
+#define AFTER_HOURS_EXAMPLE_TEST_INPUT
+#include "../../../example_helper.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
@@ -30,36 +30,20 @@ struct PauseMenu : System<DefaultUIContext> {
   }
 };
 
-static void click_quit(SystemManager &systems) {
-  testing::test_input::simulate_click(100.f, 20.f);
-  for (int frame = 0; frame < 3; ++frame) {
-    systems.run(1.f / 60.f);
-    testing::test_input::reset_frame();
-  }
-}
-
 int main() {
-  graphics::Config config;
-  config.display = graphics::DisplayMode::Headless;
-  config.width = 300;
-  config.height = 120;
-  if (!graphics::init(config))
-    return 1;
+  Checks checks;
+  HeadlessUI<PauseMenu> app(300, 120, std::make_unique<PauseMenu>());
+  if (!app.ok()) return 1;
+  app.run();
 
-  SystemManager systems;
-  auto menu = std::make_unique<PauseMenu>();
-  PauseMenu &pause = *menu;
-  ui::setup_with_resolution<>(systems, {300, 120}, std::move(menu));
-  testing::platform_input::set_test_mode(true);
-  systems.run(1.f / 60.f);
-
-  click_quit(systems);
-  const int while_open = pause.quits;
-  pause.closing = true;
-  click_quit(systems);
-  const int while_fading = pause.quits - while_open;
+  app.click_at(100.f, 20.f);
+  const int while_open = app.screen().quits;
+  app.screen().closing = true;
+  app.click_at(100.f, 20.f);
+  const int while_fading = app.screen().quits - while_open;
   std::printf("Quit clicks counted: %d while open, %d while fading (opacity %.2f)\n",
-              while_open, while_fading, static_cast<double>(pause.opacity));
-  graphics::shutdown();
-  return while_open == 1 && while_fading == 0 ? 0 : 1;
+              while_open, while_fading, static_cast<double>(app.screen().opacity));
+  checks.check(while_open == 1, "Quit counts while open");
+  checks.check(while_fading == 0, "Quit inert while fading");
+  return checks.finish("inert_fade");
 }
