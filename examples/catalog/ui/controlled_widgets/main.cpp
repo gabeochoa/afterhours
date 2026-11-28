@@ -1,14 +1,12 @@
 #include <cstdio>
 
-#include "../../../../ah.h"
-#define AFTER_HOURS_IMM_UI
-#include "../../../../src/plugins/ui.h"
+#define AFTER_HOURS_EXAMPLE_UI
+#include "../../../example_helper.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
-
-enum struct InputAction { None, WidgetNext, WidgetBack, WidgetPress };
 
 struct Settings {
   float volume = 0.8f;
@@ -36,35 +34,11 @@ struct SettingsScreen : System<UIContext<InputAction>> {
 };
 
 int main(int, char **) {
-  auto &root = EntityHelper::createEntity();
-  root.addComponent<UIContext<InputAction>>();
-  EntityHelper::registerSingleton<UIContext<InputAction>>(root);
-  root.addComponent<FontManager>()
-      .load_font(UIComponent::DEFAULT_FONT, get_default_font())
-      .load_font(UIComponent::SYMBOL_FONT, get_default_font())
-      .load_font(UIComponent::UNSET_FONT, get_unset_font());
-  EntityHelper::registerSingleton<FontManager>(root);
-  root.addComponent<window_manager::ProvidesCurrentResolution>(
-      window_manager::Resolution{1280, 720});
-  EntityHelper::registerSingleton<window_manager::ProvidesCurrentResolution>(
-      root);
-  root.addComponent<AutoLayoutRoot>();
-  root.addComponent<UIComponentDebug>("root");
-  root.addComponent<UIComponent>(root.id)
-      .set_desired_width(screen_pct(1.f))
-      .set_desired_height(screen_pct(1.f));
-
-  SystemManager systems;
-  enforce_singletons<InputAction>(systems);
-  systems.register_update_system(std::make_unique<ClearUIComponentChildren>());
-  systems.register_update_system(
-      std::make_unique<BeginUIContextManager<InputAction>>());
-  systems.register_update_system(std::make_unique<SettingsScreen>());
-  systems.register_update_system(
-      std::make_unique<EndUIContextManager<InputAction>>());
-
-  for (int i = 0; i < 5; ++i)
-    systems.run(1.f / 60.f);
-
-  return settings.muted && settings.volume == 0.25f ? 0 : 1;
+  Checks checks;
+  auto app = make_logic_ui<SettingsScreen, InputAction>(
+      {1280, 720}, std::make_unique<SettingsScreen>());
+  app.run(5);
+  checks.check(settings.muted && settings.volume == 0.25f,
+               "settings survive controlled mutation");
+  return checks.finish("controlled_widgets");
 }

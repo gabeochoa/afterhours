@@ -1,12 +1,12 @@
 #include <cstdio>
 
-#include "../../../../ah.h"
-#include "../../../../src/graphics.h"
-#define AFTER_HOURS_IMM_UI
-#include "../../../../src/plugins/e2e_testing/platform_test_input.h"
-#include "../../../../src/plugins/ui.h"
+#define AFTER_HOURS_EXAMPLE_UI
+#define AFTER_HOURS_EXAMPLE_GRAPHICS
+#define AFTER_HOURS_EXAMPLE_TEST_INPUT
+#include "../../../example_helper.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
@@ -30,26 +30,17 @@ struct Transcript : System<DefaultUIContext> {
 };
 
 int main() {
-  graphics::Config config;
-  config.display = graphics::DisplayMode::Headless;
-  config.width = 400;
-  config.height = 200;
-  if (!graphics::init(config))
-    return 1;
+  Checks checks;
+  HeadlessUI<Transcript> app(400, 200, std::make_unique<Transcript>());
+  if (!app.ok()) return 1;
 
-  SystemManager systems;
-  auto transcript = std::make_unique<Transcript>();
-  Transcript &screen = *transcript;
-  ui::setup_with_resolution<>(systems, {400, 200}, std::move(transcript));
-
-  testing::platform_input::set_test_mode(true);
   testing::test_input::set_mouse_position(100.f, 80.f);
-  for (int frame = 0; frame < 3; ++frame)
-    systems.run(1.f / 60.f);
+  app.run(3);
 
   std::printf("pointer over the second turn: copy on first %s, second %s\n",
-              screen.copy_shown[0] ? "shown" : "hidden",
-              screen.copy_shown[1] ? "shown" : "hidden");
-  graphics::shutdown();
-  return !screen.copy_shown[0] && screen.copy_shown[1] ? 0 : 1;
+              app.screen().copy_shown[0] ? "shown" : "hidden",
+              app.screen().copy_shown[1] ? "shown" : "hidden");
+  checks.check(!app.screen().copy_shown[0], "first turn not hovered");
+  checks.check(app.screen().copy_shown[1], "second turn hovered");
+  return checks.finish("hoverable");
 }

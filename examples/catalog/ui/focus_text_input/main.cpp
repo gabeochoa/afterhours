@@ -1,12 +1,12 @@
 #include <cstdio>
 
-#include "../../../../ah.h"
-#include "../../../../src/graphics.h"
-#define AFTER_HOURS_IMM_UI
-#include "../../../../src/plugins/ui.h"
+#define AFTER_HOURS_EXAMPLE_UI
+#define AFTER_HOURS_EXAMPLE_GRAPHICS
+#include "../../../example_helper.h"
 #include "../../../../src/plugins/ui/text_input/component.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
@@ -31,28 +31,21 @@ struct RenameDialog : System<DefaultUIContext> {
 };
 
 int main() {
-  graphics::Config config;
-  config.display = graphics::DisplayMode::Headless;
-  config.width = 400;
-  config.height = 300;
-  if (!graphics::init(config))
-    return 1;
-
-  SystemManager systems;
-  auto dialog = std::make_unique<RenameDialog>();
-  RenameDialog &rename = *dialog;
-  ui::setup_with_resolution<>(systems, {400, 300}, std::move(dialog));
+  Checks checks;
+  HeadlessUI<RenameDialog> app(400, 300, std::make_unique<RenameDialog>());
+  if (!app.ok()) return 1;
 
   for (int frame = 0; frame < 4; ++frame) {
     if (frame == 2)
-      rename.open = rename.just_opened = true;
-    systems.run(1.f / 60.f);
+      app.screen().open = app.screen().just_opened = true;
+    app.run();
   }
 
-  const auto &state = UICollectionHolder::getEntityForIDEnforce(rename.field_id)
-                          .get<text_input::HasTextInputState>();
+  const auto &state =
+      UICollectionHolder::getEntityForIDEnforce(app.screen().field_id)
+          .get<text_input::HasTextInputState>();
   std::printf("rename field focused two frames after opening: %s\n",
               state.is_focused ? "yes" : "no");
-  graphics::shutdown();
-  return state.is_focused ? 0 : 1;
+  checks.check(state.is_focused, "field focused after opening");
+  return checks.finish("focus_text_input");
 }
