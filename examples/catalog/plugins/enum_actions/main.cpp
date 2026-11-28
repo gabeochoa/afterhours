@@ -1,9 +1,10 @@
 #include <cstdio>
 
-#include "../../../../ah.h"
+#include "../../../example_helper.h"
 #include "../../../../src/plugins/input_system.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 
 namespace {
 int frame = 0;
@@ -26,8 +27,8 @@ int main() {
           {Action::Drop, {raylib::KEY_SPACE}},
       });
 
-  SystemManager systems;
-  systems.register_update_system(std::make_unique<input::InputSystem>());
+  Checks checks;
+  auto systems = update_systems<input::InputSystem>();
 
   int drops = 0;
   int held_frames = 0;
@@ -37,5 +38,7 @@ int main() {
     drops += input::is_pressed(Action::Drop);
   }
   std::printf("space held %d frames, dropped %d time\n", held_frames, drops);
-  return held_frames == 3 && drops == 1 ? 0 : 1;
+  checks.check(held_frames == 3, "space held for 3 frames");
+  checks.check(drops == 1, "space dropped once");
+  return checks.finish("enum_actions");
 }

@@ -2,39 +2,12 @@
 #include <cmath>
 #include <iostream>
 
-#include "../../../../ah.h"
+#define AFTER_HOURS_EXAMPLE_UI
+#include "../../../example_helper.h"
 #include "../../../../src/plugins/toast.h"
 
 using namespace afterhours;
-
-enum struct InputAction {
-  None,
-  WidgetMod,
-  WidgetNext,
-  WidgetBack,
-  WidgetPress,
-  WidgetUp,
-  WidgetDown,
-  WidgetLeft,
-  WidgetRight,
-  TextBackspace,
-  TextDelete,
-  TextHome,
-  TextEnd,
-  TextSelectAll,
-  TextCopy,
-  TextCut,
-  TextPaste,
-  TextUndo,
-  TextRedo,
-  TextSelectLeft,
-  TextSelectRight,
-  TextWordLeft,
-  TextWordRight,
-  TextDeleteWordBack,
-  TextDeleteWordForward,
-  MenuBack,
-};
+using namespace afterhours::examples;
 
 int main() {
   Entity &resolution_entity = EntityHelper::createPermanentEntity();

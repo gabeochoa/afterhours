@@ -1,9 +1,10 @@
 #include <cstdio>
 
-#include "../../../../ah.h"
+#include "../../../example_helper.h"
 #include "../../../../src/plugins/input_system.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 
 namespace {
 const float trigger_pull[] = {0.f, .1f, .9f, 1.f, 1.f, .6f, .1f, 0.f, .8f, 1.f};
@@ -25,8 +26,8 @@ int main() {
       EntityHelper::createEntity(),
       {{Fire, {input::GamepadAxisWithDir{trigger, 1}}}});
 
-  SystemManager systems;
-  systems.register_update_system(std::make_unique<input::InputSystem>());
+  Checks checks;
+  auto systems = update_systems<input::InputSystem>();
 
   int held_frames = 0;
   int shots = 0;
@@ -42,5 +43,7 @@ int main() {
                 input::is_gamepad_axis_pressed(0, trigger, 1));
   }
   std::printf("held for %d frames, fired %d shots\n", held_frames, shots);
-  return held_frames == 6 && shots == 2 ? 0 : 1;
+  checks.check(held_frames == 6, "trigger held for 6 frames");
+  checks.check(shots == 2, "trigger fired twice");
+  return checks.finish("axis_edges");
 }
