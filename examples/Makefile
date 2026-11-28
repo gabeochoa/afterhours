@@ -75,7 +75,7 @@ $(EXAMPLE_BINS): %: $(OUT)/%
 
 all: $(addprefix $(OUT)/,graphics_example drawing_3d_example headless_validation text_input_placeholder perf_stress_test calendar_stress_test profile_harness)
 
-$(OUT)/graphics_example: graphics_example.cpp
+$(OUT)/graphics_example: graphics_example.cpp example_helper.h
 	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $(filter %.cpp,$^) $(LDFLAGS_RAYLIB) -o $@
 	@echo "Built: graphics_example"
 
@@ -91,12 +91,12 @@ $(OUT)/headless_validation: headless_validation.cpp
 # Placeholder repro - clicking a hint and typing used to abort the process.
 # Backend-free: it drives insert_char directly, so it needs no window and no
 # raylib, and runs anywhere.
-$(OUT)/text_input_placeholder: text_input_placeholder.cpp
+$(OUT)/text_input_placeholder: text_input_placeholder.cpp example_helper.h
 	$(CXX) $(CXXFLAGS) -DAFTER_HOURS_USE_NONE $(DEPFLAGS) -isystem $(INCLUDE_ROOT) -isystem $(BREW_PREFIX)/include $(filter %.cpp,$^) -o $@
 	@echo "Built: text_input_placeholder"
 
 # imm visual regression - renders imm UI to a hidden window, captures a PNG
-$(OUT)/imm_visual_check: imm_visual_check.cpp
+$(OUT)/imm_visual_check: imm_visual_check.cpp example_helper.h
 	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $(filter %.cpp,$^) $(LDFLAGS_RAYLIB) -o $@
 	@echo "Built: imm_visual_check"
 

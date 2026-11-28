@@ -17,45 +17,15 @@
 #include <filesystem>
 #include <string>
 
-#include <afterhours/ah.h>
+#define AFTER_HOURS_EXAMPLE_UI
+#define AFTER_HOURS_EXAMPLE_GRAPHICS
+#include "example_helper.h"
 #include <afterhours/src/drawing_helpers.h>
-#include <afterhours/src/graphics.h>
-#define AFTER_HOURS_IMM_UI
-#include <afterhours/src/plugins/ui.h>
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
-
-// Full vocabulary the imm nav/text/debug systems reference.
-enum struct InputAction {
-  None,
-  WidgetMod,
-  WidgetNext,
-  WidgetBack,
-  WidgetPress,
-  WidgetLeft,
-  WidgetRight,
-  WidgetUp,
-  WidgetDown,
-  MenuBack,
-  TextBackspace,
-  TextCopy,
-  TextCut,
-  TextDelete,
-  TextDeleteWordBack,
-  TextDeleteWordForward,
-  TextEnd,
-  TextHome,
-  TextPaste,
-  TextRedo,
-  TextSelectAll,
-  TextSelectLeft,
-  TextSelectRight,
-  TextUndo,
-  TextWordLeft,
-  TextWordRight,
-};
 
 static constexpr int RENDER_W = 640;
 static constexpr int RENDER_H = 480;
@@ -187,36 +157,13 @@ int main(int argc, char **argv) {
   const char *out_name =
       batched ? "imm_visual_check_batched.png" : "imm_visual_check.png";
 
-  graphics::Config cfg{};
-  cfg.display = graphics::DisplayMode::Windowed;
-  cfg.width = RENDER_W;
-  cfg.height = RENDER_H;
-  cfg.target_fps = 60;
-  cfg.config_flags = raylib::FLAG_WINDOW_HIDDEN;
-  cfg.enable_msaa = false;
-  if (!graphics::init(cfg)) {
+  ImmScreenshot shot(RENDER_W, RENDER_H, batched,
+                     std::make_unique<BuildScene>());
+  // After the after-UI-updates phase so the forced hover survives until render.
+  shot.systems.register_update_system(std::make_unique<ForceHover>());
+  if (!shot.ok()) {
     fprintf(stderr, "FATAL: windowed backend init failed\n");
     return 1;
-  }
-
-  // Creates the UI collection + singletons (UIContext, FontManager w/ fonts).
-  // Must run after graphics::init (get_default_font needs a GL context).
-  Entity &ui_root = ui::init_ui_plugin<InputAction>();
-  ui_root.addComponent<window_manager::ProvidesCurrentResolution>(
-      window_manager::Resolution{RENDER_W, RENDER_H});
-  EntityHelper::registerSingleton<window_manager::ProvidesCurrentResolution>(
-      ui_root);
-  ui::UICollectionHolder::get()
-      .collection.registerSingleton<window_manager::ProvidesCurrentResolution>(
-          ui_root);
-
-  // Empty input collector so the bundled debug-overlay render system's
-  // should_run (which reads inputs) doesn't hit an empty optional. No mapping
-  // needed — with no inputs the debug toggle stays off.
-  {
-    auto &in = EntityHelper::createEntity();
-    in.addComponent<input::InputCollector>();
-    EntityHelper::registerSingleton<input::InputCollector>(in);
   }
 
   raylib::Image img = raylib::GenImageChecked(
@@ -225,27 +172,8 @@ int main(int argc, char **argv) {
   g_tex = raylib::LoadTextureFromImage(img);
   raylib::UnloadImage(img);
 
-  // Canonical imm wiring: before-bridge (Clear/Begin) -> build -> after-bridge
-  // (End) -> ForceHover -> render-bridge (RenderImm). Bridges drive the imm
-  // systems on the UI collection.
-  SystemManager systems;
-  ui::enforce_singletons<InputAction>(systems);
-  ui::register_before_ui_updates<InputAction>(systems);
-  systems.register_update_system(std::make_unique<BuildScene>());
-  ui::register_after_ui_updates<InputAction>(systems);
-  systems.register_update_system(std::make_unique<ForceHover>());
-  if (batched)
-    ui::register_batched_render_systems<InputAction>(systems);
-  else
-    ui::register_render_systems<InputAction>(systems);
-
-  graphics::begin_frame();
-  raylib::ClearBackground(raylib::Color{20, 20, 28, 255});
-  systems.run(1.f / 60.f);
-  graphics::end_frame();
-
   std::filesystem::path out = out_name;
-  bool ok = graphics::capture_frame(out);
+  bool ok = shot.capture(out, Color{20, 20, 28, 255});
   printf("[%s] screenshot: %s -> %s\n", batched ? "batched" : "immediate",
          ok ? "OK" : "FAILED", out.c_str());
 
@@ -256,6 +184,5 @@ int main(int argc, char **argv) {
   assert(g_fg_calls > 0 && "with_on_draw_fg must fire");
 
   raylib::UnloadTexture(g_tex);
-  graphics::shutdown();
   return ok ? 0 : 1;
 }

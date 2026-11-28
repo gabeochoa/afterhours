@@ -2,17 +2,17 @@
 #include <filesystem>
 
 #include "../../../../src/drawing_helpers.h"
-#include "../../../../src/graphics.h"
 #include "../../../../src/plugins/color.h"
 
+#define AFTER_HOURS_EXAMPLE_GRAPHICS
+#include "../../../example_helper.h"
+
 namespace graphics = afterhours::graphics;
+using afterhours::examples::Graphics;
 
 int main() {
-  graphics::Config config;
-  config.display = graphics::DisplayMode::Headless;
-  config.width = 320;
-  config.height = 180;
-  if (!graphics::init(config)) {
+  Graphics gfx(Graphics::headless(320, 180));
+  if (!gfx.ok()) {
     std::fprintf(stderr, "no offscreen GL context on this machine\n");
     return 1;
   }
@@ -26,7 +26,6 @@ int main() {
   const auto png =
       std::filesystem::temp_directory_path() / "offscreen_render.png";
   const bool saved = graphics::capture_frame(png);
-  graphics::shutdown();
 
   std::printf("rendered offscreen and %s %s\n", saved ? "wrote" : "failed to write",
               png.string().c_str());
