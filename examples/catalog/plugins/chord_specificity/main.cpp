@@ -1,9 +1,10 @@
 #include <cstdio>
 
-#include "../../../../ah.h"
+#include "../../../example_helper.h"
 #include "../../../../src/plugins/input_system.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 
 namespace {
 bool shift = false;
@@ -32,20 +33,20 @@ int main() {
       {{Undo, {Chord{raylib::KEY_Z, Chord::MOD_CTRL}}},
        {Redo, {Chord{raylib::KEY_Z, Chord::MOD_CTRL | Chord::MOD_SHIFT}}}});
 
-  SystemManager systems;
-  systems.register_update_system(std::make_unique<input::InputSystem>());
+  Checks checks;
+  auto systems = update_systems<input::InputSystem>();
 
-  systems.run(1.f / 60.f);
+  run_frames(systems, 1);
   const std::string ctrl_z = fired();
   shift = true;
-  systems.run(1.f / 60.f);
+  run_frames(systems, 1);
   const std::string ctrl_shift_z = fired();
 
   std::printf("Ctrl+Z fires %s, Ctrl+Shift+Z fires %s\n", ctrl_z.c_str(),
               ctrl_shift_z.c_str());
   auto collector = input::get_input_collector();
-  return ctrl_z == "Undo" && ctrl_shift_z == "Redo" &&
-                 collector.inputs_pressed().size() == 1
-             ? 0
-             : 1;
+  checks.check(ctrl_z == "Undo", "Ctrl+Z fires Undo");
+  checks.check(ctrl_shift_z == "Redo", "Ctrl+Shift+Z fires Redo");
+  checks.check(collector.inputs_pressed().size() == 1, "one press recorded");
+  return checks.finish("chord_specificity");
 }

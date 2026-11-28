@@ -3,11 +3,12 @@
 
 #define AFTER_HOURS_ENTITY_HELPER
 #define AFTER_HOURS_SYSTEM
-#include "../../../../ah.h"
+#include "../../../example_helper.h"
 #include "../../../../src/plugins/pathfinding.h"
 #include "../../shared/vector.h"
 
 using namespace afterhours;
+using namespace afterhours::examples;
 using Vec2 = Vector2Type;
 
 // Simple walkability checker - allow all positions except (5,5)
@@ -85,9 +86,7 @@ int main(int, char **) {
                               });
 
     // Process a few frames to allow async processing
-    for (int i = 0; i < 10; ++i) {
-        systems.run(0.1f);
-    }
+    run_frames(systems, 10, 0.1f);
 
     std::cout << "\nPathfinding plugin example completed successfully!"
               << std::endl;
